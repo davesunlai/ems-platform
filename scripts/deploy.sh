@@ -52,6 +52,13 @@ if [[ ! -f .env ]]; then
     echo "EMS_SMTP_USER=ai@teraems.com"
     echo "EMS_SMTP_PASSWORD="
     echo "EMS_SMTP_FROM=ai@teraems.com"
+    echo "# eWeLink / Sonoff (App ID/Secret z dev.ewelink.cc, e-mail/heslo účtu):"
+    echo "EMS_EWELINK_APPID="
+    echo "EMS_EWELINK_SECRET="
+    echo "EMS_EWELINK_EMAIL="
+    echo "EMS_EWELINK_PASSWORD="
+    echo "EMS_EWELINK_REGION=eu"
+    echo "EMS_EWELINK_COUNTRY=+420"
   } > .env
   echo "==> Vytvořen .env (heslo DB, JWT secret, admin)."
   echo "==> PRVNÍ PŘIHLÁŠENÍ:  admin / ${ADMINPW}   (změň po loginu)"

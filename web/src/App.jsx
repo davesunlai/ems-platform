@@ -11,6 +11,7 @@ import Users from "./pages/Users";
 import Modules from "./pages/Modules";
 import Control from "./pages/Control";
 import Automation from "./pages/Automation";
+import Ewelink from "./pages/Ewelink";
 import Localities from "./pages/Localities";
 
 export default function App() {
@@ -35,6 +36,9 @@ export default function App() {
             } />
             <Route path="/automation" element={
               <ProtectedRoute permission="admin"><Automation /></ProtectedRoute>
+            } />
+            <Route path="/ewelink" element={
+              <ProtectedRoute permission="admin"><Ewelink /></ProtectedRoute>
             } />
             <Route path="/localities" element={
               <ProtectedRoute permission="admin"><Localities /></ProtectedRoute>

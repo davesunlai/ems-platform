@@ -18,6 +18,7 @@ from ems.market import db as market_db
 from ems.market.routes import router as market_router
 from ems.automation import db as automation_db
 from ems.automation.routes import router as automation_router
+from ems.ewelink.routes import router as ewelink_router
 from ems.localities import db as localities_db
 from ems.localities.routes import router as localities_router
 from . import db
@@ -44,7 +45,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.8.2", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.9.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,6 +59,7 @@ app.include_router(modules_router)
 app.include_router(control_router)
 app.include_router(market_router)
 app.include_router(automation_router)
+app.include_router(ewelink_router)
 app.include_router(localities_router)
 
 # Telemetrie vyžaduje oprávnění "read".

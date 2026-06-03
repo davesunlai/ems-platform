@@ -49,6 +49,7 @@ export const api = {
   getMode: (id) => request(`/api/control/${encodeURIComponent(id)}/mode`),
   setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
   controlAudit: () => request("/api/control/audit"),
+  ewelinkDevices: () => request("/api/ewelink/devices"),
   spot: () => request("/api/market/spot"),
   spotCurve: (days = 1) => request(`/api/market/spot-curve?days=${days}`),
   setManualPrice: (price) => request("/api/admin/market/manual", { method: "POST", body: { price } }),
