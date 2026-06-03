@@ -7,8 +7,9 @@ from pydantic import BaseModel, Field
 
 
 class BatteryMode(str, Enum):
-    FORCE_CHARGE = "force_charge"   # vynucené nabíjení (ECO_CHARGE)
-    NORMAL = "normal"              # normální self-use (GENERAL)
+    FORCE_CHARGE = "force_charge"        # vynucené nabíjení (ECO_CHARGE)
+    FORCE_DISCHARGE = "force_discharge"  # vynucené vybíjení do sítě (ECO_DISCHARGE)
+    NORMAL = "normal"                   # normální self-use (GENERAL)
 
 
 class BatteryModeCommand(BaseModel):

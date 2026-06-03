@@ -35,7 +35,7 @@ function SpotPanel({ onChange }) {
   );
 }
 
-const empty = { id: "", target_module: "", price_threshold: 1500, soc_max: 90, charge_power: 100 };
+const empty = { id: "", kind: "spot_charge", target_module: "", price_threshold: 1500, soc: 90, power: 100 };
 
 export default function Automation() {
   const [rules, setRules] = useState([]);
@@ -53,12 +53,12 @@ export default function Automation() {
   const create = async () => {
     setErr("");
     try {
-      await api.createRule({
-        id: f.id, type: "spot_charge", enabled: true,
-        params: { target_module: f.target_module, price_threshold: Number(f.price_threshold),
-                  soc_max: Number(f.soc_max), charge_power: Number(f.charge_power) },
-      });
-      setF({ ...empty, target_module: mods[0]?.id || "" }); load();
+      const isCharge = f.kind === "spot_charge";
+      const params = isCharge
+        ? { target_module: f.target_module, price_threshold: Number(f.price_threshold), soc_max: Number(f.soc), charge_power: Number(f.power) }
+        : { target_module: f.target_module, price_threshold: Number(f.price_threshold), soc_min: Number(f.soc), discharge_power: Number(f.power) };
+      await api.createRule({ id: f.id, type: f.kind, enabled: true, params });
+      setF({ ...empty, kind: f.kind, target_module: mods[0]?.id || "" }); load();
     } catch (e) { setErr(e.message); }
   };
   const toggle = async (r) => { try { await api.updateRule(r.id, { enabled: !r.enabled }); load(); } catch (e) { setErr(e.message); } };
@@ -69,11 +69,18 @@ export default function Automation() {
       <SpotPanel onChange={load} />
 
       <div className="panel" style={{ marginBottom: 18 }}>
-        <h3>Nové pravidlo — nabíjení dle spotové ceny</h3>
+        <h3>Nové pravidlo</h3>
         <div className="row">
           <div className="field" style={{ marginBottom: 0 }}>
+            <label>Typ</label>
+            <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
+              <option value="spot_charge">Nabíjet při nízké ceně</option>
+              <option value="spot_discharge">Vybíjet do sítě při vysoké ceně</option>
+            </select>
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
             <label>ID</label>
-            <input value={f.id} placeholder="levne-nabijeni" onChange={(e) => setF({ ...f, id: e.target.value })} />
+            <input value={f.id} placeholder={f.kind === "spot_charge" ? "levne-nabijeni" : "drahe-vybijeni"} onChange={(e) => setF({ ...f, id: e.target.value })} />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Cílový měnič</label>
@@ -82,36 +89,39 @@ export default function Automation() {
             </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Práh ceny (Kč/MWh)</label>
-            <input value={f.price_threshold} onChange={(e) => setF({ ...f, price_threshold: e.target.value })} style={{ width: 120 }} />
+            <label>{f.kind === "spot_charge" ? "Práh (nabíjet pod, Kč)" : "Práh (vybíjet nad, Kč)"}</label>
+            <input value={f.price_threshold} onChange={(e) => setF({ ...f, price_threshold: e.target.value })} style={{ width: 150 }} />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Max SoC (%)</label>
-            <input value={f.soc_max} onChange={(e) => setF({ ...f, soc_max: e.target.value })} style={{ width: 90 }} />
+            <label>{f.kind === "spot_charge" ? "Max SoC (%)" : "Min SoC (%)"}</label>
+            <input value={f.soc} onChange={(e) => setF({ ...f, soc: e.target.value })} style={{ width: 90 }} />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Výkon (%)</label>
-            <input value={f.charge_power} onChange={(e) => setF({ ...f, charge_power: e.target.value })} style={{ width: 90 }} />
+            <input value={f.power} onChange={(e) => setF({ ...f, power: e.target.value })} style={{ width: 90 }} />
           </div>
           <button className="btn primary" onClick={create} disabled={!f.id.trim() || !f.target_module}>Přidat</button>
         </div>
         <p className="error">{err}</p>
         <p className="muted" style={{ fontSize: 12 }}>
-          Logika: když je spotová cena pod prahem a SoC pod maximem → vynucené nabíjení; jinak normální režim.
+          {f.kind === "spot_charge"
+            ? "Nabíjení: když je cena pod prahem a SoC pod maximem → vynucené nabíjení; jinak normál."
+            : "Vybíjení do sítě: když je cena nad prahem a SoC nad minimem → vybíjení do sítě; jinak normál. Min SoC chrání baterii (nevybíjí pod tuto hodnotu)."}
         </p>
       </div>
 
       <div className="panel">
         <h3>Pravidla</h3>
         <table>
-          <thead><tr><th>ID</th><th>Cíl</th><th>Práh</th><th>Max SoC</th><th>Stav</th><th>Poslední rozhodnutí</th><th>Poslední akce</th><th></th></tr></thead>
+          <thead><tr><th>ID</th><th>Typ</th><th>Cíl</th><th>Práh</th><th>SoC limit</th><th>Stav</th><th>Poslední rozhodnutí</th><th>Poslední akce</th><th></th></tr></thead>
           <tbody>
             {rules.map((r) => (
               <tr key={r.id}>
                 <td>{r.id}</td>
+                <td>{r.type === "spot_charge" ? "🔋 nabíjení" : "⚡ vybíjení"}</td>
                 <td className="role">{r.params.target_module}</td>
-                <td className="muted">{r.params.price_threshold} Kč</td>
-                <td className="muted">{r.params.soc_max} %</td>
+                <td className="muted">{r.type === "spot_charge" ? "< " : "> "}{r.params.price_threshold} Kč</td>
+                <td className="muted">{r.type === "spot_charge" ? `≤ ${r.params.soc_max}` : `≥ ${r.params.soc_min}`} %</td>
                 <td><span className={r.enabled ? "badge-on" : "badge-off"}>{r.enabled ? "zapnuto" : "vypnuto"}</span></td>
                 <td className="muted" style={{ fontSize: 12 }}>{r.last_decision || "—"}</td>
                 <td className="muted" style={{ fontSize: 12 }}>

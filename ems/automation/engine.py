@@ -20,6 +20,7 @@ from . import db as auto_db
 logger = logging.getLogger("ems.automation")
 
 CHARGE_MODES = {"ECO_CHARGE", "ECO"}
+DISCHARGE_MODES = {"ECO_DISCHARGE"}
 NORMAL_MODES = {"GENERAL", "SELF_USE"}
 MIN_CMD_INTERVAL = 60.0
 _last_cmd: dict[str, float] = {}
@@ -62,66 +63,106 @@ async def _actual_mode(device_id: str):
 
 
 async def evaluate_all(price) -> None:
+    """Vyhodnotí všechna pravidla, agregovaně podle cílového zařízení.
+
+    Pro jedno zařízení může být víc pravidel (nabíjení i vybíjení). Spočítáme
+    jeden výsledný záměr a pošleme nejvýš jeden povel — pravidla si tak
+    nepřebíjejí navzájem režim.
+    """
+    by_target: dict[str, list] = {}
     for r in await auto_db.list_enabled():
+        t = r.params.get("target_module")
+        if t:
+            by_target.setdefault(t, []).append(r)
+    for target, rules in by_target.items():
         try:
-            await _eval_rule(r, price)
+            await _eval_device(target, rules, price)
         except Exception as exc:
-            logger.warning("Vyhodnocení pravidla '%s' selhalo: %s", r.id, exc)
+            logger.warning("Vyhodnocení zařízení '%s' selhalo: %s", target, exc)
 
 
-async def _eval_rule(r, price) -> None:
-    if r.type != "spot_charge":
-        return
-    p = r.params
-    target = p.get("target_module")
-    threshold = p.get("price_threshold")
-    soc_max = float(p.get("soc_max", 95))
-    charge_power = int(p.get("charge_power", 100))
-    if not target or threshold is None or price is None:
-        await auto_db.mark_eval(r.id, "no_data:price"); return
-    threshold = float(threshold)
-
+async def _eval_device(target: str, rules: list, price) -> None:
     soc = await _latest_soc(target)
-    if soc is None:
-        await auto_db.mark_eval(r.id, "no_data:soc"); return
 
-    want_charge = (price < threshold) and (soc < soc_max)
-    desired = "force_charge" if want_charge else "normal"
-    await auto_db.mark_eval(
-        r.id, f"{desired} (cena={price:.0f} práh={threshold:.0f} SoC={soc:.0f}/{soc_max:.0f})"
-    )
-    # stav pro dashboard: kdo a co řídí
-    await _set_automation_state(target, r.id if desired == "force_charge" else None)
+    # 1) spočítej rozhodnutí každého pravidla (pro UI) a najdi aktivní kandidáty
+    charge_rule = None
+    discharge_rule = None
+    for r in rules:
+        p = r.params
+        if price is None or soc is None:
+            await auto_db.mark_eval(r.id, "no_data")
+            continue
+        if r.type == "spot_charge":
+            thr = float(p.get("price_threshold", 0)); smax = float(p.get("soc_max", 95))
+            on = price < thr and soc < smax
+            await auto_db.mark_eval(
+                r.id, f"{'force_charge' if on else 'normal'} (cena={price:.0f} práh<{thr:.0f} SoC={soc:.0f}/{smax:.0f})"
+            )
+            if on and charge_rule is None:
+                charge_rule = r
+        elif r.type == "spot_discharge":
+            thr = float(p.get("price_threshold", 0)); smin = float(p.get("soc_min", 20))
+            on = price > thr and soc > smin
+            await auto_db.mark_eval(
+                r.id, f"{'force_discharge' if on else 'normal'} (cena={price:.0f} práh>{thr:.0f} SoC={soc:.0f}/{smin:.0f})"
+            )
+            if on and discharge_rule is None:
+                discharge_rule = r
 
+    if price is None or soc is None:
+        return
+
+    # 2) výsledný záměr pro zařízení (nabíjení má přednost; normálně se nepřekrývají)
+    if charge_rule is not None:
+        desired, chosen = "force_charge", charge_rule
+        power = int(chosen.params.get("charge_power", 100))
+        soc_arg = int(chosen.params.get("soc_max", 95))
+    elif discharge_rule is not None:
+        desired, chosen = "force_discharge", discharge_rule
+        power = int(chosen.params.get("discharge_power", 100))
+        soc_arg = int(chosen.params.get("soc_min", 20))
+    else:
+        desired, chosen, power, soc_arg = "normal", None, 100, 100
+
+    # 3) indikátor pro dashboard
+    await _set_automation_state(target, chosen.id if chosen else None)
+
+    # 4) edge-trigger podle skutečného režimu
     actual = await _actual_mode(target)
     satisfied = (
         (desired == "force_charge" and actual in CHARGE_MODES)
+        or (desired == "force_discharge" and actual in DISCHARGE_MODES)
         or (desired == "normal" and (actual in NORMAL_MODES or actual is None))
     )
     if satisfied:
         return
 
     now = time.monotonic()
-    if now - _last_cmd.get(r.id, 0.0) < MIN_CMD_INTERVAL:
+    if now - _last_cmd.get(target, 0.0) < MIN_CMD_INTERVAL:
         return
 
     mod = await modules_db.get(target)
     if not mod or mod.adapter != "goodwe" or not mod.params.get("host"):
-        await auto_db.mark_eval(r.id, "error:cíl není řiditelný"); return
+        return
 
     host = mod.params["host"]; port = int(mod.params.get("port", 8899))
+    actor = chosen.id if chosen else "auto-normal"
     try:
-        res = await set_battery_mode(host, port, desired, charge_power, int(soc_max))
-        _last_cmd[r.id] = now
-        await auto_db.mark_action(r.id, desired)
+        res = await set_battery_mode(host, port, desired, power, soc_arg)
+        _last_cmd[target] = now
+        if chosen is not None:
+            await auto_db.mark_action(chosen.id, desired)
+        else:
+            for r in rules:
+                await auto_db.mark_action(r.id, "normal")
         await control_db.record(
-            f"automation:{r.id}", target, "battery-mode",
-            {"mode": desired, "power_pct": charge_power, "target_soc": int(soc_max)},
+            f"automation:{actor}", target, "battery-mode",
+            {"mode": desired, "power_pct": power, "target_soc": soc_arg},
             True, {"requested": res["requested"], "confirmed": res.get("confirmed")},
         )
-        logger.info("Automatizace '%s' → %s (cena=%.0f, SoC=%.0f)", r.id, desired, price, soc)
+        logger.info("Automatizace [%s] → %s (cena=%.0f, SoC=%.0f)", target, desired, price, soc)
     except Exception as exc:
         await control_db.record(
-            f"automation:{r.id}", target, "battery-mode", {"mode": desired}, False, {"error": str(exc)}
+            f"automation:{actor}", target, "battery-mode", {"mode": desired}, False, {"error": str(exc)}
         )
-        logger.warning("Automatizace '%s': povel selhal: %s", r.id, exc)
+        logger.warning("Automatizace [%s]: povel '%s' selhal: %s", target, desired, exc)

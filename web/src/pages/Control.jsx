@@ -35,12 +35,16 @@ function ModuleControl({ mod, onCommand }) {
           <input value={power} onChange={(e) => setPower(e.target.value)} style={{ width: 120 }} />
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>Cílový SoC (%)</label>
+          <label>SoC cíl/podlaha (%)</label>
           <input value={soc} onChange={(e) => setSoc(e.target.value)} style={{ width: 120 }} />
         </div>
         <button className="btn primary" disabled={busy}
                 onClick={() => send({ mode: "force_charge", power_pct: Number(power), target_soc: Number(soc) }, "Vynutit nabíjení")}>
           Vynutit nabíjení
+        </button>
+        <button className="btn" disabled={busy}
+                onClick={() => send({ mode: "force_discharge", power_pct: Number(power), target_soc: Number(soc) }, "Vynutit vybíjení do sítě")}>
+          Vynutit vybíjení do sítě
         </button>
         <button className="btn" disabled={busy}
                 onClick={() => send({ mode: "normal" }, "Normální režim")}>

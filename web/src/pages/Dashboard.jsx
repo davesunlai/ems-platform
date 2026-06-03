@@ -71,9 +71,13 @@ function DevicePanel({ id }) {
       </div>
       {forcing && (
         <div className="mode-banner charge">
-          {auto
-            ? `🤖 ŘÍDÍ AUTOMATIZACE „${auto}" → nucené nabíjení${mode ? ` (${mode})` : ""}`
-            : `⚡ NUCENÉ NABÍJENÍ (ručně) — režim ${mode}`}
+          {(() => {
+            const disch = mode === "ECO_DISCHARGE";
+            const act = disch ? "vybíjení do sítě" : "nabíjení";
+            return auto
+              ? `🤖 ŘÍDÍ AUTOMATIZACE „${auto}" → ${act}${mode ? ` (${mode})` : ""}`
+              : `⚡ NUCENÉ ${disch ? "VYBÍJENÍ DO SÍTĚ" : "NABÍJENÍ"} (ručně) — režim ${mode}`;
+          })()}
         </div>
       )}
       <div className="cards">

@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field
 
 
 class RuleType(str, Enum):
-    SPOT_CHARGE = "spot_charge"   # nabíjej při nízké spotové ceně
+    SPOT_CHARGE = "spot_charge"        # nabíjej při nízké spotové ceně
+    SPOT_DISCHARGE = "spot_discharge"  # vybíjej do sítě při vysoké ceně
 
 
 class SpotChargeParams(BaseModel):

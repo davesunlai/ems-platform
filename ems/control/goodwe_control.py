@@ -22,6 +22,12 @@ async def set_battery_mode(host: str, port: int, mode: str,
             OperationMode.ECO_CHARGE, eco_mode_power=power_pct, eco_mode_soc=target_soc
         )
         requested = "ECO_CHARGE"
+    elif mode == "force_discharge":
+        # ECO_DISCHARGE: vybíjí baterii (do sítě) až na spodní SoC (target_soc = podlaha)
+        await inverter.set_operation_mode(
+            OperationMode.ECO_DISCHARGE, eco_mode_power=power_pct, eco_mode_soc=target_soc
+        )
+        requested = "ECO_DISCHARGE"
     elif mode == "normal":
         await inverter.set_operation_mode(OperationMode.GENERAL)
         requested = "GENERAL"
