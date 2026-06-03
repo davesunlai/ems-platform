@@ -6,3 +6,6 @@ venv/
 .env
 .DS_Store
 devices.yaml
+web/node_modules/
+web/dist/
+*.tar.gz
