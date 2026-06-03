@@ -11,7 +11,8 @@ Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 
 - **Registr modulů v DB** (v0.3): správa zařízení/modulů z admin UI, živá rekonciliace bez restartu kolektoru, migrace z devices.yaml.
 - **Řízení / zápis do měniče** (v0.4): povelový kanál s ověřením (read-back) a auditem, oprávnění `control`. První povel: režim baterie Goodwe ET — vynucené nabíjení / normální režim.
 - **Automatizace dle spotové ceny** (v0.5): pravidlo „levný spot → nabíjej", zdroj cen OTE + ruční test, audit automatických povelů, samoopravné edge-triggerem. První VPP chování.
-- React SPA frontend (přihlášení, dashboard, řízení, automatizace, správa modulů a uživatelů).
+- **Správa hesel** (v0.6): změna vlastního hesla, admin reset, zapomenuté heslo přes e-mail (Forpsi SMTP), profilová pole (e-mail, jméno).
+- React SPA frontend (přihlášení, dashboard, řízení, automatizace, správa modulů a uživatelů, změna hesla).
 
 ### Role a oprávnění
 - **viewer** — `read`: jen dashboard.

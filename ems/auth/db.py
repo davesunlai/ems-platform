@@ -26,6 +26,18 @@ async def ensure_schema() -> None:
             )
             """
         )
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS password_resets (
+                token_hash TEXT PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                expires_at TIMESTAMPTZ NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
 
 
 async def seed_admin() -> None:
@@ -48,7 +60,7 @@ async def get_user(username: str) -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, username, password_hash, role, active FROM users WHERE username = $1",
+            "SELECT id, username, password_hash, role, active, email, full_name FROM users WHERE username = $1",
             username,
         )
     return dict(row) if row else None
@@ -57,24 +69,29 @@ async def get_user(username: str) -> dict | None:
 async def list_users() -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id, username, role, active FROM users ORDER BY id")
+        rows = await conn.fetch("SELECT id, username, role, active, email, full_name FROM users ORDER BY id")
     return [dict(r) for r in rows]
 
 
-async def create_user(username: str, password: str, role: str) -> dict:
+async def create_user(username: str, password: str, role: str,
+                      email: str | None = None, full_name: str | None = None) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)
-            RETURNING id, username, role, active
+            INSERT INTO users (username, password_hash, role, email, full_name)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, username, role, active, email, full_name
             """,
-            username, hash_password(password), role,
+            username, hash_password(password), role, email, full_name,
         )
     return dict(row)
 
 
-async def update_user(user_id: int, *, password: str | None, role: str | None, active: bool | None) -> dict | None:
+async def update_user(user_id: int, *, password: str | None = None, role: str | None = None,
+                      active: bool | None = None, email: str | None = None,
+                      full_name: str | None = None, _email_set: bool = False,
+                      _name_set: bool = False) -> dict | None:
     sets, args = [], []
     if password is not None:
         args.append(hash_password(password)); sets.append(f"password_hash = ${len(args)}")
@@ -82,6 +99,10 @@ async def update_user(user_id: int, *, password: str | None, role: str | None, a
         args.append(role); sets.append(f"role = ${len(args)}")
     if active is not None:
         args.append(active); sets.append(f"active = ${len(args)}")
+    if _email_set:
+        args.append(email); sets.append(f"email = ${len(args)}")
+    if _name_set:
+        args.append(full_name); sets.append(f"full_name = ${len(args)}")
     if not sets:
         return None
     args.append(user_id)
@@ -89,7 +110,7 @@ async def update_user(user_id: int, *, password: str | None, role: str | None, a
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             f"UPDATE users SET {', '.join(sets)} WHERE id = ${len(args)} "
-            f"RETURNING id, username, role, active",
+            f"RETURNING id, username, role, active, email, full_name",
             *args,
         )
     return dict(row) if row else None
@@ -100,3 +121,48 @@ async def delete_user(user_id: int) -> bool:
     async with pool.acquire() as conn:
         res = await conn.execute("DELETE FROM users WHERE id = $1", user_id)
     return res.endswith("1")
+
+
+async def get_user_by_email(email: str) -> dict | None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, username, role, active, email, full_name FROM users "
+            "WHERE lower(email) = lower($1)",
+            email,
+        )
+    return dict(row) if row else None
+
+
+async def set_password(user_id: int, password: str) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        res = await conn.execute(
+            "UPDATE users SET password_hash = $1 WHERE id = $2",
+            hash_password(password), user_id,
+        )
+    return res.endswith("1")
+
+
+async def create_reset(user_id: int, token_hash: str, expires_at) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1, $2, $3)",
+            token_hash, user_id, expires_at,
+        )
+
+
+async def get_reset(token_hash: str) -> dict | None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT user_id, expires_at FROM password_resets WHERE token_hash = $1", token_hash
+        )
+    return dict(row) if row else None
+
+
+async def delete_reset(token_hash: str) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM password_resets WHERE token_hash = $1", token_hash)

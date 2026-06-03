@@ -42,15 +42,35 @@ class UserOut(BaseModel):
     username: str
     role: str
     active: bool
+    email: str | None = None
+    full_name: str | None = None
 
 
 class UserCreate(BaseModel):
     username: str
     password: str
     role: Role = Role.VIEWER
+    email: str | None = None
+    full_name: str | None = None
 
 
 class UserUpdate(BaseModel):
     password: str | None = None
     role: Role | None = None
     active: bool | None = None
+    email: str | None = None
+    full_name: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str

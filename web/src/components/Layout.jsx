@@ -37,6 +37,7 @@ export default function Layout() {
           <SpotChip />
           <span>{user?.username}</span>
           <span className="role">{user?.role}</span>
+          <NavLink to="/change-password" className="btn">Změnit heslo</NavLink>
           <button className="btn" onClick={logout}>Odhlásit</button>
         </div>
       </header>

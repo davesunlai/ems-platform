@@ -49,6 +49,13 @@ services:
       EMS_JWT_SECRET: ${EMS_JWT_SECRET:-dev-insecure-change-me}
       EMS_ADMIN_USER: ${EMS_ADMIN_USER:-admin}
       EMS_ADMIN_PASSWORD: ${EMS_ADMIN_PASSWORD:-admin}
+      EMS_BASE_URL: ${EMS_BASE_URL:-http://localhost:8080}
+      EMS_SMTP_HOST: ${EMS_SMTP_HOST:-smtp.forpsi.com}
+      EMS_SMTP_PORT: ${EMS_SMTP_PORT:-465}
+      EMS_SMTP_SECURITY: ${EMS_SMTP_SECURITY:-ssl}
+      EMS_SMTP_USER: ${EMS_SMTP_USER:-}
+      EMS_SMTP_PASSWORD: ${EMS_SMTP_PASSWORD:-}
+      EMS_SMTP_FROM: ${EMS_SMTP_FROM:-}
     ports: ["8000:8000"]
     depends_on:
       timescaledb:

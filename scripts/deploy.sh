@@ -44,11 +44,24 @@ if [[ ! -f .env ]]; then
     echo "EMS_JWT_SECRET=${JWT}"
     echo "EMS_ADMIN_USER=admin"
     echo "EMS_ADMIN_PASSWORD=${ADMINPW}"
+    echo "EMS_BASE_URL=http://192.168.6.209:8080"
+    echo "# E-mail (Forpsi) — doplň heslo schránky:"
+    echo "EMS_SMTP_HOST=smtp.forpsi.com"
+    echo "EMS_SMTP_PORT=465"
+    echo "EMS_SMTP_SECURITY=ssl"
+    echo "EMS_SMTP_USER=ai@teraems.com"
+    echo "EMS_SMTP_PASSWORD="
+    echo "EMS_SMTP_FROM=ai@teraems.com"
   } > .env
   echo "==> Vytvořen .env (heslo DB, JWT secret, admin)."
   echo "==> PRVNÍ PŘIHLÁŠENÍ:  admin / ${ADMINPW}   (změň po loginu)"
 fi
 set -a; source .env; set +a
+
+if [[ -z "${EMS_SMTP_PASSWORD:-}" ]]; then
+  echo "==> POZN.: EMS_SMTP_PASSWORD není v .env — reset hesla e-mailem zatím nebude fungovat."
+  echo "    Doplň do .env: EMS_BASE_URL, EMS_SMTP_USER=ai@teraems.com, EMS_SMTP_PASSWORD=<heslo schránky> (+ HOST/PORT/SECURITY/FROM)."
+fi
 
 # 3) build + start
 echo "==> Build a start kontejnerů…"

@@ -30,6 +30,9 @@ async function request(path, { method = "GET", body } = {}) {
 export const api = {
   login: (username, password) => request("/api/auth/login", { method: "POST", body: { username, password } }),
   me: () => request("/api/auth/me"),
+  changePassword: (old_password, new_password) => request("/api/auth/change-password", { method: "POST", body: { old_password, new_password } }),
+  forgotPassword: (email) => request("/api/auth/forgot-password", { method: "POST", body: { email } }),
+  resetPassword: (token, new_password) => request("/api/auth/reset-password", { method: "POST", body: { token, new_password } }),
   devices: () => request("/api/devices"),
   latest: (id) => request(`/api/devices/${encodeURIComponent(id)}/latest`),
   history: (id, metric, minutes = 360) =>

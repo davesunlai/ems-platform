@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../auth";
 
 export default function Login() {
@@ -37,6 +37,9 @@ export default function Login() {
           {busy ? "Přihlašuji…" : "Přihlásit"}
         </button>
         <p className="error">{err}</p>
+        <p style={{ textAlign: "center", marginTop: 4 }}>
+          <Link to="/forgot" className="muted" style={{ fontSize: 13 }}>Zapomenuté heslo?</Link>
+        </p>
       </div>
     </div>
   );
