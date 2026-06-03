@@ -1,4 +1,4 @@
-# EMS Platform
+# TERA EMS
 
 Univerzální energy management napříč energetickým portfoliem — sledování a (postupně) řízení vyrobené a spotřebované elektrické energie. Stavěno modulárně: jádro drží kanonický model, každý typ zdroje se připojuje přes vlastní adaptér.
 
@@ -12,7 +12,8 @@ Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 
 - **Řízení / zápis do měniče** (v0.4): povelový kanál s ověřením (read-back) a auditem, oprávnění `control`. První povel: režim baterie Goodwe ET — vynucené nabíjení / normální režim.
 - **Automatizace dle spotové ceny** (v0.5): pravidlo „levný spot → nabíjej", zdroj cen OTE + ruční test, audit automatických povelů, samoopravné edge-triggerem. První VPP chování.
 - **Správa hesel** (v0.6): změna vlastního hesla, admin reset, zapomenuté heslo přes e-mail (Forpsi SMTP), profilová pole (e-mail, jméno).
-- React SPA frontend (přihlášení, dashboard, řízení, automatizace, správa modulů a uživatelů, změna hesla).
+- **Lokality a párování** (v0.6.1): správa lokalit, vazba zařízení→lokalita a uživatel↔lokalita (M:N), profil uživatele (telefon, poznámka).
+- React SPA frontend (přihlášení, dashboard, řízení, automatizace, lokality, správa modulů a uživatelů, změna hesla).
 
 ### Role a oprávnění
 - **viewer** — `read`: jen dashboard.

@@ -38,6 +38,7 @@ def _row_to_module(row) -> Module:
         device_type=row["device_type"], adapter=row["adapter"],
         params=json.loads(row["params"]) if isinstance(row["params"], str) else row["params"],
         region=row["region"], enabled=row["enabled"],
+        locality_id=row.get("locality_id"),
     )
 
 

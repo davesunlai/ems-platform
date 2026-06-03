@@ -31,6 +31,7 @@ class Module(BaseModel):
     params: dict = Field(default_factory=dict)
     region: str = "CZ"
     enabled: bool = True
+    locality_id: int | None = None
 
 
 class ModuleCreate(BaseModel):

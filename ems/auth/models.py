@@ -44,6 +44,8 @@ class UserOut(BaseModel):
     active: bool
     email: str | None = None
     full_name: str | None = None
+    phone: str | None = None
+    note: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -52,6 +54,8 @@ class UserCreate(BaseModel):
     role: Role = Role.VIEWER
     email: str | None = None
     full_name: str | None = None
+    phone: str | None = None
+    note: str | None = None
 
 
 class UserUpdate(BaseModel):
@@ -60,6 +64,8 @@ class UserUpdate(BaseModel):
     active: bool | None = None
     email: str | None = None
     full_name: str | None = None
+    phone: str | None = None
+    note: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):

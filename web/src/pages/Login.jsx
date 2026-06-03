@@ -21,7 +21,7 @@ export default function Login() {
     <div className="login-wrap">
       <div className="login-card">
         <div className="brand">
-          <span className="dot" /><b>EMS Platform</b>
+          <span className="dot" /><b>TERA EMS</b>
         </div>
         <div className="field">
           <label>Uživatel</label>

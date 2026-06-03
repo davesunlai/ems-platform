@@ -124,7 +124,8 @@ async def post_user(body: UserCreate, _: dict = Depends(require_permission("admi
     if await db.get_user(body.username):
         raise HTTPException(status_code=409, detail="Uživatel už existuje")
     return await db.create_user(body.username, body.password, body.role.value,
-                                email=body.email, full_name=body.full_name)
+                                email=body.email, full_name=body.full_name,
+                                phone=body.phone, note=body.note)
 
 
 @router.patch("/admin/users/{user_id}", response_model=UserOut)
@@ -137,6 +138,8 @@ async def patch_user(user_id: int, body: UserUpdate, _: dict = Depends(require_p
         active=body.active,
         email=body.email, _email_set="email" in sent,
         full_name=body.full_name, _name_set="full_name" in sent,
+        phone=body.phone if "phone" in sent else None,
+        note=body.note if "note" in sent else None,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Uživatel nenalezen nebo nic ke změně")

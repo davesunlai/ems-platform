@@ -28,6 +28,8 @@ async def ensure_schema() -> None:
         )
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS note TEXT")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS password_resets (
@@ -60,7 +62,7 @@ async def get_user(username: str) -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, username, password_hash, role, active, email, full_name FROM users WHERE username = $1",
+            "SELECT id, username, password_hash, role, active, email, full_name, phone, note FROM users WHERE username = $1",
             username,
         )
     return dict(row) if row else None
@@ -69,28 +71,30 @@ async def get_user(username: str) -> dict | None:
 async def list_users() -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id, username, role, active, email, full_name FROM users ORDER BY id")
+        rows = await conn.fetch("SELECT id, username, role, active, email, full_name, phone, note FROM users ORDER BY id")
     return [dict(r) for r in rows]
 
 
 async def create_user(username: str, password: str, role: str,
-                      email: str | None = None, full_name: str | None = None) -> dict:
+                      email: str | None = None, full_name: str | None = None,
+                      phone: str | None = None, note: str | None = None) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO users (username, password_hash, role, email, full_name)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, username, role, active, email, full_name
+            INSERT INTO users (username, password_hash, role, email, full_name, phone, note)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id, username, role, active, email, full_name, phone, note
             """,
-            username, hash_password(password), role, email, full_name,
+            username, hash_password(password), role, email, full_name, phone, note,
         )
     return dict(row)
 
 
 async def update_user(user_id: int, *, password: str | None = None, role: str | None = None,
                       active: bool | None = None, email: str | None = None,
-                      full_name: str | None = None, _email_set: bool = False,
+                      full_name: str | None = None, phone: str | None = None,
+                      note: str | None = None, _email_set: bool = False,
                       _name_set: bool = False) -> dict | None:
     sets, args = [], []
     if password is not None:
@@ -103,6 +107,10 @@ async def update_user(user_id: int, *, password: str | None = None, role: str | 
         args.append(email); sets.append(f"email = ${len(args)}")
     if _name_set:
         args.append(full_name); sets.append(f"full_name = ${len(args)}")
+    if phone is not None:
+        args.append(phone); sets.append(f"phone = ${len(args)}")
+    if note is not None:
+        args.append(note); sets.append(f"note = ${len(args)}")
     if not sets:
         return None
     args.append(user_id)
@@ -110,7 +118,7 @@ async def update_user(user_id: int, *, password: str | None = None, role: str | 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             f"UPDATE users SET {', '.join(sets)} WHERE id = ${len(args)} "
-            f"RETURNING id, username, role, active, email, full_name",
+            f"RETURNING id, username, role, active, email, full_name, phone, note",
             *args,
         )
     return dict(row) if row else None

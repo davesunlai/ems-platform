@@ -56,4 +56,12 @@ export const api = {
   createRule: (r) => request("/api/admin/automation", { method: "POST", body: r }),
   updateRule: (id, patch) => request(`/api/admin/automation/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
   deleteRule: (id) => request(`/api/admin/automation/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  listLocalities: () => request("/api/admin/localities"),
+  createLocality: (l) => request("/api/admin/localities", { method: "POST", body: l }),
+  updateLocality: (id, patch) => request(`/api/admin/localities/${id}`, { method: "PATCH", body: patch }),
+  deleteLocality: (id) => request(`/api/admin/localities/${id}`, { method: "DELETE" }),
+  assignUser: (id, user_id) => request(`/api/admin/localities/${id}/users`, { method: "POST", body: { user_id } }),
+  unassignUser: (id, user_id) => request(`/api/admin/localities/${id}/users/${user_id}`, { method: "DELETE" }),
+  assignDevice: (id, module_id) => request(`/api/admin/localities/${id}/devices`, { method: "POST", body: { module_id } }),
+  unassignDevice: (id, module_id) => request(`/api/admin/localities/${id}/devices/${encodeURIComponent(module_id)}`, { method: "DELETE" }),
 };

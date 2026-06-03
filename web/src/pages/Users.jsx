@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 
 const ROLES = ["viewer", "operator", "admin"];
-const empty = { username: "", password: "", role: "viewer", email: "", full_name: "" };
+const empty = { username: "", password: "", role: "viewer", email: "", full_name: "", phone: "", note: "" };
 
 export default function Users() {
   const [users, setUsers] = useState([]);
@@ -18,6 +18,7 @@ export default function Users() {
       await api.createUser({
         username: nu.username, password: nu.password, role: nu.role,
         email: nu.email || null, full_name: nu.full_name || null,
+        phone: nu.phone || null, note: nu.note || null,
       });
       setNu(empty); load();
     } catch (e) { setErr(e.message); }
@@ -29,6 +30,11 @@ export default function Users() {
     const email = prompt(`E-mail uživatele ${u.username}:`, u.email || "");
     if (email === null) return;
     try { await api.updateUser(u.id, { email: email || null }); load(); } catch (e) { setErr(e.message); }
+  };
+  const editPhone = async (u) => {
+    const phone = prompt(`Telefon uživatele ${u.username}:`, u.phone || "");
+    if (phone === null) return;
+    try { await api.updateUser(u.id, { phone: phone || "" }); load(); } catch (e) { setErr(e.message); }
   };
   const resetPw = async (u) => {
     const pw = prompt(`Nové heslo pro ${u.username} (min. 6 znaků):`, "");
@@ -59,6 +65,10 @@ export default function Users() {
             <input value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
+            <label>Telefon</label>
+            <input value={nu.phone} onChange={(e) => setNu({ ...nu, phone: e.target.value })} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
             <label>Role</label>
             <select value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })}>
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -72,7 +82,7 @@ export default function Users() {
       <div className="panel">
         <h3>Uživatelé</h3>
         <table>
-          <thead><tr><th>ID</th><th>Uživatel</th><th>Jméno</th><th>E-mail</th><th>Role</th><th>Stav</th><th></th></tr></thead>
+          <thead><tr><th>ID</th><th>Uživatel</th><th>Jméno</th><th>E-mail</th><th>Telefon</th><th>Role</th><th>Stav</th><th></th></tr></thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
@@ -82,6 +92,10 @@ export default function Users() {
                 <td className="muted" style={{ fontSize: 13 }}>
                   {u.email || "—"}
                   <button className="btn" style={{ marginLeft: 6, padding: "2px 7px" }} onClick={() => editEmail(u)}>✎</button>
+                </td>
+                <td className="muted" style={{ fontSize: 13 }}>
+                  {u.phone || "—"}
+                  <button className="btn" style={{ marginLeft: 6, padding: "2px 7px" }} onClick={() => editPhone(u)}>✎</button>
                 </td>
                 <td>
                   <select className="role" value={u.role} onChange={(e) => setRole(u.id, e.target.value)}

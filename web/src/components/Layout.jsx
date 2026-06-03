@@ -22,13 +22,14 @@ export default function Layout() {
       <header className="topbar">
         <div className="brand">
           <span className="dot" />
-          <b>EMS Platform</b>
+          <b>TERA EMS</b>
           <span>pilot</span>
         </div>
         <nav className="nav">
           <NavLink to="/" end>Dashboard</NavLink>
           {has("control") && <NavLink to="/control">Řízení</NavLink>}
           {has("admin") && <NavLink to="/automation">Automatizace</NavLink>}
+          {has("admin") && <NavLink to="/localities">Lokality</NavLink>}
           {has("admin") && <NavLink to="/modules">Moduly</NavLink>}
           {has("admin") && <NavLink to="/users">Uživatelé</NavLink>}
         </nav>
