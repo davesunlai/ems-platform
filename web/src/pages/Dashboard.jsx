@@ -118,6 +118,7 @@ function DevicePanel({ id, locality, lastSeen }) {
           );
         })}
       </div>
+      {hist.length >= 2 && (
       <div className="chart-wrap">
         <div className="chart-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span>{LABELS[chartMetric] || chartMetric}</span>
@@ -130,6 +131,7 @@ function DevicePanel({ id, locality, lastSeen }) {
         </div>
         <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color="#3fb950" />
       </div>
+      )}
     </section>
   );
 }
