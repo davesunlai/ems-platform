@@ -1,6 +1,19 @@
 // Víceřadý spojnicový graf s osami (čas X, výkon Y v kW) + legenda.
 // series: [{ label, color, points: [{time, value}] }] — hodnoty ve W → kW.
-export default function MultiChart({ series, height = 240 }) {
+import { useRef, useState } from "react";
+
+export default function MultiChart({ series, height = 240, onPan, windowMinutes }) {
+  const drag = useRef(null);
+  const [shift, setShift] = useState(0);
+  const W0 = 760;
+  const down = (e) => { drag.current = { x: e.clientX, w: e.currentTarget.getBoundingClientRect().width }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} };
+  const move = (e) => { if (drag.current) setShift(((e.clientX - drag.current.x) / drag.current.w) * W0); };
+  const end = (e) => {
+    if (!drag.current) return;
+    const frac = (e.clientX - drag.current.x) / drag.current.w;
+    drag.current = null; setShift(0);
+    if (onPan && Math.abs(frac) > 0.02 && windowMinutes) onPan(frac * windowMinutes);
+  };
   const valid = (series || []).filter((s) => s.points && s.points.length >= 2);
   if (!valid.length)
     return <div className="muted" style={{ fontSize: 12, padding: "20px 0" }}>Zatím bez dat v tomto okně.</div>;
@@ -36,7 +49,9 @@ export default function MultiChart({ series, height = 240 }) {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", cursor: onPan ? "ew-resize" : "default", touchAction: "none" }}
+           onPointerDown={onPan ? down : undefined} onPointerMove={onPan ? move : undefined}
+           onPointerUp={onPan ? end : undefined} onPointerLeave={onPan ? end : undefined}>
         <text x={14} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
               transform={`rotate(-90 14 ${padT + plotH / 2})`}>kW</text>
         {yTicks.map((v, i) => (
@@ -54,9 +69,11 @@ export default function MultiChart({ series, height = 240 }) {
                 fontSize="10" fill="var(--muted)">{fmtX(t)}</text>
         ))}
         <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="var(--border)" strokeWidth="0.8" />
-        {valid.map((s, i) => (
-          <path key={i} d={pathFor(s.points)} fill="none" stroke={s.color} strokeWidth="1.7" vectorEffect="non-scaling-stroke" />
-        ))}
+        <g transform={`translate(${shift},0)`}>
+          {valid.map((s, i) => (
+            <path key={i} d={pathFor(s.points)} fill="none" stroke={s.color} strokeWidth="1.7" vectorEffect="non-scaling-stroke" />
+          ))}
+        </g>
       </svg>
       <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--muted)", marginTop: 4, flexWrap: "wrap" }}>
         {valid.map((s, i) => (

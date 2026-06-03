@@ -63,10 +63,11 @@ async def latest_for_device(device_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def history(device_id: str, metric: str, minutes: int = 360,
+async def history(device_id: str, metric: str, minutes: int = 360, offset: int = 0,
                   target_points: int = 400) -> list[dict]:
-    # Agregace do ~target_points košů, ať i měsíc dat je pár set bodů, ne 260k.
+    # Okno [now-(minutes+offset), now-offset]; agregace do ~target_points košů.
     bucket_seconds = max(10, int(minutes * 60 / target_points))
+    start_min = minutes + offset
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -75,11 +76,12 @@ async def history(device_id: str, metric: str, minutes: int = 360,
                    avg(value) AS value
             FROM samples
             WHERE device_id = $1 AND metric = $2
-              AND time > now() - ($3 || ' minutes')::interval
+              AND time >  now() - ($3 || ' minutes')::interval
+              AND time <= now() - ($5 || ' minutes')::interval
             GROUP BY bucket
             ORDER BY bucket
             """,
-            device_id, metric, str(minutes), str(bucket_seconds),
+            device_id, metric, str(start_min), str(bucket_seconds), str(offset),
         )
     return [{"time": r["bucket"].isoformat(), "value": float(r["value"])}
             for r in rows if r["value"] is not None]
@@ -113,11 +115,12 @@ async def latest_states(device_id: str) -> dict:
 
 
 async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 360,
-                            target_points: int = 400) -> list[dict]:
+                            offset: int = 0, target_points: int = 400) -> list[dict]:
     """Součet veličiny přes více zařízení v čase (per-bucket suma průměrů zařízení)."""
     if not device_ids:
         return []
     bucket_seconds = max(10, int(minutes * 60 / target_points))
+    start_min = minutes + offset
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -127,12 +130,13 @@ async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 3
                        device_id, avg(value) AS dev_avg
                 FROM samples
                 WHERE device_id = ANY($2::text[]) AND metric = $3
-                  AND time > now() - ($4 || ' minutes')::interval
+                  AND time >  now() - ($4 || ' minutes')::interval
+                  AND time <= now() - ($5 || ' minutes')::interval
                 GROUP BY b, device_id
             ) t
             GROUP BY b ORDER BY b
             """,
-            str(bucket_seconds), device_ids, metric, str(minutes),
+            str(bucket_seconds), device_ids, metric, str(start_min), str(offset),
         )
     return [{"time": r["b"].isoformat(), "value": float(r["value"])}
             for r in rows if r["value"] is not None]

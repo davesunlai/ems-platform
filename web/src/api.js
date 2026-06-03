@@ -35,10 +35,10 @@ export const api = {
   resetPassword: (token, new_password) => request("/api/auth/reset-password", { method: "POST", body: { token, new_password } }),
   devices: () => request("/api/devices"),
   latest: (id) => request(`/api/devices/${encodeURIComponent(id)}/latest`),
-  history: (id, metric, minutes = 360) =>
-    request(`/api/devices/${encodeURIComponent(id)}/history?metric=${metric}&minutes=${minutes}`),
-  aggregate: (ids, metrics, minutes = 360) =>
-    request(`/api/devices/aggregate?ids=${encodeURIComponent(ids.join(","))}&metrics=${metrics.join(",")}&minutes=${minutes}`),
+  history: (id, metric, minutes = 360, offset = 0) =>
+    request(`/api/devices/${encodeURIComponent(id)}/history?metric=${metric}&minutes=${minutes}&offset=${offset}`),
+  aggregate: (ids, metrics, minutes = 360, offset = 0) =>
+    request(`/api/devices/aggregate?ids=${encodeURIComponent(ids.join(","))}&metrics=${metrics.join(",")}&minutes=${minutes}&offset=${offset}`),
   listUsers: () => request("/api/admin/users"),
   createUser: (u) => request("/api/admin/users", { method: "POST", body: u }),
   updateUser: (id, patch) => request(`/api/admin/users/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),

@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.10.0", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.11.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,17 +94,19 @@ async def latest(device_id: str, _: dict = Depends(read)) -> dict:
 
 @app.get("/api/devices/aggregate")
 async def devices_aggregate(ids: str, metrics: str = "pv_power,load_power,grid_power",
-                            minutes: int = 360, _: dict = Depends(read)) -> dict:
+                            minutes: int = 360, offset: int = 0, _: dict = Depends(read)) -> dict:
     minutes = max(360, min(minutes, 43200))
+    offset = max(0, min(offset, 525600))
     dev_ids = [x for x in ids.split(",") if x]
     out = {}
     for met in [x for x in metrics.split(",") if x]:
-        out[met] = await db.aggregate_history(dev_ids, met, minutes)
+        out[met] = await db.aggregate_history(dev_ids, met, minutes, offset)
     return {"minutes": minutes, "metrics": out}
 
 
 @app.get("/api/devices/{device_id}/history")
-async def device_history(device_id: str, metric: str, minutes: int = 360, _: dict = Depends(read)) -> dict:
+async def device_history(device_id: str, metric: str, minutes: int = 360, offset: int = 0, _: dict = Depends(read)) -> dict:
     minutes = max(360, min(minutes, 43200))  # 6 h .. 30 dní
-    points = await db.history(device_id, metric, minutes)
+    offset = max(0, min(offset, 525600))      # až ~1 rok zpět
+    points = await db.history(device_id, metric, minutes, offset)
     return {"device_id": device_id, "metric": metric, "points": points}

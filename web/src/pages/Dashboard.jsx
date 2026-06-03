@@ -19,6 +19,16 @@ const WIN = [
   { min: 43200, label: "30 dní" },
 ];
 
+function rangeLabel(minutes, offset) {
+  const end = new Date(Date.now() - offset * 60000);
+  const start = new Date(Date.now() - (offset + minutes) * 60000);
+  const dd = (x) => x.toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric" });
+  const tt = (x) => x.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+  return start.toDateString() === end.toDateString()
+    ? `${dd(start)} ${tt(start)}–${tt(end)}`
+    : `${dd(start)} ${tt(start)} – ${dd(end)} ${tt(end)}`;
+}
+
 function fmt(metric, m) {
   const v = m.value, u = m.unit;
   if (u === "W" || u === "var") {
@@ -37,7 +47,9 @@ function DevicePanel({ id, locality, lastSeen }) {
   const [hist, setHist] = useState([]);
   const [chartMetric, setChartMetric] = useState("pv_power");
   const [win, setWin] = useState(0);
+  const [offset, setOffset] = useState(0);
   const err = useRef(false);
+  const pan = (db) => setOffset((o) => Math.max(0, Math.min(525600, Math.round(o + db))));
 
   useEffect(() => {
     let alive = true;
@@ -59,13 +71,13 @@ function DevicePanel({ id, locality, lastSeen }) {
   useEffect(() => {
     let alive = true;
     const fetchHist = async () => {
-      try { const h = await api.history(id, chartMetric, WIN[win].min); if (alive) setHist(h.points); }
+      try { const h = await api.history(id, chartMetric, WIN[win].min, offset); if (alive) setHist(h.points); }
       catch (e) { /* ignore */ }
     };
     fetchHist();
-    const t = setInterval(fetchHist, 60000);
-    return () => { alive = false; clearInterval(t); };
-  }, [id, chartMetric, win]);
+    const t = offset === 0 ? setInterval(fetchHist, 60000) : null;
+    return () => { alive = false; if (t) clearInterval(t); };
+  }, [id, chartMetric, win, offset]);
 
   if (!latest) return (
     <section className="device"><div className="device-head"><span className="id">{id}</span></div>
@@ -123,14 +135,16 @@ function DevicePanel({ id, locality, lastSeen }) {
       <div className="chart-wrap">
         <div className="chart-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span>{LABELS[chartMetric] || chartMetric}</span>
+          <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· {rangeLabel(WIN[win].min, offset)}</span>
           <span style={{ flex: 1 }} />
+          {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">→ teď</button>}
           <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
-                  onClick={() => setWin((w) => Math.max(0, w - 1))} disabled={win === 0} title="kratší okno">−</button>
+                  onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0} title="kratší okno">−</button>
           <span className="muted" style={{ minWidth: 50, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{WIN[win].label}</span>
           <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
-                  onClick={() => setWin((w) => Math.min(WIN.length - 1, w + 1))} disabled={win === WIN.length - 1} title="delší okno (až 30 dní)">+</button>
+                  onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1} title="delší okno (až 30 dní)">+</button>
         </div>
-        <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color="#3fb950" />
+        <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color="#3fb950" onPan={pan} windowMinutes={WIN[win].min} />
       </div>
       )}
     </section>
@@ -139,16 +153,18 @@ function DevicePanel({ id, locality, lastSeen }) {
 
 function LocalityChart({ deviceIds }) {
   const [win, setWin] = useState(2); // default 24 h
+  const [offset, setOffset] = useState(0);
   const [data, setData] = useState(null);
+  const pan = (db) => setOffset((o) => Math.max(0, Math.min(525600, Math.round(o + db))));
 
   useEffect(() => {
     let alive = true;
-    const load = () => api.aggregate(deviceIds, ["pv_power", "load_power", "grid_power"], WIN[win].min)
+    const load = () => api.aggregate(deviceIds, ["pv_power", "load_power", "grid_power"], WIN[win].min, offset)
       .then((r) => alive && setData(r.metrics)).catch(() => {});
     load();
-    const t = setInterval(load, 60000);
-    return () => { alive = false; clearInterval(t); };
-  }, [deviceIds.join(","), win]);
+    const t = offset === 0 ? setInterval(load, 60000) : null;
+    return () => { alive = false; if (t) clearInterval(t); };
+  }, [deviceIds.join(","), win, offset]);
 
   const series = data ? [
     { label: "Výroba FVE", color: "#3fb950", points: data.pv_power || [] },
@@ -160,15 +176,17 @@ function LocalityChart({ deviceIds }) {
     <div className="panel" style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <h3 style={{ margin: 0 }}>Souhrn lokality</h3>
+        <span className="muted" style={{ fontSize: 12 }}>· {rangeLabel(WIN[win].min, offset)}</span>
         <span style={{ flex: 1 }} />
+        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">→ teď</button>}
         <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
-                onClick={() => setWin((w) => Math.max(0, w - 1))} disabled={win === 0}>−</button>
+                onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0}>−</button>
         <span className="muted" style={{ minWidth: 50, textAlign: "center" }}>{WIN[win].label}</span>
         <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
-                onClick={() => setWin((w) => Math.min(WIN.length - 1, w + 1))} disabled={win === WIN.length - 1}>+</button>
+                onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1}>+</button>
       </div>
       {!data ? <p className="muted" style={{ fontSize: 12 }}>Načítám…</p>
-             : <MultiChart series={series} />}
+             : <MultiChart series={series} onPan={pan} windowMinutes={WIN[win].min} />}
     </div>
   );
 }
