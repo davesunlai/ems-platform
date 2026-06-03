@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
         await control_db.ensure_schema()
         await db.ensure_state_schema()
         await market_db.ensure_schema()
+        await market_db.ensure_history_schema()
         await automation_db.ensure_schema()
         await localities_db.ensure_schema()
     except Exception as exc:
@@ -43,7 +44,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.7.3", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.8.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

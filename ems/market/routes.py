@@ -20,6 +20,12 @@ async def spot(_: dict = Depends(require_permission("read"))):
     return await db.get_state()
 
 
+@router.get("/market/spot-curve")
+async def spot_curve(days: int = 1, _: dict = Depends(require_permission("read"))):
+    days = max(1, min(days, 30))
+    return {"days": days, "slots": await db.history_window(days)}
+
+
 @router.post("/admin/market/manual")
 async def set_manual(body: ManualPrice, _: dict = Depends(require_permission("admin"))):
     await db.set_manual(body.price)

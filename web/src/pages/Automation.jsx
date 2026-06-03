@@ -74,8 +74,8 @@ export default function Automation() {
       <SpotPanel onChange={() => { load(); loadSpot(); }} />
 
       <div className="panel" style={{ marginBottom: 18 }}>
-        <h3>Cenová křivka (dnes + zítra)</h3>
-        <SpotCurve curve={spot?.curve} rules={rules} />
+        <h3>Cenová křivka (15min, OTE)</h3>
+        <SpotCurve rules={rules} />
       </div>
 
       <div className="panel" style={{ marginBottom: 18 }}>

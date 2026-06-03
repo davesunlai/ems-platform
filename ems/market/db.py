@@ -68,3 +68,61 @@ async def set_curve(curve: dict) -> None:
         await conn.execute(
             "UPDATE market_state SET curve = $1::jsonb WHERE id = 1", json.dumps(curve)
         )
+
+
+async def ensure_history_schema() -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS spot_history (
+                slot  TIMESTAMPTZ PRIMARY KEY,
+                price DOUBLE PRECISION NOT NULL
+            )
+            """
+        )
+
+
+async def upsert_slots(slots: list[dict]) -> None:
+    """slots: [{start: ISO, price}] — uloží/aktualizuje 15min sloty."""
+    from datetime import datetime
+    if not slots:
+        return
+    rows = []
+    for s in slots:
+        try:
+            rows.append((datetime.fromisoformat(s["start"]), float(s["price"])))
+        except Exception:
+            pass
+    if not rows:
+        return
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.executemany(
+            "INSERT INTO spot_history (slot, price) VALUES ($1, $2) "
+            "ON CONFLICT (slot) DO UPDATE SET price = EXCLUDED.price",
+            rows,
+        )
+
+
+async def history_window(days: int = 1, target_points: int = 400) -> list[dict]:
+    """Sloty od (dnešek - (days-1)) do konce zítřka, agregované na ~target bodů.
+
+    days=1 => dnešek+zítřek v 15min; delší okna se zhrubnou (time_bucket).
+    """
+    bucket_seconds = max(900, int(days * 86400 / target_points))  # min 15 min
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT time_bucket(($1 || ' seconds')::interval, slot) AS b, avg(price) AS price
+            FROM spot_history
+            WHERE slot >= date_trunc('day', now()) - ($2 || ' days')::interval
+              AND slot <  date_trunc('day', now()) + interval '2 days'
+            GROUP BY b
+            ORDER BY b
+            """,
+            str(bucket_seconds), str(max(0, days - 1)),
+        )
+    return [{"start": r["b"].isoformat(), "price": float(r["price"])}
+            for r in rows if r["price"] is not None]

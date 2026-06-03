@@ -50,6 +50,7 @@ export const api = {
   setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
   controlAudit: () => request("/api/control/audit"),
   spot: () => request("/api/market/spot"),
+  spotCurve: (days = 1) => request(`/api/market/spot-curve?days=${days}`),
   setManualPrice: (price) => request("/api/admin/market/manual", { method: "POST", body: { price } }),
   clearManualPrice: () => request("/api/admin/market/manual", { method: "DELETE" }),
   listRules: () => request("/api/automation"),

@@ -1,16 +1,39 @@
+import { useEffect, useState } from "react";
+import { api } from "../api";
+
 const GREEN = "#3fb950";
 const RED = "#e06c75";
+const WIN = [
+  { days: 1, label: "den" }, { days: 2, label: "2 dny" }, { days: 3, label: "3 dny" },
+  { days: 7, label: "7 dní" }, { days: 14, label: "14 dní" }, { days: 30, label: "30 dní" },
+];
 
-export default function SpotCurve({ curve, rules = [] }) {
-  const today = curve?.today || [];
-  const tomorrow = curve?.tomorrow || [];
-  if (!today.length && !tomorrow.length)
-    return <p className="muted" style={{ fontSize: 13 }}>Cenová křivka zatím není k dispozici (zítřek bývá po ~14:00).</p>;
+export default function SpotCurve({ rules = [] }) {
+  const [wi, setWi] = useState(0);
+  const [slots, setSlots] = useState(null);
 
-  const slots = [
-    ...today.map((h) => ({ ...h, day: "dnes" })),
-    ...tomorrow.map((h) => ({ ...h, day: "zítra" })),
-  ];
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.spotCurve(WIN[wi].days).then((r) => alive && setSlots(r.slots)).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, [wi]);
+
+  const controls = (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <span style={{ flex: 1 }} />
+      <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+              onClick={() => setWi((w) => Math.max(0, w - 1))} disabled={wi === 0} title="kratší">−</button>
+      <span className="muted" style={{ minWidth: 50, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{WIN[wi].label}</span>
+      <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+              onClick={() => setWi((w) => Math.min(WIN.length - 1, w + 1))} disabled={wi === WIN.length - 1} title="delší (až 30 dní)">+</button>
+    </div>
+  );
+
+  if (!slots) return <>{controls}<p className="muted" style={{ fontSize: 13 }}>Načítám…</p></>;
+  if (!slots.length) return <>{controls}<p className="muted" style={{ fontSize: 13 }}>Data zatím nejsou (historie se plní; zítřek bývá po ~14:00).</p></>;
+
   const chargeThr = rules.filter((r) => r.enabled && r.type === "spot_charge").map((r) => Number(r.params.price_threshold));
   const dischThr = rules.filter((r) => r.enabled && r.type === "spot_discharge").map((r) => Number(r.params.price_threshold));
 
@@ -19,25 +42,47 @@ export default function SpotCurve({ curve, rules = [] }) {
   const maxV = Math.max(...vals), minV = Math.min(...vals);
   const span = (maxV - minV) || 1;
 
-  const W = 960, H = 250, padT = 14, padB = 46, padL = 50, padR = 12;
+  const ts = slots.map((s) => new Date(s.start).getTime());
+  const multiDay = WIN[wi].days > 2;
+  const now = Date.now();
+
+  const W = 960, H = 250, padT = 14, padB = 40, padL = 52, padR = 12;
   const plotH = H - padT - padB, plotW = W - padL - padR;
   const n = slots.length, bw = plotW / n;
   const y = (v) => padT + plotH * (1 - (v - minV) / span);
-  const curHour = new Date().getHours();
+  const base = y(Math.min(0, minV) < 0 ? 0 : minV);
 
   const barColor = (p) => {
     if (chargeThr.some((t) => p < t)) return GREEN;
     if (dischThr.some((t) => p > t)) return RED;
     return "var(--border)";
   };
+  const fmtX = (t) => {
+    const d = new Date(t);
+    return multiDay ? d.toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric" })
+                    : d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  // ~7 popisků osy X rovnoměrně
+  const xN = Math.min(7, n);
+  const xIdx = Array.from({ length: xN }, (_, i) => Math.round((i * (n - 1)) / (xN - 1)));
+  // hranice dnů (svislé linky)
+  const dayBounds = [];
+  for (let i = 1; i < n; i++) if (new Date(ts[i]).getDate() !== new Date(ts[i - 1]).getDate()) dayBounds.push(i);
+  // aktuální slot
+  let curIdx = -1;
+  for (let i = 0; i < n; i++) {
+    const next = i + 1 < n ? ts[i + 1] : ts[i] + (ts[1] - ts[0] || 9e5);
+    if (now >= ts[i] && now < next) { curIdx = i; break; }
+  }
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", minWidth: 640 }}>
-        {/* jednotka osy Y */}
+    <>
+      {controls}
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}>
         <text x={13} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
               transform={`rotate(-90 13 ${padT + plotH / 2})`}>Kč/MWh</text>
-        {/* osa Y: min/max/0 */}
+
         {[minV, maxV, 0].filter((v, i, a) => a.indexOf(v) === i).map((v, i) => (
           <g key={i}>
             <line x1={padL} y1={y(v)} x2={W - padR} y2={y(v)} stroke="var(--border)" strokeWidth="0.5" opacity="0.4" />
@@ -45,7 +90,6 @@ export default function SpotCurve({ curve, rules = [] }) {
           </g>
         ))}
 
-        {/* prahové čáry pravidel */}
         {chargeThr.map((t, i) => (
           <line key={`c${i}`} x1={padL} y1={y(t)} x2={W - padR} y2={y(t)} stroke={GREEN} strokeWidth="1" strokeDasharray="4 3" opacity="0.6" />
         ))}
@@ -53,46 +97,32 @@ export default function SpotCurve({ curve, rules = [] }) {
           <line key={`d${i}`} x1={padL} y1={y(t)} x2={W - padR} y2={y(t)} stroke={RED} strokeWidth="1" strokeDasharray="4 3" opacity="0.6" />
         ))}
 
-        {/* sloupce */}
+        {dayBounds.map((i, k) => (
+          <line key={`db${k}`} x1={padL + i * bw} y1={padT} x2={padL + i * bw} y2={padT + plotH}
+                stroke="var(--fg)" strokeWidth="0.6" opacity="0.35" strokeDasharray="2 3" />
+        ))}
+
         {slots.map((s, i) => {
-          const x = padL + i * bw;
-          const top = y(s.price), base = y(Math.min(0, minV) < 0 ? 0 : minV);
-          const h = Math.max(1, Math.abs(base - top));
-          const isCur = s.day === "dnes" && s.hour === curHour;
+          const top = y(s.price), h = Math.max(0.8, Math.abs(base - top));
           return (
-            <g key={i}>
-              <rect x={x + 1} y={Math.min(top, base)} width={Math.max(1, bw - 1.5)} height={h}
-                    fill={barColor(s.price)} opacity={s.day === "zítra" ? 0.65 : 1}
-                    stroke={isCur ? "var(--fg)" : "none"} strokeWidth={isCur ? 1.5 : 0}>
-                <title>{`${s.day} ${s.hour}:00 — ${Math.round(s.price)} Kč/MWh`}</title>
-              </rect>
-            </g>
+            <rect key={i} x={padL + i * bw} y={Math.min(top, base)} width={Math.max(0.6, bw - 0.4)} height={h}
+                  fill={barColor(s.price)} stroke={i === curIdx ? "var(--fg)" : "none"} strokeWidth={i === curIdx ? 1.2 : 0}>
+              <title>{`${new Date(s.start).toLocaleString("cs-CZ")} — ${Math.round(s.price)} Kč/MWh`}</title>
+            </rect>
           );
         })}
 
-        {/* osa X: hodiny (po 6 h) */}
-        {slots.map((s, i) => (s.hour % 6 === 0 ? (
-          <text key={`hx${i}`} x={padL + i * bw + bw / 2} y={H - 28} textAnchor="middle"
-                fontSize="9" fill="var(--muted)">{s.hour}</text>
-        ) : null))}
-
-        {/* předěl dnes | zítra + popisky */}
-        {today.length > 0 && tomorrow.length > 0 && (
-          <line x1={padL + today.length * bw} y1={padT} x2={padL + today.length * bw} y2={H - padB}
-                stroke="var(--fg)" strokeWidth="0.7" opacity="0.5" strokeDasharray="2 2" />
-        )}
-        {today.length > 0 && (
-          <text x={padL + (today.length * bw) / 2} y={H - 10} textAnchor="middle" fontSize="11" fill="var(--muted)">dnes</text>
-        )}
-        {tomorrow.length > 0 && (
-          <text x={padL + today.length * bw + (tomorrow.length * bw) / 2} y={H - 10} textAnchor="middle" fontSize="11" fill="var(--muted)">zítra</text>
-        )}
+        {xIdx.map((i, k) => (
+          <text key={`x${k}`} x={padL + i * bw + bw / 2} y={H - 8}
+                textAnchor={k === 0 ? "start" : k === xIdx.length - 1 ? "end" : "middle"}
+                fontSize="9.5" fill="var(--muted)">{fmtX(ts[i])}</text>
+        ))}
       </svg>
       <div style={{ display: "flex", gap: 18, fontSize: 12, color: "var(--muted)", marginTop: 4, flexWrap: "wrap" }}>
-        <span><span style={{ display: "inline-block", width: 10, height: 10, background: GREEN, borderRadius: 2, marginRight: 5 }} />nabíjení (cena pod prahem)</span>
-        <span><span style={{ display: "inline-block", width: 10, height: 10, background: RED, borderRadius: 2, marginRight: 5 }} />vybíjení do sítě (cena nad prahem)</span>
-        <span>přerušované čáry = prahy pravidel · zítřek světlejší</span>
+        <span><span style={{ display: "inline-block", width: 10, height: 10, background: GREEN, borderRadius: 2, marginRight: 5 }} />nabíjení (pod prahem)</span>
+        <span><span style={{ display: "inline-block", width: 10, height: 10, background: RED, borderRadius: 2, marginRight: 5 }} />vybíjení do sítě (nad prahem)</span>
+        <span>15min intervaly · přerušované = prahy pravidel · zvýrazněn aktuální slot</span>
       </div>
-    </div>
+    </>
   );
 }
