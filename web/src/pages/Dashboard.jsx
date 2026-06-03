@@ -49,7 +49,7 @@ function DevicePanel({ id, locality, lastSeen }) {
   const [win, setWin] = useState(0);
   const [offset, setOffset] = useState(0);
   const err = useRef(false);
-  const pan = (db) => setOffset((o) => Math.max(0, Math.min(525600, Math.round(o + db))));
+  const step = (dir) => setOffset((o) => Math.max(0, Math.min(525600, o + dir * WIN[win].min)));
 
   useEffect(() => {
     let alive = true;
@@ -137,14 +137,16 @@ function DevicePanel({ id, locality, lastSeen }) {
           <span>{LABELS[chartMetric] || chartMetric}</span>
           <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· {rangeLabel(WIN[win].min, offset)}</span>
           <span style={{ flex: 1 }} />
-          {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">→ teď</button>}
-          <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+          <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
+          <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
+          {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
+          <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1, marginLeft: 6 }}
                   onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0} title="kratší okno">−</button>
           <span className="muted" style={{ minWidth: 50, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{WIN[win].label}</span>
           <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
                   onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1} title="delší okno (až 30 dní)">+</button>
         </div>
-        <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color="#3fb950" onPan={pan} windowMinutes={WIN[win].min} />
+        <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color="#3fb950" />
       </div>
       )}
     </section>
@@ -155,7 +157,7 @@ function LocalityChart({ deviceIds }) {
   const [win, setWin] = useState(2); // default 24 h
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState(null);
-  const pan = (db) => setOffset((o) => Math.max(0, Math.min(525600, Math.round(o + db))));
+  const step = (dir) => setOffset((o) => Math.max(0, Math.min(525600, o + dir * WIN[win].min)));
 
   useEffect(() => {
     let alive = true;
@@ -178,15 +180,17 @@ function LocalityChart({ deviceIds }) {
         <h3 style={{ margin: 0 }}>Souhrn lokality</h3>
         <span className="muted" style={{ fontSize: 12 }}>· {rangeLabel(WIN[win].min, offset)}</span>
         <span style={{ flex: 1 }} />
-        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">→ teď</button>}
-        <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
+        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
+        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
+        <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1, marginLeft: 6 }}
                 onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0}>−</button>
         <span className="muted" style={{ minWidth: 50, textAlign: "center" }}>{WIN[win].label}</span>
         <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
                 onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1}>+</button>
       </div>
       {!data ? <p className="muted" style={{ fontSize: 12 }}>Načítám…</p>
-             : <MultiChart series={series} onPan={pan} windowMinutes={WIN[win].min} />}
+             : <MultiChart series={series} />}
     </div>
   );
 }

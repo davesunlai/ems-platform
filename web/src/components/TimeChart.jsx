@@ -1,19 +1,6 @@
 // Spojnicový graf s osami: X = čas, Y = hodnota (s popisky).
 // Bez externích knihoven. Hodnoty ve W se zobrazují jako kW.
-import { useRef, useState } from "react";
-
-export default function TimeChart({ points, color = "#3fb950", unit = "", height = 220, onPan, windowMinutes }) {
-  const drag = useRef(null);
-  const [shift, setShift] = useState(0);
-  const W0 = 760;
-  const down = (e) => { drag.current = { x: e.clientX, w: e.currentTarget.getBoundingClientRect().width }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} };
-  const move = (e) => { if (drag.current) setShift(((e.clientX - drag.current.x) / drag.current.w) * W0); };
-  const end = (e) => {
-    if (!drag.current) return;
-    const frac = (e.clientX - drag.current.x) / drag.current.w;
-    drag.current = null; setShift(0);
-    if (onPan && Math.abs(frac) > 0.02 && windowMinutes) onPan(frac * windowMinutes);
-  };
+export default function TimeChart({ points, color = "#3fb950", unit = "", height = 220 }) {
   if (!points || points.length < 2)
     return <div className="muted" style={{ fontSize: 12, padding: "20px 0" }}>Sbírám data…</div>;
 
@@ -59,9 +46,7 @@ export default function TimeChart({ points, color = "#3fb950", unit = "", height
   const xTicks = Array.from({ length: xN }, (_, i) => t0 + (tspan * i) / (xN - 1));
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", cursor: onPan ? "ew-resize" : "default", touchAction: "none" }}
-         onPointerDown={onPan ? down : undefined} onPointerMove={onPan ? move : undefined}
-         onPointerUp={onPan ? end : undefined} onPointerLeave={onPan ? end : undefined}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
       <defs>
         <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.26" />
@@ -88,11 +73,9 @@ export default function TimeChart({ points, color = "#3fb950", unit = "", height
       ))}
       <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="var(--border)" strokeWidth="0.8" />
 
-      {/* data (posuvné táhnutím) */}
-      <g transform={`translate(${shift},0)`}>
-        <path d={area} fill={`url(#${gid})`} />
-        <path d={d} fill="none" stroke={color} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-      </g>
+      {/* data */}
+      <path d={area} fill={`url(#${gid})`} />
+      <path d={d} fill="none" stroke={color} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
