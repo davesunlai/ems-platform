@@ -1,0 +1,66 @@
+# Pilot na jednom Debian stroji (192.168.6.209).
+# Spuštění z kořene projektu:
+#   docker compose -f infra/docker-compose.yml up -d --build
+# Přístup z LANu:  http://192.168.6.209:8080
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ems
+      POSTGRES_PASSWORD: ${EMS_DB_PASSWORD:-ems}
+      POSTGRES_DB: ems
+    ports: ["5433:5432"]
+    volumes:
+      - tsdata:/var/lib/postgresql/data
+      - ./timescaledb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ems"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  collector:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "ems.collector.main"]
+    environment:
+      EMS_SINK: timescale
+      EMS_DB_DSN: postgresql://ems:${EMS_DB_PASSWORD:-ems}@timescaledb:5432/ems
+      EMS_DEVICES: /app/devices.yaml
+      EMS_POLL_INTERVAL: "10"
+    volumes:
+      - ../devices.yaml:/app/devices.yaml:ro
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    restart: unless-stopped
+    command: ["uvicorn", "ems.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      EMS_DB_DSN: postgresql://ems:${EMS_DB_PASSWORD:-ems}@timescaledb:5432/ems
+      EMS_JWT_SECRET: ${EMS_JWT_SECRET:-dev-insecure-change-me}
+      EMS_ADMIN_USER: ${EMS_ADMIN_USER:-admin}
+      EMS_ADMIN_PASSWORD: ${EMS_ADMIN_PASSWORD:-admin}
+    ports: ["8000:8000"]
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports: ["8080:80"]
+    depends_on: [api]
+
+volumes:
+  tsdata:

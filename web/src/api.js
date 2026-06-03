@@ -1,0 +1,56 @@
+// Tenký API klient: připojí Bearer token, řeší 401.
+const TOKEN_KEY = "ems_token";
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
+export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+let onUnauthorized = () => {};
+export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn; };
+
+async function request(path, { method = "GET", body } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 401) { clearToken(); onUnauthorized(); throw new Error("Neautorizováno"); }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+export const api = {
+  login: (username, password) => request("/api/auth/login", { method: "POST", body: { username, password } }),
+  me: () => request("/api/auth/me"),
+  devices: () => request("/api/devices"),
+  latest: (id) => request(`/api/devices/${encodeURIComponent(id)}/latest`),
+  history: (id, metric, minutes = 360) =>
+    request(`/api/devices/${encodeURIComponent(id)}/history?metric=${metric}&minutes=${minutes}`),
+  listUsers: () => request("/api/admin/users"),
+  createUser: (u) => request("/api/admin/users", { method: "POST", body: u }),
+  updateUser: (id, patch) => request(`/api/admin/users/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
+  deleteUser: (id) => request(`/api/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  listModules: () => request("/api/admin/modules"),
+  createModule: (m) => request("/api/admin/modules", { method: "POST", body: m }),
+  updateModule: (id, patch) => request(`/api/admin/modules/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
+  deleteModule: (id) => request(`/api/admin/modules/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  controlModules: () => request("/api/control/modules"),
+  getMode: (id) => request(`/api/control/${encodeURIComponent(id)}/mode`),
+  setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
+  controlAudit: () => request("/api/control/audit"),
+  spot: () => request("/api/market/spot"),
+  setManualPrice: (price) => request("/api/admin/market/manual", { method: "POST", body: { price } }),
+  clearManualPrice: () => request("/api/admin/market/manual", { method: "DELETE" }),
+  listRules: () => request("/api/automation"),
+  createRule: (r) => request("/api/admin/automation", { method: "POST", body: r }),
+  updateRule: (id, patch) => request(`/api/admin/automation/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
+  deleteRule: (id) => request(`/api/admin/automation/${encodeURIComponent(id)}`, { method: "DELETE" }),
+};

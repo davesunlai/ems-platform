@@ -1,0 +1,22 @@
+[project]
+name = "ems-platform"
+version = "0.5.1"
+description = "Univerzální energy management napříč energetickým portfoliem"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+goodwe = ["goodwe>=0.4.8"]
+api = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "asyncpg>=0.29", "pyjwt>=2.7", "bcrypt>=4.1", "httpx>=0.27"]
+collector = ["asyncpg>=0.29"]
+all = ["goodwe>=0.4.8", "fastapi>=0.110", "uvicorn[standard]>=0.29", "asyncpg>=0.29", "pyjwt>=2.7", "bcrypt>=4.1", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ems*"]

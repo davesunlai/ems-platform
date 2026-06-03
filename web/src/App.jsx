@@ -1,0 +1,37 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./auth";
+import Layout from "./components/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Users from "./pages/Users";
+import Modules from "./pages/Modules";
+import Control from "./pages/Control";
+import Automation from "./pages/Automation";
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route element={<ProtectedRoute permission="read"><Layout /></ProtectedRoute>}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/users" element={
+              <ProtectedRoute permission="admin"><Users /></ProtectedRoute>
+            } />
+            <Route path="/modules" element={
+              <ProtectedRoute permission="admin"><Modules /></ProtectedRoute>
+            } />
+            <Route path="/control" element={
+              <ProtectedRoute permission="control"><Control /></ProtectedRoute>
+            } />
+            <Route path="/automation" element={
+              <ProtectedRoute permission="admin"><Automation /></ProtectedRoute>
+            } />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}

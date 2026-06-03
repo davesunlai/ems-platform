@@ -1,0 +1,91 @@
+"""Databázové dotazy pro API (TimescaleDB / PostgreSQL přes asyncpg)."""
+from __future__ import annotations
+
+import os
+
+_pool = None
+
+
+async def get_pool():
+    global _pool
+    if _pool is None:
+        import asyncpg
+        dsn = os.getenv("EMS_DB_DSN", "postgresql://ems:ems@timescaledb:5432/ems")
+        _pool = await asyncpg.create_pool(dsn, min_size=1, max_size=8)
+    return _pool
+
+
+async def close_pool() -> None:
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
+
+
+async def list_devices() -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT DISTINCT device_id FROM samples ORDER BY device_id"
+        )
+    return [{"device_id": r["device_id"]} for r in rows]
+
+
+async def latest_for_device(device_id: str) -> list[dict]:
+    """Poslední hodnota každé veličiny daného zařízení."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT ON (metric) metric, value, unit, quality, time
+            FROM samples
+            WHERE device_id = $1
+              AND time > now() - interval '5 minutes'
+            ORDER BY metric, time DESC
+            """,
+            device_id,
+        )
+    return [dict(r) for r in rows]
+
+
+async def history(device_id: str, metric: str, minutes: int = 360) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT time, value
+            FROM samples
+            WHERE device_id = $1 AND metric = $2
+              AND time > now() - ($3 || ' minutes')::interval
+            ORDER BY time
+            """,
+            device_id, metric, str(minutes),
+        )
+    return [{"time": r["time"].isoformat(), "value": r["value"]} for r in rows]
+
+
+async def ensure_state_schema() -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS device_state (
+                device_id  TEXT NOT NULL,
+                key        TEXT NOT NULL,
+                value      TEXT,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (device_id, key)
+            )
+            """
+        )
+
+
+async def latest_states(device_id: str) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT key, value FROM device_state "
+            "WHERE device_id = $1 AND updated_at > now() - interval '5 minutes'",
+            device_id,
+        )
+    return {r["key"]: r["value"] for r in rows}

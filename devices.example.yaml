@@ -1,0 +1,22 @@
+# Šablona konfigurace zařízení. Zkopíruj na devices.yaml a uprav.
+# Reálný měnič: adapter: goodwe + host = lokální IP měniče (dosažitelná přes VPN).
+devices:
+  - id: home-fve-hybrid
+    type: storage
+    adapter: goodwe          # mock pro vývoj bez VPN
+    name: "Goodwe GW10K-ET (hybrid + baterie 52 kWh)"
+    site: "Domácnost pilot"
+    region: CZ
+    params:
+      host: 192.168.1.10     # IP měniče ET na domácí síti
+      port: 8899             # UDP 8899 (nativní) | 502 (Modbus TCP s LAN donglem V2)
+
+  - id: home-fve-grid
+    type: generation
+    adapter: goodwe
+    name: "Goodwe GW10K-DT (grid-tie FVE)"
+    site: "Domácnost pilot"
+    region: CZ
+    params:
+      host: 192.168.1.11
+      port: 8899
