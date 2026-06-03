@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.8.0", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.8.1", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,8 +77,6 @@ async def devices(_: dict = Depends(read)) -> list[dict]:
 @app.get("/api/devices/{device_id}/latest")
 async def latest(device_id: str, _: dict = Depends(read)) -> dict:
     rows = await db.latest_for_device(device_id)
-    if not rows:
-        raise HTTPException(status_code=404, detail="Zařízení nemá data")
     metrics = {
         r["metric"]: {
             "value": r["value"],
@@ -89,7 +87,7 @@ async def latest(device_id: str, _: dict = Depends(read)) -> dict:
         for r in rows
     }
     states = await db.latest_states(device_id)
-    return {"device_id": device_id, "metrics": metrics, "states": states}
+    return {"device_id": device_id, "metrics": metrics, "states": states, "active": bool(metrics)}
 
 
 @app.get("/api/devices/{device_id}/history")

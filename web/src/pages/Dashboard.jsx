@@ -31,7 +31,7 @@ function fmt(metric, m) {
   return { value: typeof v === "number" ? v.toFixed(1) : v, unit: u };
 }
 
-function DevicePanel({ id }) {
+function DevicePanel({ id, locality, lastSeen }) {
   const [latest, setLatest] = useState(null);
   const [hist, setHist] = useState([]);
   const [chartMetric, setChartMetric] = useState("pv_power");
@@ -45,7 +45,7 @@ function DevicePanel({ id }) {
         const l = await api.latest(id);
         if (!alive) return;
         setLatest(l);
-        const cm = l.metrics.pv_power ? "pv_power" : Object.keys(l.metrics)[0];
+        const cm = l.metrics.pv_power ? "pv_power" : (Object.keys(l.metrics)[0] || "pv_power");
         setChartMetric(cm);
         err.current = false;
       } catch (e) { err.current = true; }
@@ -72,6 +72,7 @@ function DevicePanel({ id }) {
   );
 
   const metrics = latest.metrics;
+  const active = latest.active ?? (Object.keys(metrics).length > 0);
   const mode = latest.states?.operation_mode;
   const auto = latest.states?.automation;
   const forcing = (mode && !["GENERAL", "SELF_USE"].includes(mode)) || !!auto;
@@ -80,10 +81,18 @@ function DevicePanel({ id }) {
   return (
     <section className="device">
       <div className="device-head">
-        <span className="dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--green)" }} />
+        <span className="dot" title={active ? "aktivní" : "neaktivní"}
+              style={{ width: 9, height: 9, borderRadius: "50%", background: active ? "var(--green)" : "#e06c75" }} />
         <h2>{id}</h2>
+        {locality && <span className="mode-chip" style={{ textTransform: "none" }}>📍 {locality}</span>}
         {mode && <span className="mode-chip">{mode}</span>}
+        {!active && <span className="mode-chip" style={{ color: "#e06c75", borderColor: "#e06c75" }}>neaktivní</span>}
       </div>
+      {!active && (
+        <p className="muted" style={{ fontSize: 13, marginTop: -4 }}>
+          Žádná čerstvá data{lastSeen ? ` — naposledy ${new Date(lastSeen).toLocaleString("cs-CZ")}` : ""}.
+        </p>
+      )}
       {forcing && (
         <div className="mode-banner charge">
           {(() => {
@@ -137,5 +146,5 @@ export default function Dashboard() {
   if (!devices) return <main><p className="muted">Načítám zařízení…</p></main>;
   if (!devices.length) return <main><p className="muted">Zatím žádná data. Běží kolektor?</p></main>;
 
-  return <main>{devices.map((d) => <DevicePanel key={d.device_id} id={d.device_id} />)}</main>;
+  return <main>{devices.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} />)}</main>;
 }

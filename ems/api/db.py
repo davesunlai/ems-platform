@@ -26,9 +26,24 @@ async def list_devices() -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT DISTINCT device_id FROM samples ORDER BY device_id"
+            """
+            SELECT s.device_id,
+                   max(l.name)  AS locality,
+                   max(s.time)  AS last_seen,
+                   (max(s.time) > now() - interval '5 minutes') AS active
+            FROM samples s
+            LEFT JOIN modules m    ON m.id = s.device_id
+            LEFT JOIN localities l ON l.id = m.locality_id
+            GROUP BY s.device_id
+            ORDER BY s.device_id
+            """
         )
-    return [{"device_id": r["device_id"]} for r in rows]
+    return [{
+        "device_id": r["device_id"],
+        "locality": r["locality"],
+        "last_seen": r["last_seen"].isoformat() if r["last_seen"] else None,
+        "active": bool(r["active"]),
+    } for r in rows]
 
 
 async def latest_for_device(device_id: str) -> list[dict]:
