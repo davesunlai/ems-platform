@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
 import TimeChart from "../components/TimeChart";
+import MultiChart from "../components/MultiChart";
 
 const LABELS = {
   pv_power: "FVE výkon", load_power: "Spotřeba", battery_power: "Baterie",
@@ -136,6 +137,42 @@ function DevicePanel({ id, locality, lastSeen }) {
   );
 }
 
+function LocalityChart({ deviceIds }) {
+  const [win, setWin] = useState(2); // default 24 h
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.aggregate(deviceIds, ["pv_power", "load_power", "grid_power"], WIN[win].min)
+      .then((r) => alive && setData(r.metrics)).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, [deviceIds.join(","), win]);
+
+  const series = data ? [
+    { label: "Výroba FVE", color: "#3fb950", points: data.pv_power || [] },
+    { label: "Spotřeba lokality", color: "#d29922", points: data.load_power || [] },
+    { label: "Síť (import +/export −)", color: "#58a6ff", points: data.grid_power || [] },
+  ].filter((x) => x.points.length >= 2) : [];
+
+  return (
+    <div className="panel" style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <h3 style={{ margin: 0 }}>Souhrn lokality</h3>
+        <span style={{ flex: 1 }} />
+        <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+                onClick={() => setWin((w) => Math.max(0, w - 1))} disabled={win === 0}>−</button>
+        <span className="muted" style={{ minWidth: 50, textAlign: "center" }}>{WIN[win].label}</span>
+        <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+                onClick={() => setWin((w) => Math.min(WIN.length - 1, w + 1))} disabled={win === WIN.length - 1}>+</button>
+      </div>
+      {!data ? <p className="muted" style={{ fontSize: 12 }}>Načítám…</p>
+             : <MultiChart series={series} />}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [devices, setDevices] = useState(null);
   const [error, setError] = useState("");
@@ -148,5 +185,26 @@ export default function Dashboard() {
   if (!devices) return <main><p className="muted">Načítám zařízení…</p></main>;
   if (!devices.length) return <main><p className="muted">Zatím žádná data. Běží kolektor?</p></main>;
 
-  return <main>{devices.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} />)}</main>;
+  const groups = {};
+  devices.forEach((d) => { const k = d.locality || "—"; (groups[k] = groups[k] || []).push(d); });
+  const names = Object.keys(groups).sort((a, b) =>
+    a === "—" ? 1 : b === "—" ? -1 : a.localeCompare(b, "cs"));
+
+  return (
+    <main>
+      {names.map((name) => {
+        const devs = groups[name];
+        const ids = devs.map((d) => d.device_id);
+        return (
+          <section key={name} style={{ marginBottom: 26 }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>
+              {name === "—" ? "Bez lokality" : `📍 ${name}`}
+            </h2>
+            <LocalityChart deviceIds={ids} />
+            {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} />)}
+          </section>
+        );
+      })}
+    </main>
+  );
 }

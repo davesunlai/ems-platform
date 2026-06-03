@@ -37,6 +37,8 @@ export const api = {
   latest: (id) => request(`/api/devices/${encodeURIComponent(id)}/latest`),
   history: (id, metric, minutes = 360) =>
     request(`/api/devices/${encodeURIComponent(id)}/history?metric=${metric}&minutes=${minutes}`),
+  aggregate: (ids, metrics, minutes = 360) =>
+    request(`/api/devices/aggregate?ids=${encodeURIComponent(ids.join(","))}&metrics=${metrics.join(",")}&minutes=${minutes}`),
   listUsers: () => request("/api/admin/users"),
   createUser: (u) => request("/api/admin/users", { method: "POST", body: u }),
   updateUser: (id, patch) => request(`/api/admin/users/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),

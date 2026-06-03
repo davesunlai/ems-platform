@@ -110,3 +110,29 @@ async def latest_states(device_id: str) -> dict:
             device_id,
         )
     return {r["key"]: r["value"] for r in rows}
+
+
+async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 360,
+                            target_points: int = 400) -> list[dict]:
+    """Součet veličiny přes více zařízení v čase (per-bucket suma průměrů zařízení)."""
+    if not device_ids:
+        return []
+    bucket_seconds = max(10, int(minutes * 60 / target_points))
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT b, sum(dev_avg) AS value FROM (
+                SELECT time_bucket(($1 || ' seconds')::interval, time) AS b,
+                       device_id, avg(value) AS dev_avg
+                FROM samples
+                WHERE device_id = ANY($2::text[]) AND metric = $3
+                  AND time > now() - ($4 || ' minutes')::interval
+                GROUP BY b, device_id
+            ) t
+            GROUP BY b ORDER BY b
+            """,
+            str(bucket_seconds), device_ids, metric, str(minutes),
+        )
+    return [{"time": r["b"].isoformat(), "value": float(r["value"])}
+            for r in rows if r["value"] is not None]
