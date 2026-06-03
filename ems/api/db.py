@@ -48,20 +48,26 @@ async def latest_for_device(device_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def history(device_id: str, metric: str, minutes: int = 360) -> list[dict]:
+async def history(device_id: str, metric: str, minutes: int = 360,
+                  target_points: int = 400) -> list[dict]:
+    # Agregace do ~target_points košů, ať i měsíc dat je pár set bodů, ne 260k.
+    bucket_seconds = max(10, int(minutes * 60 / target_points))
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT time, value
+            SELECT time_bucket(($4 || ' seconds')::interval, time) AS bucket,
+                   avg(value) AS value
             FROM samples
             WHERE device_id = $1 AND metric = $2
               AND time > now() - ($3 || ' minutes')::interval
-            ORDER BY time
+            GROUP BY bucket
+            ORDER BY bucket
             """,
-            device_id, metric, str(minutes),
+            device_id, metric, str(minutes), str(bucket_seconds),
         )
-    return [{"time": r["time"].isoformat(), "value": r["value"]} for r in rows]
+    return [{"time": r["bucket"].isoformat(), "value": float(r["value"])}
+            for r in rows if r["value"] is not None]
 
 
 async def ensure_state_schema() -> None:

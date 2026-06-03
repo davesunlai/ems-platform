@@ -12,6 +12,7 @@ Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 
 - **Řízení / zápis do měniče** (v0.4): povelový kanál s ověřením (read-back) a auditem, oprávnění `control`. První povel: režim baterie Goodwe ET — vynucené nabíjení / normální režim.
 - **Automatizace dle spotové ceny** (v0.5): pravidlo „levný spot → nabíjej", zdroj cen OTE + ruční test, audit automatických povelů, samoopravné edge-triggerem. První VPP chování.
 - **Správa hesel** (v0.6): změna vlastního hesla, admin reset, zapomenuté heslo přes e-mail (Forpsi SMTP), profilová pole (e-mail, jméno).
+- **Grafy s osami a oknem** (v0.7.2): graf výkonu na dashboardu má osy čas/výkon a tlačítka +/− pro zpětné okno 6 h–30 dní (agregace přes time_bucket); spotová křivka má popisky os (hodiny / Kč/MWh).
 - **Cenová křivka dnes+zítra** (v0.7.1): vizualizace hodinových spotových cen s vyznačením, kdy by automatika nabíjela/vybíjela; „zpět na živý feed" stáhne cenu okamžitě.
 - **Vybíjení do sítě dle ceny** (v0.7): pravidlo „prodávej draze" (ECO_DISCHARGE) vedle „nakupuj levně"; engine agreguje pravidla na zařízení (žádný konflikt), spodní SoC chrání baterii.
 - **Lokality a párování** (v0.6.1): správa lokalit, vazba zařízení→lokalita a uživatel↔lokalita (M:N), profil uživatele (telefon, poznámka).

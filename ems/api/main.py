@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.7.1", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.7.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -93,5 +93,6 @@ async def latest(device_id: str, _: dict = Depends(read)) -> dict:
 
 @app.get("/api/devices/{device_id}/history")
 async def device_history(device_id: str, metric: str, minutes: int = 360, _: dict = Depends(read)) -> dict:
+    minutes = max(360, min(minutes, 43200))  # 6 h .. 30 dní
     points = await db.history(device_id, metric, minutes)
     return {"device_id": device_id, "metric": metric, "points": points}

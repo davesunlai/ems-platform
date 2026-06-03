@@ -19,7 +19,7 @@ export default function SpotCurve({ curve, rules = [] }) {
   const maxV = Math.max(...vals), minV = Math.min(...vals);
   const span = (maxV - minV) || 1;
 
-  const W = 960, H = 230, padT = 14, padB = 30, padL = 46, padR = 12;
+  const W = 960, H = 250, padT = 14, padB = 46, padL = 50, padR = 12;
   const plotH = H - padT - padB, plotW = W - padL - padR;
   const n = slots.length, bw = plotW / n;
   const y = (v) => padT + plotH * (1 - (v - minV) / span);
@@ -34,6 +34,9 @@ export default function SpotCurve({ curve, rules = [] }) {
   return (
     <div style={{ overflowX: "auto" }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", minWidth: 640 }}>
+        {/* jednotka osy Y */}
+        <text x={13} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
+              transform={`rotate(-90 13 ${padT + plotH / 2})`}>Kč/MWh</text>
         {/* osa Y: min/max/0 */}
         {[minV, maxV, 0].filter((v, i, a) => a.indexOf(v) === i).map((v, i) => (
           <g key={i}>
@@ -66,6 +69,12 @@ export default function SpotCurve({ curve, rules = [] }) {
             </g>
           );
         })}
+
+        {/* osa X: hodiny (po 6 h) */}
+        {slots.map((s, i) => (s.hour % 6 === 0 ? (
+          <text key={`hx${i}`} x={padL + i * bw + bw / 2} y={H - 28} textAnchor="middle"
+                fontSize="9" fill="var(--muted)">{s.hour}</text>
+        ) : null))}
 
         {/* předěl dnes | zítra + popisky */}
         {today.length > 0 && tomorrow.length > 0 && (

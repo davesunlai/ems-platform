@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
-import Sparkline from "../components/Sparkline";
+import TimeChart from "../components/TimeChart";
 
 const LABELS = {
   pv_power: "FVE výkon", load_power: "Spotřeba", battery_power: "Baterie",
@@ -12,6 +12,11 @@ const LABELS = {
 const ACCENT = { pv_power: "green", battery_power: "blue", battery_soc: "blue", grid_power: "amber", load_power: "" };
 const ORDER = ["pv_power","load_power","battery_power","battery_soc","grid_power","active_power",
                "frequency","temperature","energy_pv_total","energy_import","energy_export"];
+const WIN = [
+  { min: 360, label: "6 h" }, { min: 720, label: "12 h" }, { min: 1440, label: "24 h" },
+  { min: 4320, label: "3 dny" }, { min: 10080, label: "7 dní" }, { min: 20160, label: "14 dní" },
+  { min: 43200, label: "30 dní" },
+];
 
 function fmt(metric, m) {
   const v = m.value, u = m.unit;
@@ -30,6 +35,7 @@ function DevicePanel({ id }) {
   const [latest, setLatest] = useState(null);
   const [hist, setHist] = useState([]);
   const [chartMetric, setChartMetric] = useState("pv_power");
+  const [win, setWin] = useState(0);
   const err = useRef(false);
 
   useEffect(() => {
@@ -41,8 +47,6 @@ function DevicePanel({ id }) {
         setLatest(l);
         const cm = l.metrics.pv_power ? "pv_power" : Object.keys(l.metrics)[0];
         setChartMetric(cm);
-        const h = await api.history(id, cm, 360);
-        if (alive) setHist(h.points);
         err.current = false;
       } catch (e) { err.current = true; }
     };
@@ -50,6 +54,17 @@ function DevicePanel({ id }) {
     const t = setInterval(tick, 5000);
     return () => { alive = false; clearInterval(t); };
   }, [id]);
+
+  useEffect(() => {
+    let alive = true;
+    const fetchHist = async () => {
+      try { const h = await api.history(id, chartMetric, WIN[win].min); if (alive) setHist(h.points); }
+      catch (e) { /* ignore */ }
+    };
+    fetchHist();
+    const t = setInterval(fetchHist, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, [id, chartMetric, win]);
 
   if (!latest) return (
     <section className="device"><div className="device-head"><span className="id">{id}</span></div>
@@ -95,8 +110,16 @@ function DevicePanel({ id }) {
         })}
       </div>
       <div className="chart-wrap">
-        <div className="chart-title">{LABELS[chartMetric] || chartMetric} — posledních 6 h</div>
-        <Sparkline points={hist} color="#3fb950" />
+        <div className="chart-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span>{LABELS[chartMetric] || chartMetric}</span>
+          <span style={{ flex: 1 }} />
+          <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+                  onClick={() => setWin((w) => Math.max(0, w - 1))} disabled={win === 0} title="kratší okno">−</button>
+          <span className="muted" style={{ minWidth: 50, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{WIN[win].label}</span>
+          <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+                  onClick={() => setWin((w) => Math.min(WIN.length - 1, w + 1))} disabled={win === WIN.length - 1} title="delší okno (až 30 dní)">+</button>
+        </div>
+        <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color="#3fb950" />
       </div>
     </section>
   );
