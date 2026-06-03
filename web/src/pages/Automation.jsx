@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import SpotCurve from "../components/SpotCurve";
 
 function SpotPanel({ onChange }) {
   const [st, setSt] = useState(null);
@@ -42,12 +43,16 @@ export default function Automation() {
   const [mods, setMods] = useState([]);
   const [f, setF] = useState(empty);
   const [err, setErr] = useState("");
+  const [spot, setSpot] = useState(null);
 
   const load = () => api.listRules().then(setRules).catch((e) => setErr(e.message));
+  const loadSpot = () => api.spot().then(setSpot).catch(() => {});
   useEffect(() => {
     load();
     api.controlModules().then((m) => { setMods(m); setF((x) => ({ ...x, target_module: m[0]?.id || "" })); }).catch(() => {});
-    const t = setInterval(load, 8000); return () => clearInterval(t);
+    loadSpot();
+    const t = setInterval(() => { load(); loadSpot(); }, 8000);
+    return () => clearInterval(t);
   }, []);
 
   const create = async () => {
@@ -66,7 +71,12 @@ export default function Automation() {
 
   return (
     <main>
-      <SpotPanel onChange={load} />
+      <SpotPanel onChange={() => { load(); loadSpot(); }} />
+
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <h3>Cenová křivka (dnes + zítra)</h3>
+        <SpotCurve curve={spot?.curve} rules={rules} />
+      </div>
 
       <div className="panel" style={{ marginBottom: 18 }}>
         <h3>Nové pravidlo</h3>

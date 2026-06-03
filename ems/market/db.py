@@ -18,17 +18,21 @@ async def ensure_schema() -> None:
             )
             """
         )
+        await conn.execute("ALTER TABLE market_state ADD COLUMN IF NOT EXISTS curve JSONB")
         await conn.execute("INSERT INTO market_state (id) VALUES (1) ON CONFLICT DO NOTHING")
 
 
 async def get_state() -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT price, currency, manual, updated_at FROM market_state WHERE id = 1")
+        row = await conn.fetchrow("SELECT price, currency, manual, updated_at, curve FROM market_state WHERE id = 1")
     if not row:
-        return {"price": None, "currency": "CZK/MWh", "manual": False, "updated_at": None}
+        return {"price": None, "currency": "CZK/MWh", "manual": False, "updated_at": None, "curve": None}
     d = dict(row)
     d["updated_at"] = d["updated_at"].isoformat() if d["updated_at"] else None
+    if isinstance(d.get("curve"), str):
+        import json
+        d["curve"] = json.loads(d["curve"])
     return d
 
 
@@ -55,3 +59,12 @@ async def clear_manual() -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("UPDATE market_state SET manual = FALSE, updated_at = now() WHERE id = 1")
+
+
+async def set_curve(curve: dict) -> None:
+    import json
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE market_state SET curve = $1::jsonb WHERE id = 1", json.dumps(curve)
+        )

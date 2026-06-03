@@ -20,7 +20,7 @@ import signal
 from ems.core.model import Device, reading_to_samples
 from ems.modules import db as modules_db
 from ems.market import db as market_db
-from ems.market.spot import fetch_current_price_czk
+from ems.market.spot import fetch_current_price_czk, fetch_day_prices
 from ems.automation import db as automation_db
 from ems.automation.engine import evaluate_all
 from .config import build_adapter, build_sink
@@ -142,6 +142,10 @@ async def tick_market_and_automation(state: dict) -> None:
                 price = await fetch_current_price_czk()
                 if price is not None:
                     await market_db.set_live_price(price)
+            # křivku stahujeme vždy (reálná data i během ručního testu)
+            curve = await fetch_day_prices()
+            if curve is not None:
+                await market_db.set_curve(curve)
         except Exception as exc:
             logger.warning("Obnova trhu selhala: %s", exc)
     # vyhodnocení automatizace s aktuální cenou

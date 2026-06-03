@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from ems.auth.deps import require_permission
 from . import db
+from .spot import fetch_current_price_czk, fetch_day_prices
 
 router = APIRouter(prefix="/api", tags=["market"])
 
@@ -28,4 +29,14 @@ async def set_manual(body: ManualPrice, _: dict = Depends(require_permission("ad
 @router.delete("/admin/market/manual")
 async def clear_manual(_: dict = Depends(require_permission("admin"))):
     await db.clear_manual()
+    # okamžitě natáhni živou cenu (a křivku), ať se nečeká na refresh cyklus
+    try:
+        price = await fetch_current_price_czk()
+        if price is not None:
+            await db.set_live_price(price)
+        curve = await fetch_day_prices()
+        if curve is not None:
+            await db.set_curve(curve)
+    except Exception:
+        pass
     return await db.get_state()
