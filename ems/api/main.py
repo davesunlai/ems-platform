@@ -45,13 +45,15 @@ async def lifespan(app: FastAPI):
         await contact_db.ensure_schema()
         from ems.outages import db as outages_db
         await outages_db.ensure_schema()
+        from ems.ewelink import store as ewelink_store
+        await ewelink_store.ensure_schema()
     except Exception as exc:
         logger.error("Inicializace auth schématu selhala: %s", exc)
     yield
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.21.0", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.22.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
