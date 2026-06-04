@@ -51,6 +51,13 @@ async def upsert_many(locality_id: int, outages: list) -> int:
     return len(outages)
 
 
+async def existing_uids(locality_id: int) -> set[str]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT uid FROM planned_outages WHERE locality_id=$1", locality_id)
+    return {r["uid"] for r in rows}
+
+
 async def list_for_locality(locality_id: int, upcoming_only: bool = True) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:

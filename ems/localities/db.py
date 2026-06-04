@@ -90,6 +90,18 @@ async def list_all() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+async def users_with_email_for_locality(loc_id: int) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT u.id, u.username, u.full_name, u.email FROM users u "
+            "JOIN user_localities ul ON ul.user_id = u.id "
+            "WHERE ul.locality_id = $1 AND u.active = true "
+            "AND u.email IS NOT NULL AND u.email <> '' ORDER BY u.username",
+            loc_id)
+    return [dict(r) for r in rows]
+
+
 async def localities_for_user(user_id: int) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:

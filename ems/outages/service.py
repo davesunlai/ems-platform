@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from ems.localities import db as loc_db
 from . import db as outage_db
@@ -42,12 +43,47 @@ def query_kind(loc: dict) -> str | None:
     return "adresa"
 
 
-async def refresh_locality(loc: dict) -> int:
+async def refresh_locality(loc: dict, notify: bool = True) -> int:
     q = query_for_locality(loc)
     if not q:
         return 0
+    before = await outage_db.existing_uids(loc["id"])
     outages = await _provider.fetch(q)
-    return await outage_db.upsert_many(loc["id"], outages)
+    n = await outage_db.upsert_many(loc["id"], outages)
+    new = [o for o in outages if o.uid not in before]
+    if notify and new:
+        try:
+            await _notify_new(loc, new)
+        except Exception as exc:
+            logger.warning("Notifikace odstávek [%s] selhala: %s", loc.get("name"), exc)
+    return n
+
+
+async def _notify_new(loc: dict, new_outages: list) -> None:
+    from ems.notify.email import send_email
+    from ems.notify.templates import html_mail
+
+    users = await loc_db.users_with_email_for_locality(loc["id"])
+    if not users:
+        return
+    base = os.getenv("EMS_BASE_URL", "http://localhost:8080").rstrip("/")
+    lines = []
+    for o in sorted(new_outages, key=lambda x: x.start):
+        s = o.start.strftime("%d.%m.%Y %H:%M")
+        e = o.end.strftime("%H:%M")
+        loc_str = (" – " + "; ".join(o.locations)) if o.locations else ""
+        lines.append(f"{s}–{e}{loc_str}")
+    paragraphs = [f"V lokalitě <strong>{loc.get('name')}</strong> je nově plánovaná odstávka elektřiny:"] + lines
+    subject = f"TERA EMS – plánovaná odstávka: {loc.get('name')}"
+    html = html_mail(
+        "Plánovaná odstávka elektřiny", paragraphs, "Otevřít TERA EMS", base,
+        "Tuto zprávu odeslal systém TERA EMS automaticky při zjištění nové odstávky z portálu distributora.")
+    body = subject + "\n\n" + "\n".join(lines) + f"\n\n{base}"
+    for u in users:
+        try:
+            await send_email(u["email"], subject, body, html=html)
+        except Exception as exc:
+            logger.warning("E-mail odstávky na %s selhal: %s", u.get("email"), exc)
 
 
 async def refresh_all() -> None:
