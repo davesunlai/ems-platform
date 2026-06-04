@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api } from "../api";
+import Tour, { tourSeen } from "./Tour";
 
 function AlertsBell() {
   const [data, setData] = useState({ count: 0, alerts: [] });
@@ -60,6 +61,8 @@ function SpotChip() {
 
 export default function Layout() {
   const { user, logout, has } = useAuth();
+  const [tour, setTour] = useState(false);
+  useEffect(() => { if (!tourSeen()) setTour(true); }, []);
   return (
     <>
       <header className="topbar">
@@ -85,11 +88,13 @@ export default function Layout() {
           <SpotChip />
           <span>{user?.username}</span>
           <span className="role">{user?.role}</span>
+          <button className="btn" onClick={() => setTour(true)} title="Průvodce systémem">Průvodce</button>
           <NavLink to="/change-password" className="btn">Změnit heslo</NavLink>
           <button className="btn" onClick={logout}>Odhlásit</button>
         </div>
       </header>
       <Outlet />
+      <Tour open={tour} onClose={() => setTour(false)} />
     </>
   );
 }
