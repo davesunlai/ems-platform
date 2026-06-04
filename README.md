@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.15.1 — Menu „Kontakt" přejmenováno na „Spínací kontakty"; stránka připravena na další spínané výstupy (eWeLink/Olimex) a spouštěče.
+
 ## v0.15.0 — Výstrahy v liště: trojúhelník s počtem výstrah scoped na lokality uživatele, generický agregátor (zatím odstávky), endpoint /api/alerts.
 
 ## v0.14.0 — Plánované odstávky distribuce (ČEZ): identifikace u lokality (EAN/elektroměr/adresa, priorita), denní stahování, zobrazení v adminu.

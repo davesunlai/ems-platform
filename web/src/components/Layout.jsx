@@ -71,7 +71,7 @@ export default function Layout() {
         <nav className="nav">
           <NavLink to="/" end>Dashboard</NavLink>
           {has("control") && <NavLink to="/control">Řízení</NavLink>}
-          {has("control") && <NavLink to="/contact">Kontakt</NavLink>}
+          {has("control") && <NavLink to="/contact">Spínací kontakty</NavLink>}
           {has("admin") && <NavLink to="/automation">Automatizace</NavLink>}
           {has("admin") && <NavLink to="/ewelink">eWeLink</NavLink>}
           {has("admin") && <NavLink to="/billing">Zúčtování</NavLink>}

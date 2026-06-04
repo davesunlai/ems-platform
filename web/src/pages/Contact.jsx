@@ -75,8 +75,14 @@ export default function Contact() {
   if (!mods) return <main><p className="muted">Načítám…</p></main>;
   return (
     <main>
-      <h2 style={{ marginTop: 0 }}>Spínání kontaktu dle SOC</h2>
+      <h2 style={{ marginTop: 0 }}>Spínací kontakty</h2>
       <p className="muted" style={{ fontSize: 13 }}>
+        Spínané výstupy (relé / kontakty) napříč zařízeními, ovládané podle událostí.
+        Zatím: suchý kontakt měniče Goodwe podle SOC. Postupně přibydou kontakty z dalších
+        zařízení (eWeLink/Sonoff, Olimex) a další spouštěče (spot, přebytek, plán).
+      </p>
+      <h3 style={{ marginBottom: 4 }}>Suchý kontakt měniče (Goodwe) — dle SOC</h3>
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
         Sepne suchý kontakt (relé) měniče při dosažení horní meze SOC a rozepne při poklesu na dolní mez (hystereze).
         Nejdřív otestuj ruční sepnutí/rozepnutí — měnič musí mít Load Control v režimu, který respektuje softwarové přepnutí.
       </p>
