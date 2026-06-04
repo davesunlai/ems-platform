@@ -2,6 +2,24 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
+
+
+def _zero_fill_power(rows_dt: list[tuple], bucket_seconds: int, gap_factor: int = 3) -> list[tuple]:
+    """Při výpadku dat (mezera > gap_factor košů) vloží nuly, aby čára spadla
+    na 0 místo interpolace posledního a nového bodu. Pro výkonové veličiny."""
+    if len(rows_dt) < 2:
+        return rows_dt
+    gap = bucket_seconds * gap_factor
+    bucket = timedelta(seconds=bucket_seconds)
+    out, prev_t = [], None
+    for t, v in rows_dt:
+        if prev_t is not None and (t - prev_t).total_seconds() > gap:
+            out.append((prev_t + bucket, 0.0))
+            out.append((t - bucket, 0.0))
+        out.append((t, v))
+        prev_t = t
+    return out
 
 _pool = None
 
@@ -85,8 +103,10 @@ async def history(device_id: str, metric: str, minutes: int = 360, offset: int =
             """,
             device_id, metric, str(start_min), str(bucket_seconds), str(offset),
         )
-    return [{"time": r["bucket"].isoformat(), "value": float(r["value"])}
-            for r in rows if r["value"] is not None]
+    raw = [(r["bucket"], float(r["value"])) for r in rows if r["value"] is not None]
+    if metric.endswith("_power"):
+        raw = _zero_fill_power(raw, bucket_seconds)
+    return [{"time": t.isoformat(), "value": v} for t, v in raw]
 
 
 async def ensure_state_schema() -> None:
@@ -140,5 +160,7 @@ async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 3
             """,
             str(bucket_seconds), device_ids, metric, str(start_min), str(offset),
         )
-    return [{"time": r["b"].isoformat(), "value": float(r["value"])}
-            for r in rows if r["value"] is not None]
+    raw = [(r["b"], float(r["value"])) for r in rows if r["value"] is not None]
+    if metric.endswith("_power"):
+        raw = _zero_fill_power(raw, bucket_seconds)
+    return [{"time": t.isoformat(), "value": v} for t, v in raw]
