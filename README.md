@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.19.1 — deploy.sh na konci restartuje web (nginx), aby po přegenerování api nedržel starou IP (konec opakovaných Bad Gateway).
+
 ## v0.19.0 — Oznámení odstávek: hodina běhu (EMS_OUTAGE_HOUR) a opakování ve dnech (EMS_OUTAGE_REMIND_DAYS) v .env; úvodní mail + připomínky až do odstávky (řízeno last_notified); kolektor dostal SMTP.
 
 ## v0.18.1 — Admin může u uživatele změnit Jméno (tlačítko ✎ u jména v seznamu uživatelů).

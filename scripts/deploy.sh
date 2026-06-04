@@ -74,6 +74,10 @@ fi
 echo "==> Build a start kontejnerů…"
 $COMPOSE up -d --build
 
+# 3b) nginx (web) znovu načte upstream – jinak po přegenerování api drží starou IP -> Bad Gateway
+echo "==> Restart web (nginx) kvůli aktuální IP api…"
+$COMPOSE restart web
+
 # 4) krátké čekání a stav
 echo "==> Čekám na nahození služeb…"
 sleep 8
