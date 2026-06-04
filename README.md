@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.22.1 — eWeLink: výpis zařízení napříč všemi rodinami/domácnostmi + stránkování (dřív se ukazovala jen jedna rodina).
+
 ## v0.22.0 — eWeLink přes OAuth2 (tlačítko Připojit, token v DB s auto-obnovou), výpis a on/off ovládání Sonoffů.
 
 ## v0.21.0 — HTTPS přes Caddy (Let's Encrypt) pro teraems.com; reverzní proxy na web kontejner. Odemyká OAuth2 pro eWeLink.

@@ -147,31 +147,62 @@ async def connected() -> bool:
     return (await store.get_token()) is not None
 
 
+async def _get(client, tok: dict, path: str) -> dict:
+    headers = {
+        "Authorization": "Bearer " + tok["access_token"],
+        "X-CK-Appid": _appid(),
+        "X-CK-Nonce": _nonce(),
+        "Content-Type": "application/json",
+    }
+    r = await client.get(_base(tok["region"]) + path, headers=headers)
+    return r.json()
+
+
+async def _families(client, tok: dict) -> list[str]:
+    data = await _get(client, tok, "/v2/family")
+    if data.get("error"):
+        return []
+    return [f.get("id") for f in (data.get("data") or {}).get("familyList", []) if f.get("id")]
+
+
+async def _things_in(client, tok: dict, fid: str | None) -> list[dict]:
+    out, begin = [], 0
+    while True:
+        q = f"/v2/device/thing?num=30&beginIndex={begin}" + (f"&familyid={fid}" if fid else "")
+        data = await _get(client, tok, q)
+        if data.get("error"):
+            break
+        lst = (data.get("data") or {}).get("thingList", [])
+        out.extend(lst)
+        if len(lst) < 30:
+            break
+        begin += 30
+        if begin > 600:
+            break
+    return out
+
+
 async def list_devices() -> list[dict]:
     if not configured():
         raise RuntimeError("eWeLink není nakonfigurován (chybí EMS_EWELINK_APPID/SECRET v .env)")
     import httpx
     async with _lock:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:
             tok = await _valid_token(client)
-            headers = {
-                "Authorization": "Bearer " + tok["access_token"],
-                "X-CK-Appid": _appid(),
-                "X-CK-Nonce": _nonce(),
-                "Content-Type": "application/json",
-            }
-            r = await client.get(_base(tok["region"]) + "/v2/device/thing", headers=headers)
-            data = r.json()
-            if data.get("error") in (401, 402, 403):  # token neplatný → refresh a zkus znovu
+            # ověř token jedním lehkým dotazem, případně obnov
+            probe = await _get(client, tok, "/v2/family")
+            if probe.get("error") in (401, 402, 403):
                 tok = await _refresh(client, tok)
-                headers["Authorization"] = "Bearer " + tok["access_token"]
-                headers["X-CK-Nonce"] = _nonce()
-                r = await client.get(_base(tok["region"]) + "/v2/device/thing", headers=headers)
-                data = r.json()
-            if data.get("error"):
-                raise RuntimeError(f"eWeLink chyba {data.get('error')}: {data.get('msg')}")
-            things = (data.get("data") or {}).get("thingList", [])
-            return [_normalize(t) for t in things]
+            families = await _families(client, tok)
+            things: dict[str, dict] = {}
+            sources = families if families else [None]
+            for fid in sources:
+                for t in await _things_in(client, tok, fid):
+                    d = t.get("itemData", t)
+                    did = d.get("deviceid")
+                    if did:
+                        things[did] = t
+            return [_normalize(t) for t in things.values()]
 
 
 async def set_switch(deviceid: str, on: bool) -> None:
