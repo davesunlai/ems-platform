@@ -50,7 +50,7 @@ class UserOut(BaseModel):
 
 class UserCreate(BaseModel):
     username: str
-    password: str
+    password: str | None = None
     role: Role = Role.VIEWER
     email: str | None = None
     full_name: str | None = None

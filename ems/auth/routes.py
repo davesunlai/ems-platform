@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ems.notify.email import send_email, smtp_configured
+from ems.notify.templates import html_mail
 from . import db
 from .deps import get_current_user, require_permission
 from .models import (
@@ -22,6 +23,7 @@ logger = logging.getLogger("ems.auth")
 router = APIRouter(prefix="/api", tags=["auth"])
 
 RESET_TTL_HOURS = 1
+ACTIVATION_TTL_HOURS = 168  # 7 dní na nastavení hesla po založení
 
 
 def _hash_token(token: str) -> str:
@@ -123,9 +125,64 @@ async def get_users(_: dict = Depends(require_permission("admin"))):
 async def post_user(body: UserCreate, _: dict = Depends(require_permission("admin"))):
     if await db.get_user(body.username):
         raise HTTPException(status_code=409, detail="Uživatel už existuje")
-    return await db.create_user(body.username, body.password, body.role.value,
+    pw = body.password if body.password else secrets.token_urlsafe(24)
+    user = await db.create_user(body.username, pw, body.role.value,
                                 email=body.email, full_name=body.full_name,
                                 phone=body.phone, note=body.note)
+    if body.email and smtp_configured():
+        try:
+            token = secrets.token_urlsafe(32)
+            expires = datetime.now(timezone.utc) + timedelta(hours=ACTIVATION_TTL_HOURS)
+            await db.create_reset(user["id"], _hash_token(token), expires)
+            base = os.getenv("EMS_BASE_URL", "http://localhost:8080").rstrip("/")
+            link = f"{base}/reset?token={token}"
+            name = body.full_name or body.username
+            days = ACTIVATION_TTL_HOURS // 24
+            text = (f"Vítejte v TERA EMS, {name}!\n\n"
+                    f"Byl pro vás vytvořen účet '{body.username}'. Heslo si nastavte přes "
+                    f"odkaz (platí {days} dní):\n\n{link}\n")
+            html = html_mail(
+                "Vítejte v TERA EMS",
+                [f"Dobrý den, {name},",
+                 "byl pro vás vytvořen účet v systému <strong>TERA EMS</strong> — pro sledování "
+                 "a řízení fotovoltaiky, baterií a toků do/ze sítě (výroba, spotřeba, přetoky, "
+                 "spotové ceny).",
+                 f"Pro dokončení registrace si prosím nastavte heslo k účtu <strong>{body.username}</strong>:"],
+                "Nastavit heslo", link,
+                f"Odkaz je platný {days} dní. Po nastavení hesla se přihlásíte jménem „{body.username}“.")
+            await send_email(body.email, "Vítejte v TERA EMS — nastavení hesla", text, html=html)
+        except Exception as exc:
+            logger.warning("Uvítací e-mail se nepodařilo odeslat: %s", exc)
+    return user
+
+
+@router.post("/admin/users/{user_id}/send-reset")
+async def admin_send_reset(user_id: int, _: dict = Depends(require_permission("admin"))):
+    user = await db.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+    if not user.get("email"):
+        raise HTTPException(status_code=400, detail="Uživatel nemá e-mail — nejdřív ho doplňte")
+    if not smtp_configured():
+        raise HTTPException(status_code=400, detail="SMTP není nakonfigurováno")
+    token = secrets.token_urlsafe(32)
+    expires = datetime.now(timezone.utc) + timedelta(hours=RESET_TTL_HOURS)
+    await db.create_reset(user["id"], _hash_token(token), expires)
+    base = os.getenv("EMS_BASE_URL", "http://localhost:8080").rstrip("/")
+    link = f"{base}/reset?token={token}"
+    name = user.get("full_name") or user["username"]
+    text = (f"Dobrý den, {name},\n\nbyl vyžádán reset hesla k účtu '{user['username']}'. "
+            f"Nové heslo nastavte přes odkaz (platí {RESET_TTL_HOURS} h):\n\n{link}\n")
+    html = html_mail(
+        "Obnova hesla",
+        [f"Dobrý den, {name},",
+         f"správce vyžádal obnovu hesla k vašemu účtu <strong>{user['username']}</strong> "
+         "v systému TERA EMS.",
+         "Nové heslo nastavíte kliknutím níže:"],
+        "Nastavit nové heslo", link,
+        f"Odkaz je platný {RESET_TTL_HOURS} h. Pokud jste o reset nežádal(a), kontaktujte správce.")
+    await send_email(user["email"], "TERA EMS — obnova hesla", text, html=html)
+    return {"detail": f"E-mail s odkazem odeslán na {user['email']}."}
 
 
 @router.patch("/admin/users/{user_id}", response_model=UserOut)

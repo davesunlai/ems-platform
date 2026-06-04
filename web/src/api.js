@@ -43,6 +43,7 @@ export const api = {
   createUser: (u) => request("/api/admin/users", { method: "POST", body: u }),
   updateUser: (id, patch) => request(`/api/admin/users/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
   deleteUser: (id) => request(`/api/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  sendReset: (id) => request(`/api/admin/users/${encodeURIComponent(id)}/send-reset`, { method: "POST" }),
   listModules: () => request("/api/admin/modules"),
   createModule: (m) => request("/api/admin/modules", { method: "POST", body: m }),
   updateModule: (id, patch) => request(`/api/admin/modules/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),

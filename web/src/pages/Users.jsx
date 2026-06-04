@@ -16,7 +16,7 @@ export default function Users() {
     setErr("");
     try {
       await api.createUser({
-        username: nu.username, password: nu.password, role: nu.role,
+        username: nu.username, password: nu.password || null, role: nu.role,
         email: nu.email || null, full_name: nu.full_name || null,
         phone: nu.phone || null, note: nu.note || null,
       });
@@ -37,10 +37,9 @@ export default function Users() {
     try { await api.updateUser(u.id, { phone: phone || "" }); load(); } catch (e) { setErr(e.message); }
   };
   const resetPw = async (u) => {
-    const pw = prompt(`Nové heslo pro ${u.username} (min. 6 znaků):`, "");
-    if (!pw) return;
-    if (pw.length < 6) { setErr("Heslo musí mít aspoň 6 znaků"); return; }
-    try { await api.updateUser(u.id, { password: pw }); setErr(""); alert("Heslo nastaveno."); } catch (e) { setErr(e.message); }
+    if (!confirm(`Poslat uživateli ${u.username} e-mail s odkazem pro nastavení hesla?`)) return;
+    try { const r = await api.sendReset(u.id); setErr(""); alert(r.detail || "E-mail odeslán."); }
+    catch (e) { setErr(e.message); }
   };
 
   return (
@@ -54,7 +53,7 @@ export default function Users() {
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Heslo</label>
-            <input type="password" value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} />
+            <input type="password" value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} placeholder="prázdné = pošle se e-mail s odkazem" />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Jméno</label>
@@ -74,7 +73,7 @@ export default function Users() {
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
-          <button className="btn primary" onClick={create} disabled={!nu.username.trim() || !nu.password}>Vytvořit</button>
+          <button className="btn primary" onClick={create} disabled={!nu.username.trim()}>Vytvořit</button>
         </div>
         <p className="error">{err}</p>
       </div>

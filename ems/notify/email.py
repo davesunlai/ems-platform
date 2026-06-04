@@ -21,7 +21,7 @@ def smtp_configured() -> bool:
     return bool(os.getenv("EMS_SMTP_USER") and os.getenv("EMS_SMTP_PASSWORD"))
 
 
-async def send_email(to: str, subject: str, body: str) -> None:
+async def send_email(to: str, subject: str, body: str, html: str | None = None) -> None:
     import aiosmtplib
 
     host = os.getenv("EMS_SMTP_HOST", "smtp.forpsi.com")
@@ -36,6 +36,8 @@ async def send_email(to: str, subject: str, body: str) -> None:
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")
 
     kwargs = {"hostname": host, "port": port, "username": user, "password": password}
     if security == "ssl":
