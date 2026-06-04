@@ -11,6 +11,7 @@ const LABELS = {
   voltage: "Napětí", current: "Proud",
 };
 const ACCENT = { pv_power: "green", battery_power: "blue", battery_soc: "blue", grid_power: "amber", load_power: "" };
+const CHART_COLOR = { pv_power: "#3fb950", load_power: "#8b949e", battery_power: "#58a6ff", battery_soc: "#58a6ff", grid_power: "#d29922", active_power: "#3fb950" };
 const ORDER = ["pv_power","load_power","battery_power","battery_soc","grid_power","active_power",
                "frequency","temperature","energy_pv_total","energy_import","energy_export"];
 const WIN = [
@@ -49,6 +50,7 @@ function DevicePanel({ id, locality, lastSeen }) {
   const [win, setWin] = useState(0);
   const [offset, setOffset] = useState(0);
   const err = useRef(false);
+  const picked = useRef(false);
   const step = (dir) => setOffset((o) => Math.max(0, Math.min(525600, o + dir * WIN[win].min)));
 
   useEffect(() => {
@@ -59,7 +61,7 @@ function DevicePanel({ id, locality, lastSeen }) {
         if (!alive) return;
         setLatest(l);
         const cm = l.metrics.pv_power ? "pv_power" : (Object.keys(l.metrics)[0] || "pv_power");
-        setChartMetric(cm);
+        if (!picked.current) setChartMetric(cm);
         err.current = false;
       } catch (e) { err.current = true; }
     };
@@ -121,7 +123,10 @@ function DevicePanel({ id, locality, lastSeen }) {
         {keys.map((k) => {
           const f = fmt(k, metrics[k]);
           return (
-            <div key={k} className={`card ${ACCENT[k] ? "accent-" + ACCENT[k] : ""}`}>
+            <div key={k} className={`card ${ACCENT[k] ? "accent-" + ACCENT[k] : ""}`}
+                 onClick={() => { picked.current = true; setChartMetric(k); }}
+                 title="Zobrazit v grafu"
+                 style={{ cursor: "pointer", outline: k === chartMetric ? "1.5px solid var(--blue, #58a6ff)" : "none", outlineOffset: 1 }}>
               <div className="label">{LABELS[k] || k}</div>
               <div className="value">{f.value}<span className="unit">{f.unit}</span></div>
               {k === "battery_soc" && (
@@ -146,7 +151,7 @@ function DevicePanel({ id, locality, lastSeen }) {
           <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
                   onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1} title="delší okno (až 30 dní)">+</button>
         </div>
-        <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color="#3fb950" />
+        <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color={CHART_COLOR[chartMetric] || "#3fb950"} />
       </div>
       )}
     </section>

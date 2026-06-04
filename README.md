@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.16.0 — Dashboard: klikací dlaždice přepínají metriku grafu (vč. SoC baterie), barva křivky dle veličiny.
+
 ## v0.15.3 — Předání EMS_SMTP_FROM_NAME do api kontejneru v docker-compose (jinak se proměnná z .env nedostala dovnitř).
 
 ## v0.15.2 — Konfigurovatelné jméno odesílatele e-mailů přes EMS_SMTP_FROM_NAME (výchozí „TERA EMS").
