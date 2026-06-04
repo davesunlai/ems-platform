@@ -89,5 +89,17 @@ services:
     ports: ["8080:80"]
     depends_on: [api]
 
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on: [web]
+
 volumes:
   tsdata:
+  caddydata:
+  caddyconfig:
