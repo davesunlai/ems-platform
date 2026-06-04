@@ -50,3 +50,29 @@ async def read_battery_mode(host: str, port: int) -> str | None:
     inverter = await goodwe.connect(host, port=port)
     cm = await inverter.get_operation_mode()
     return cm.name if cm is not None else None
+
+
+async def set_load_switch(host: str, port: int, on: bool) -> dict:
+    """Sepne/rozepne suchý kontakt (Load Control) na ET měniči.
+
+    Pozn.: měnič musí mít Load Control Mode nastaven tak, aby respektoval
+    softwarové přepnutí (ověřit přes ruční tlačítko/PV Master).
+    """
+    import goodwe
+    inverter = await goodwe.connect(host, port=port)
+    await inverter.write_setting("load_control_switch", 1 if on else 0)
+    confirmed = None
+    try:
+        confirmed = await inverter.read_setting("load_control_switch")
+    except Exception as exc:
+        logger.warning("Read-back kontaktu selhal: %s", exc)
+    return {"requested": 1 if on else 0, "confirmed": confirmed}
+
+
+async def read_load_switch(host: str, port: int) -> int | None:
+    import goodwe
+    inverter = await goodwe.connect(host, port=port)
+    try:
+        return await inverter.read_setting("load_control_switch")
+    except Exception:
+        return None
