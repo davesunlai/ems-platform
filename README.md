@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.15.2 — Konfigurovatelné jméno odesílatele e-mailů přes EMS_SMTP_FROM_NAME (výchozí „TERA EMS").
+
 ## v0.15.1 — Menu „Kontakt" přejmenováno na „Spínací kontakty"; stránka připravena na další spínané výstupy (eWeLink/Olimex) a spouštěče.
 
 ## v0.15.0 — Výstrahy v liště: trojúhelník s počtem výstrah scoped na lokality uživatele, generický agregátor (zatím odstávky), endpoint /api/alerts.

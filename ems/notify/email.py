@@ -7,12 +7,14 @@ Konfigurace přes proměnné prostředí:
   EMS_SMTP_USER=ai@teraems.com
   EMS_SMTP_PASSWORD=...        # heslo schránky (v .env, ne v gitu)
   EMS_SMTP_FROM=ai@teraems.com
+  EMS_SMTP_FROM_NAME=TERA EMS   # zobrazované jméno odesílatele (volitelné)
 """
 from __future__ import annotations
 
 import logging
 import os
 from email.message import EmailMessage
+from email.utils import formataddr
 
 logger = logging.getLogger("ems.notify")
 
@@ -30,9 +32,10 @@ async def send_email(to: str, subject: str, body: str, html: str | None = None) 
     user = os.getenv("EMS_SMTP_USER")
     password = os.getenv("EMS_SMTP_PASSWORD")
     sender = os.getenv("EMS_SMTP_FROM", user or "noreply@localhost")
+    from_name = os.getenv("EMS_SMTP_FROM_NAME", "TERA EMS").strip()
 
     msg = EmailMessage()
-    msg["From"] = sender
+    msg["From"] = formataddr((from_name, sender)) if from_name else sender
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
