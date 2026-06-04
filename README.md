@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.17.1 — Pevné DNS (1.1.1.1/8.8.8.8) pro api a collector kontejnery, aby dosáhly na ČEZ (jinak „name resolution" chyba uvnitř kontejneru).
+
 ## v0.17.0 — Průvodce systémem: po prvním přihlášení provede klikacími kroky, přepíná stránky a zvýrazňuje menu; znovu spustitelný tlačítkem „Průvodce".
 
 ## v0.16.1 — Graf zařízení se po výběru veličiny bez dat neschová celý, ukáže ovládání + hlášku (snazší dostat se k SoC).

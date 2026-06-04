@@ -27,6 +27,7 @@ services:
       dockerfile: infra/Dockerfile
     restart: unless-stopped
     command: ["python", "-m", "ems.collector.main"]
+    dns: ["1.1.1.1", "8.8.8.8"]
     environment:
       EMS_SINK: timescale
       EMS_DB_DSN: postgresql://ems:${EMS_DB_PASSWORD:-ems}@timescaledb:5432/ems
@@ -44,6 +45,7 @@ services:
       dockerfile: infra/Dockerfile
     restart: unless-stopped
     command: ["uvicorn", "ems.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    dns: ["1.1.1.1", "8.8.8.8"]
     environment:
       EMS_DB_DSN: postgresql://ems:${EMS_DB_PASSWORD:-ems}@timescaledb:5432/ems
       EMS_JWT_SECRET: ${EMS_JWT_SECRET:-dev-insecure-change-me}
