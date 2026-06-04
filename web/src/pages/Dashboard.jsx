@@ -244,7 +244,7 @@ function BillingTable({ localityId }) {
           <th style={{ textAlign: "right" }}>Výroba</th>
           <th style={{ textAlign: "right" }}>Spotřeba</th>
           <th style={{ textAlign: "right" }}>Přetoky</th>
-          <th style={{ textAlign: "right" }}>Odběr</th>
+          <th style={{ textAlign: "right" }}>Nákup od distributora</th>
         </tr></thead>
         <tbody>
           {b.baseline && (b.baseline.export_kwh || b.baseline.import_kwh) ? (
