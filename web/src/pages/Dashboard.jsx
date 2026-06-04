@@ -136,7 +136,7 @@ function DevicePanel({ id, locality, lastSeen }) {
           );
         })}
       </div>
-      {hist.length >= 2 && (
+      {active && (
       <div className="chart-wrap">
         <div className="chart-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span>{LABELS[chartMetric] || chartMetric}</span>
@@ -151,7 +151,9 @@ function DevicePanel({ id, locality, lastSeen }) {
           <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
                   onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1} title="delší okno (až 30 dní)">+</button>
         </div>
-        <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color={CHART_COLOR[chartMetric] || "#3fb950"} />
+        {hist.length >= 2
+          ? <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color={CHART_COLOR[chartMetric] || "#3fb950"} />
+          : <p className="muted" style={{ fontSize: 13, padding: "24px 0", textAlign: "center" }}>Pro tuto veličinu zatím není dost dat v tomto okně.</p>}
       </div>
       )}
     </section>

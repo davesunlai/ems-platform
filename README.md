@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.16.1 — Graf zařízení se po výběru veličiny bez dat neschová celý, ukáže ovládání + hlášku (snazší dostat se k SoC).
+
 ## v0.16.0 — Dashboard: klikací dlaždice přepínají metriku grafu (vč. SoC baterie), barva křivky dle veličiny.
 
 ## v0.15.3 — Předání EMS_SMTP_FROM_NAME do api kontejneru v docker-compose (jinak se proměnná z .env nedostala dovnitř).
