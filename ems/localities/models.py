@@ -1,6 +1,8 @@
 """Modely lokalit a párovacích vazeb."""
 from __future__ import annotations
 
+from datetime import date
+
 from pydantic import BaseModel
 
 
@@ -24,3 +26,12 @@ class AssignUser(BaseModel):
 
 class AssignDevice(BaseModel):
     module_id: str
+
+
+class BillingSettings(BaseModel):
+    billing_start: date | None = None
+    billing_months: int | None = None
+    export_limit_kwh: float | None = None
+    alert_enabled: bool | None = None
+    autolimit_enabled: bool | None = None
+    alert_email: str | None = None

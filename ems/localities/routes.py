@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ems.auth.deps import require_permission
 from . import db
-from .models import AssignDevice, AssignUser, LocalityCreate, LocalityUpdate
+from .models import AssignDevice, AssignUser, BillingSettings, LocalityCreate, LocalityUpdate
 
 router = APIRouter(prefix="/api/admin/localities", tags=["localities"])
 
@@ -70,3 +70,13 @@ async def add_device(loc_id: int, body: AssignDevice, _: dict = Depends(require_
 async def remove_device(loc_id: int, module_id: str, _: dict = Depends(require_permission("admin"))):
     await db.unassign_device(module_id)
     return await _enrich(await db.get(loc_id))
+
+
+@router.put("/{loc_id}/billing")
+async def set_billing(loc_id: int, body: BillingSettings,
+                      _: dict = Depends(require_permission("admin"))):
+    patch = body.model_dump(exclude_unset=True)
+    loc = await db.set_billing(loc_id, patch)
+    if not loc:
+        raise HTTPException(status_code=404, detail="Lokalita nenalezena")
+    return await _enrich(loc)

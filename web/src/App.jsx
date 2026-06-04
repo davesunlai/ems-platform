@@ -12,6 +12,7 @@ import Modules from "./pages/Modules";
 import Control from "./pages/Control";
 import Automation from "./pages/Automation";
 import Ewelink from "./pages/Ewelink";
+import Billing from "./pages/Billing";
 import Localities from "./pages/Localities";
 
 export default function App() {
@@ -39,6 +40,9 @@ export default function App() {
             } />
             <Route path="/ewelink" element={
               <ProtectedRoute permission="admin"><Ewelink /></ProtectedRoute>
+            } />
+            <Route path="/billing" element={
+              <ProtectedRoute permission="admin"><Billing /></ProtectedRoute>
             } />
             <Route path="/localities" element={
               <ProtectedRoute permission="admin"><Localities /></ProtectedRoute>

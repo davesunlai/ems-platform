@@ -195,6 +195,83 @@ function LocalityChart({ deviceIds }) {
   );
 }
 
+function fmtKWh(v) {
+  return v >= 1000 ? `${(v / 1000).toFixed(2)} MWh` : `${v.toFixed(0)} kWh`;
+}
+
+function BillingTable({ localityId }) {
+  const [b, setB] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    api.localityBilling(localityId).then((r) => alive && setB(r)).catch(() => {});
+    return () => { alive = false; };
+  }, [localityId]);
+
+  if (!b || !b.configured) return null;
+  const lim = b.settings.export_limit_kwh;
+  const exp = b.totals.export_kwh;
+  const pct = lim ? Math.min(100, (exp / lim) * 100) : 0;
+  const over = lim && exp >= lim;
+  const fmtMonth = (m) => {
+    const [y, mo] = m.split("-");
+    return new Date(y, mo - 1, 1).toLocaleDateString("cs-CZ", { month: "long", year: "numeric" });
+  };
+
+  return (
+    <div className="panel" style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <h3 style={{ margin: 0 }}>Zúčtovací období</h3>
+        <span className="muted" style={{ fontSize: 13 }}>
+          {new Date(b.period.start).toLocaleDateString("cs-CZ")} – {new Date(b.period.end).toLocaleDateString("cs-CZ")}
+        </span>
+      </div>
+
+      {lim != null && (
+        <div style={{ margin: "10px 0 4px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+            <span>Přetoky za období: <strong style={{ color: over ? "#e06c75" : "var(--green)" }}>{fmtKWh(exp)}</strong></span>
+            <span className="muted">limit {fmtKWh(lim)}</span>
+          </div>
+          <div style={{ height: 8, background: "var(--border)", borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ width: `${pct}%`, height: "100%", background: over ? "#e06c75" : pct > 80 ? "#d29922" : "var(--green)" }} />
+          </div>
+        </div>
+      )}
+
+      <table style={{ marginTop: 12, width: "100%" }}>
+        <thead><tr>
+          <th style={{ textAlign: "left" }}>Měsíc</th>
+          <th style={{ textAlign: "right" }}>Výroba</th>
+          <th style={{ textAlign: "right" }}>Spotřeba</th>
+          <th style={{ textAlign: "right" }}>Přetoky</th>
+          <th style={{ textAlign: "right" }}>Odběr</th>
+        </tr></thead>
+        <tbody>
+          {b.months.map((r) => (
+            <tr key={r.month}>
+              <td>{fmtMonth(r.month)}</td>
+              <td style={{ textAlign: "right" }}>{r.prod_kwh.toFixed(0)} kWh</td>
+              <td style={{ textAlign: "right" }}>{r.cons_kwh.toFixed(0)} kWh</td>
+              <td style={{ textAlign: "right", color: "var(--green)" }}>{r.export_kwh.toFixed(0)} kWh</td>
+              <td style={{ textAlign: "right" }}>{r.import_kwh.toFixed(0)} kWh</td>
+            </tr>
+          ))}
+          {!b.months.length && <tr><td colSpan="5" className="muted">Zatím žádná data v tomto období.</td></tr>}
+        </tbody>
+        {b.months.length > 0 && (
+          <tfoot><tr style={{ fontWeight: 600, borderTop: "1px solid var(--border)" }}>
+            <td>Celkem za období</td>
+            <td style={{ textAlign: "right" }}>{fmtKWh(b.totals.prod_kwh)}</td>
+            <td style={{ textAlign: "right" }}>{fmtKWh(b.totals.cons_kwh)}</td>
+            <td style={{ textAlign: "right", color: "var(--green)" }}>{fmtKWh(b.totals.export_kwh)}</td>
+            <td style={{ textAlign: "right" }}>{fmtKWh(b.totals.import_kwh)}</td>
+          </tr></tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [devices, setDevices] = useState(null);
   const [error, setError] = useState("");
@@ -223,6 +300,7 @@ export default function Dashboard() {
               {name === "—" ? "Bez lokality" : `📍 ${name}`}
             </h2>
             <LocalityChart deviceIds={ids} />
+            {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}
             {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} />)}
           </section>
         );

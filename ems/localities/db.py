@@ -37,6 +37,41 @@ async def ensure_schema() -> None:
             "ALTER TABLE modules ADD COLUMN IF NOT EXISTS locality_id INTEGER "
             "REFERENCES localities(id) ON DELETE SET NULL"
         )
+        # Zúčtovací období (dle ČEZ) + limit přetoků a upozornění
+        for col, ddl in (
+            ("billing_start", "DATE"),
+            ("billing_months", "INTEGER NOT NULL DEFAULT 12"),
+            ("export_limit_kwh", "DOUBLE PRECISION"),
+            ("alert_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("autolimit_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("alert_email", "TEXT"),
+            ("alert_fired", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("limit_applied", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("period_anchor", "DATE"),
+        ):
+            await conn.execute(
+                f"ALTER TABLE localities ADD COLUMN IF NOT EXISTS {col} {ddl}"
+            )
+
+
+async def set_billing(loc_id: int, patch: dict) -> dict | None:
+    if not patch:
+        return await get(loc_id)
+    cols = ["billing_start", "billing_months", "export_limit_kwh",
+            "alert_enabled", "autolimit_enabled", "alert_email"]
+    sets, args = [], []
+    for k in cols:
+        if k in patch:
+            args.append(patch[k]); sets.append(f"{k} = ${len(args)}")
+    if not sets:
+        return await get(loc_id)
+    args.append(loc_id)
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            f"UPDATE localities SET {', '.join(sets)} WHERE id = ${len(args)} RETURNING *", *args
+        )
+    return dict(row) if row else None
 
 
 async def list_all() -> list[dict]:

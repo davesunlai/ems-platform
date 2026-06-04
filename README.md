@@ -12,6 +12,7 @@ Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 
 - **Řízení / zápis do měniče** (v0.4): povelový kanál s ověřením (read-back) a auditem, oprávnění `control`. První povel: režim baterie Goodwe ET — vynucené nabíjení / normální režim.
 - **Automatizace dle spotové ceny** (v0.5): pravidlo „levný spot → nabíjej", zdroj cen OTE + ruční test, audit automatických povelů, samoopravné edge-triggerem. První VPP chování.
 - **Správa hesel** (v0.6): změna vlastního hesla, admin reset, zapomenuté heslo přes e-mail (Forpsi SMTP), profilová pole (e-mail, jméno).
+- **Zúčtovací období + přetoky** (v0.12.0): per lokalita nastavení období (start dle ČEZ, délka, limit přetoků); na dashboardu tabulka po měsících (výroba/spotřeba/přetoky/odběr) + součet za období + pruh přetoky vs. limit; po konci období od nuly. Admin stránka „Zúčtování".
 - **Posun času šipkami + datum** (v0.11.0–0.11.1): grafy (zařízení i souhrn lokality) se posouvají šipkami ◀ ▶ vždy o jeden aktuálně nastavený úsek (délku okna); nad grafem je čitelný popisek datum/čas rozsahu a tlačítko „teď".
 - **Souhrnný graf lokality** (v0.10.0): dashboard seskupený podle lokality, souhrnný víceřadý graf — součet výroby FVE + spotřeba lokality + odběr/dodávka do sítě (řady dle dostupných dat), okno 6 h–30 dní.
 - **eWeLink/Sonoff (test)** (v0.9.0): připojení na eWeLink cloud, admin výpis zařízení (online, vypínač, příkon). První integrace chytrých zařízení; ovládání a telemetrie navazují.

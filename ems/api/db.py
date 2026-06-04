@@ -29,6 +29,7 @@ async def list_devices() -> list[dict]:
             """
             SELECT s.device_id,
                    max(l.name)  AS locality,
+                   max(m.locality_id) AS locality_id,
                    max(s.time)  AS last_seen,
                    (max(s.time) > now() - interval '5 minutes') AS active
             FROM samples s
@@ -41,6 +42,7 @@ async def list_devices() -> list[dict]:
     return [{
         "device_id": r["device_id"],
         "locality": r["locality"],
+        "locality_id": r["locality_id"],
         "last_seen": r["last_seen"].isoformat() if r["last_seen"] else None,
         "active": bool(r["active"]),
     } for r in rows]
