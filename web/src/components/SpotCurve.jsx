@@ -11,6 +11,7 @@ const WIN = [
 export default function SpotCurve({ rules = [] }) {
   const [wi, setWi] = useState(0);
   const [slots, setSlots] = useState(null);
+  const [hov, setHov] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -76,10 +77,22 @@ export default function SpotCurve({ rules = [] }) {
     if (now >= ts[i] && now < next) { curIdx = i; break; }
   }
 
+  const onMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const vbX = ((e.clientX - rect.left) / rect.width) * W;
+    if (vbX < padL || vbX > W - padR) { setHov(null); return; }
+    const i = Math.floor((vbX - padL) / bw);
+    setHov(i >= 0 && i < n ? i : null);
+  };
+  const hx = hov != null ? padL + (hov + 0.5) * bw : 0;
+  const fmtFull = (t) => new Date(t).toLocaleString("cs-CZ",
+    { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
   return (
     <>
       {controls}
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}>
+      <div style={{ position: "relative" }} onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
         <text x={13} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
               transform={`rotate(-90 13 ${padT + plotH / 2})`}>Kč/MWh</text>
 
@@ -117,7 +130,23 @@ export default function SpotCurve({ rules = [] }) {
                 textAnchor={k === 0 ? "start" : k === xIdx.length - 1 ? "end" : "middle"}
                 fontSize="9.5" fill="var(--muted)">{fmtX(ts[i])}</text>
         ))}
+
+        {hov != null && (
+          <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} stroke="var(--fg)" strokeWidth="0.9" strokeDasharray="3 3" opacity="0.8" />
+        )}
       </svg>
+
+      {hov != null && (
+        <div style={{
+          position: "absolute", top: 4, left: `${(hx / W) * 100}%`, transform: "translateX(-50%)",
+          background: "var(--panel, #161b22)", border: "1px solid var(--border, #30363d)", borderRadius: 7,
+          padding: "5px 9px", fontSize: 12, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 5,
+          boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
+          <div className="muted" style={{ fontSize: 11 }}>{fmtFull(slots[hov].start)}</div>
+          <div><strong>{Math.round(slots[hov].price)}</strong> Kč/MWh</div>
+        </div>
+      )}
+      </div>
       <div style={{ display: "flex", gap: 18, fontSize: 12, color: "var(--muted)", marginTop: 4, flexWrap: "wrap" }}>
         <span><span style={{ display: "inline-block", width: 10, height: 10, background: GREEN, borderRadius: 2, marginRight: 5 }} />nabíjení (pod prahem)</span>
         <span><span style={{ display: "inline-block", width: 10, height: 10, background: RED, borderRadius: 2, marginRight: 5 }} />vybíjení do sítě (nad prahem)</span>
