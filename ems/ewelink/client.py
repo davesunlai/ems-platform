@@ -166,20 +166,11 @@ async def _families(client, tok: dict) -> list[str]:
 
 
 async def _things_in(client, tok: dict, fid: str | None) -> list[dict]:
-    out, begin = [], 0
-    while True:
-        q = f"/v2/device/thing?num=30&beginIndex={begin}" + (f"&familyid={fid}" if fid else "")
-        data = await _get(client, tok, q)
-        if data.get("error"):
-            break
-        lst = (data.get("data") or {}).get("thingList", [])
-        out.extend(lst)
-        if len(lst) < 30:
-            break
-        begin += 30
-        if begin > 600:
-            break
-    return out
+    q = "/v2/device/thing?num=0" + (f"&familyid={fid}" if fid else "")
+    data = await _get(client, tok, q)
+    if data.get("error"):
+        return []
+    return (data.get("data") or {}).get("thingList", [])
 
 
 async def list_devices() -> list[dict]:

@@ -57,7 +57,7 @@ export const api = {
   contactSwitch: (id, on) => request(`/api/contact/${encodeURIComponent(id)}/switch?on=${on}`, { method: "POST" }),
   ewelinkDevices: () => request("/api/ewelink/devices"),
   ewelinkAuthUrl: () => request("/api/ewelink/auth-url"),
-  ewelinkSwitch: (deviceid, on) => request("/api/ewelink/switch", { method: "POST", body: JSON.stringify({ deviceid, on }) }),
+  ewelinkSwitch: (deviceid, on) => request("/api/ewelink/switch", { method: "POST", body: { deviceid, on } }),
   spot: () => request("/api/market/spot"),
   spotCurve: (days = 1) => request(`/api/market/spot-curve?days=${days}`),
   setManualPrice: (price) => request("/api/admin/market/manual", { method: "POST", body: { price } }),
