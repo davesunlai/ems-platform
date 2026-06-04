@@ -18,6 +18,11 @@ class LocalityUpdate(BaseModel):
     address: str | None = None
     region: str | None = None
     note: str | None = None
+    cez_ean: str | None = None
+    cez_meter: str | None = None
+    addr_zip: str | None = None
+    addr_city: str | None = None
+    addr_street: str | None = None
 
 
 class AssignUser(BaseModel):

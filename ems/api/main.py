@@ -43,13 +43,15 @@ async def lifespan(app: FastAPI):
         await localities_db.ensure_schema()
         from ems.contact import db as contact_db
         await contact_db.ensure_schema()
+        from ems.outages import db as outages_db
+        await outages_db.ensure_schema()
     except Exception as exc:
         logger.error("Inicializace auth schématu selhala: %s", exc)
     yield
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.13.0", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.15.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,6 +69,10 @@ app.include_router(ewelink_router)
 app.include_router(billing_router)
 app.include_router(contact_router)
 app.include_router(localities_router)
+from ems.outages.routes import router as outages_router
+app.include_router(outages_router)
+from ems.alerts.routes import router as alerts_router
+app.include_router(alerts_router)
 
 # Telemetrie vyžaduje oprávnění "read".
 read = require_permission("read")

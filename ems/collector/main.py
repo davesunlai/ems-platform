@@ -24,6 +24,7 @@ from ems.market.spot import fetch_current_price_czk, fetch_day_slots
 from ems.automation import db as automation_db
 from ems.automation.engine import evaluate_all
 from ems.contact.engine import evaluate_contacts
+from ems.outages.service import refresh_all as refresh_outages_all
 from .config import build_adapter, build_sink
 
 logging.basicConfig(
@@ -161,6 +162,16 @@ async def tick_market_and_automation(state: dict) -> None:
         await evaluate_contacts()
     except Exception as exc:
         logger.warning("Spínání kontaktu selhalo: %s", exc)
+
+    # plánované odstávky distribuce – 1× denně
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    if state.get("last_outage_day") != today:
+        state["last_outage_day"] = today
+        try:
+            await refresh_outages_all()
+        except Exception as exc:
+            logger.warning("Refresh odstávek selhal: %s", exc)
 
 
 def main() -> None:

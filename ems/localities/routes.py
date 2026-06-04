@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ems.auth.deps import require_permission
 from . import db
+from ems.outages.service import query_kind
 from .models import AssignDevice, AssignUser, BillingSettings, LocalityCreate, LocalityUpdate
 
 router = APIRouter(prefix="/api/admin/localities", tags=["localities"])
@@ -15,6 +16,7 @@ async def _enrich(loc: dict) -> dict:
     loc.pop("created_at", None)
     loc["users"] = await db.users_for_locality(loc["id"])
     loc["devices"] = await db.devices_for_locality(loc["id"])
+    loc["outage_by"] = query_kind(loc)
     return loc
 
 

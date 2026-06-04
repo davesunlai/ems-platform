@@ -51,6 +51,11 @@ async def ensure_schema() -> None:
             ("baseline_export_kwh", "DOUBLE PRECISION"),
             ("baseline_import_kwh", "DOUBLE PRECISION"),
             ("baseline_period_start", "DATE"),
+            ("cez_ean", "TEXT"),
+            ("cez_meter", "TEXT"),
+            ("addr_zip", "TEXT"),
+            ("addr_city", "TEXT"),
+            ("addr_street", "TEXT"),
         ):
             await conn.execute(
                 f"ALTER TABLE localities ADD COLUMN IF NOT EXISTS {col} {ddl}"
@@ -85,6 +90,16 @@ async def list_all() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+async def localities_for_user(user_id: int) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT l.* FROM localities l "
+            "JOIN user_localities ul ON ul.locality_id = l.id "
+            "WHERE ul.user_id = $1 ORDER BY l.name", user_id)
+    return [dict(r) for r in rows]
+
+
 async def get(loc_id: int) -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -104,7 +119,7 @@ async def create(name: str, address, region: str, note) -> dict:
 
 async def update(loc_id: int, patch: dict) -> dict | None:
     sets, args = [], []
-    for k in ("name", "address", "region", "note"):
+    for k in ("name", "address", "region", "note", "cez_ean", "cez_meter", "addr_zip", "addr_city", "addr_street"):
         if k in patch and patch[k] is not None:
             args.append(patch[k]); sets.append(f"{k} = ${len(args)}")
     if not sets:

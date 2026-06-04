@@ -3,6 +3,79 @@ import { api } from "../api";
 
 const emptyLoc = { name: "", address: "", region: "CZ", note: "" };
 
+const fmtDT = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
+function OutageSection({ loc, onChange }) {
+  const [form, setForm] = useState({
+    cez_ean: loc.cez_ean || "", cez_meter: loc.cez_meter || "",
+    addr_zip: loc.addr_zip || "", addr_city: loc.addr_city || "", addr_street: loc.addr_street || "",
+  });
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const loadOut = () => api.localityOutages(loc.id).then(setData).catch(() => {});
+  useEffect(() => { loadOut(); }, [loc.id]);
+
+  const set = (k, v) => setForm({ ...form, [k]: v });
+  const save = async () => {
+    setBusy(true); setMsg("");
+    try { await api.updateLocality(loc.id, form); onChange(); setMsg("Uloženo."); }
+    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+  const refresh = async () => {
+    setBusy(true); setMsg("");
+    try { const r = await api.refreshOutages(loc.id); setData({ ...data, ...r }); setMsg(`Načteno z ČEZ: ${r.fetched} odstávek.`); }
+    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+
+  const by = loc.outage_by;
+  const outages = data?.outages || [];
+
+  return (
+    <div style={{ marginTop: 16, borderTop: "1px solid var(--border, #2a2a35)", paddingTop: 12 }}>
+      <label className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>
+        Plánované odstávky (ČEZ)
+      </label>
+      <p className="muted" style={{ fontSize: 12, margin: "4px 0 10px" }}>
+        Dotaz použije první vyplněnou možnost v pořadí: EAN → číslo elektroměru → adresa.
+        {by ? <> Aktuálně se ptá podle: <strong>{by}</strong>.</> : <> Zatím není vyplněn žádný identifikátor.</>}
+      </p>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div className="field" style={{ marginBottom: 0, minWidth: 200 }}><label>EAN (18 míst)</label>
+          <input value={form.cez_ean} onChange={(e) => set("cez_ean", e.target.value)} placeholder="859182400…" /></div>
+        <div className="field" style={{ marginBottom: 0, minWidth: 150 }}><label>Číslo elektroměru</label>
+          <input value={form.cez_meter} onChange={(e) => set("cez_meter", e.target.value)} /></div>
+      </div>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
+        <div className="field" style={{ marginBottom: 0, maxWidth: 110 }}><label>PSČ</label>
+          <input value={form.addr_zip} onChange={(e) => set("addr_zip", e.target.value)} placeholder="742 21" /></div>
+        <div className="field" style={{ marginBottom: 0, minWidth: 160 }}><label>Město / obec</label>
+          <input value={form.addr_city} onChange={(e) => set("addr_city", e.target.value)} /></div>
+        <div className="field" style={{ marginBottom: 0, minWidth: 160 }}><label>Ulice</label>
+          <input value={form.addr_street} onChange={(e) => set("addr_street", e.target.value)} /></div>
+        <button className="btn primary" onClick={save} disabled={busy}>Uložit</button>
+        <button className="btn" onClick={refresh} disabled={busy || !by} title={by ? "" : "Vyplň a ulož identifikátor"}>Načíst teď</button>
+      </div>
+      {msg && <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>{msg}</p>}
+
+      <div style={{ marginTop: 10 }}>
+        {outages.length === 0 && <span className="muted" style={{ fontSize: 13 }}>Žádné nadcházející plánované odstávky.</span>}
+        {outages.map((o) => (
+          <div key={o.uid} style={{ fontSize: 13, padding: "6px 0", borderBottom: "1px solid var(--border, #23232b)" }}>
+            <strong>{fmtDT(o.start)} – {fmtDT(o.end)}</strong>
+            {o.number && <span className="muted"> · č. {o.number}</span>}
+            {o.locations && <div className="muted" style={{ fontSize: 12 }}>{o.locations}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LocalityCard({ loc, allUsers, allModules, onChange }) {
   const [uSel, setUSel] = useState("");
   const [dSel, setDSel] = useState("");
@@ -74,6 +147,8 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
           </div>
         </div>
       </div>
+
+      <OutageSection loc={loc} onChange={onChange} />
     </div>
   );
 }
