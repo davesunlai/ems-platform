@@ -25,6 +25,9 @@ async def ensure_schema() -> None:
             """
         )
         await conn.execute(
+            "ALTER TABLE planned_outages ADD COLUMN IF NOT EXISTS last_notified DATE"
+        )
+        await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_outages_loc ON planned_outages (locality_id, start_at)"
         )
 
@@ -76,6 +79,35 @@ async def list_for_locality(locality_id: int, upcoming_only: bool = True) -> lis
             "locations": r["locations"],
         })
     return out
+
+
+async def due_for_notification(locality_id: int, remind_days: int) -> list[dict]:
+    """Nadcházející odstávky, které je třeba (znovu) oznámit.
+
+    remind_days <= 0  → jen nikdy neoznámené (úvodní mail).
+    remind_days  > 0  → navíc ty, kde od posledního oznámení uplynulo >= N dní.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if remind_days and remind_days > 0:
+            rows = await conn.fetch(
+                "SELECT * FROM planned_outages WHERE locality_id=$1 AND end_at >= now() "
+                "AND (last_notified IS NULL OR last_notified <= (CURRENT_DATE - ($2 || ' days')::interval)) "
+                "ORDER BY start_at", locality_id, str(remind_days))
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM planned_outages WHERE locality_id=$1 AND end_at >= now() "
+                "AND last_notified IS NULL ORDER BY start_at", locality_id)
+    return [dict(r) for r in rows]
+
+
+async def mark_notified(uids: list[str]) -> None:
+    if not uids:
+        return
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE planned_outages SET last_notified = CURRENT_DATE WHERE uid = ANY($1::text[])", uids)
 
 
 async def prune_old(days: int = 3) -> None:

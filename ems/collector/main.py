@@ -163,11 +163,17 @@ async def tick_market_and_automation(state: dict) -> None:
     except Exception as exc:
         logger.warning("Spínání kontaktu selhalo: %s", exc)
 
-    # plánované odstávky distribuce – 1× denně
+    # plánované odstávky distribuce – 1× denně v nastavenou hodinu (pražský čas)
     import datetime as _dt
-    today = _dt.date.today().isoformat()
-    if state.get("last_outage_day") != today:
-        state["last_outage_day"] = today
+    from zoneinfo import ZoneInfo as _ZI
+    try:
+        _hour = int(os.getenv("EMS_OUTAGE_HOUR", "7"))
+    except ValueError:
+        _hour = 7
+    _now = _dt.datetime.now(_ZI("Europe/Prague"))
+    _day = _now.date().isoformat()
+    if _now.hour >= _hour and state.get("last_outage_day") != _day:
+        state["last_outage_day"] = _day
         try:
             await refresh_outages_all()
         except Exception as exc:

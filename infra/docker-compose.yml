@@ -33,6 +33,16 @@ services:
       EMS_DB_DSN: postgresql://ems:${EMS_DB_PASSWORD:-ems}@timescaledb:5432/ems
       EMS_DEVICES: /app/devices.yaml
       EMS_POLL_INTERVAL: "10"
+      EMS_BASE_URL: ${EMS_BASE_URL:-http://localhost:8080}
+      EMS_SMTP_HOST: ${EMS_SMTP_HOST:-smtp.forpsi.com}
+      EMS_SMTP_PORT: ${EMS_SMTP_PORT:-465}
+      EMS_SMTP_SECURITY: ${EMS_SMTP_SECURITY:-ssl}
+      EMS_SMTP_USER: ${EMS_SMTP_USER:-}
+      EMS_SMTP_PASSWORD: ${EMS_SMTP_PASSWORD:-}
+      EMS_SMTP_FROM: ${EMS_SMTP_FROM:-}
+      EMS_SMTP_FROM_NAME: "${EMS_SMTP_FROM_NAME:-TERA EMS}"
+      EMS_OUTAGE_HOUR: ${EMS_OUTAGE_HOUR:-7}
+      EMS_OUTAGE_REMIND_DAYS: ${EMS_OUTAGE_REMIND_DAYS:-2}
     volumes:
       - ../devices.yaml:/app/devices.yaml:ro
     depends_on:
@@ -59,6 +69,7 @@ services:
       EMS_SMTP_PASSWORD: ${EMS_SMTP_PASSWORD:-}
       EMS_SMTP_FROM: ${EMS_SMTP_FROM:-}
       EMS_SMTP_FROM_NAME: "${EMS_SMTP_FROM_NAME:-TERA EMS}"
+      EMS_OUTAGE_REMIND_DAYS: ${EMS_OUTAGE_REMIND_DAYS:-2}
       EMS_EWELINK_APPID: ${EMS_EWELINK_APPID:-}
       EMS_EWELINK_SECRET: ${EMS_EWELINK_SECRET:-}
       EMS_EWELINK_EMAIL: ${EMS_EWELINK_EMAIL:-}

@@ -31,6 +31,7 @@ async def refresh_outages(loc_id: int, _: dict = Depends(require_permission("adm
         raise HTTPException(status_code=400, detail="Lokalita nemá vyplněný EAN, elektroměr ani adresu")
     try:
         n = await service.refresh_locality(loc)
+        await service.notify_locality(loc)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"ČEZ dotaz selhal: {exc}")
     return {"fetched": n, "outages": await db.list_for_locality(loc_id, upcoming_only=True)}
