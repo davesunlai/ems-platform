@@ -171,7 +171,7 @@ function LocalityChart({ deviceIds }) {
   const series = data ? [
     { label: "Výroba FVE", color: "#3fb950", points: data.pv_power || [] },
     { label: "Spotřeba lokality", color: "#d29922", points: data.load_power || [] },
-    { label: "Síť (import +/export −)", color: "#58a6ff", points: data.grid_power || [] },
+    { label: "Síť (export +/odběr −)", color: "#58a6ff", points: data.grid_power || [] },
   ].filter((x) => x.points.length >= 2) : [];
 
   return (
@@ -247,6 +247,15 @@ function BillingTable({ localityId }) {
           <th style={{ textAlign: "right" }}>Odběr</th>
         </tr></thead>
         <tbody>
+          {b.baseline && (b.baseline.export_kwh || b.baseline.import_kwh) ? (
+            <tr className="muted">
+              <td>Před spuštěním měření</td>
+              <td style={{ textAlign: "right" }}>—</td>
+              <td style={{ textAlign: "right" }}>—</td>
+              <td style={{ textAlign: "right" }}>{b.baseline.export_kwh.toFixed(0)} kWh</td>
+              <td style={{ textAlign: "right" }}>{b.baseline.import_kwh.toFixed(0)} kWh</td>
+            </tr>
+          ) : null}
           {b.months.map((r) => (
             <tr key={r.month}>
               <td>{fmtMonth(r.month)}</td>

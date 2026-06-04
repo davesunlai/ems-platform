@@ -1,7 +1,7 @@
 """Měsíční energetické bilance lokality (kWh) z výkonových vzorků.
 
 Energie ≈ Σ (hodinový průměr výkonu × 1 h). Přetoky/odběr z čisté výkonu sítě
-(součet grid_power přes zařízení): export = max(0, −net), import = max(0, net).
+(součet grid_power přes zařízení): znaménko: kladný grid_power = dodávka do sítě (export), záporný = odběr (import).
 """
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ WITH hourly AS (
     SELECT h, sum(p) AS np FROM hourly GROUP BY h
 )
 SELECT to_char(date_trunc('month', h), 'YYYY-MM') AS m,
-       sum(greatest(0, -np)) / 1000.0 AS export_kwh,
-       sum(greatest(0,  np)) / 1000.0 AS import_kwh
+       sum(greatest(0,  np)) / 1000.0 AS export_kwh,
+       sum(greatest(0, -np)) / 1000.0 AS import_kwh
 FROM net GROUP BY 1
 """
 

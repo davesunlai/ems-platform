@@ -20,3 +20,11 @@ souhrn po měsících od začátku období, součet za období a hlídání pře
 - Energie je aproximace integrací po hodinách (dost přesné na MWh bilanci).
 - v0.13.0: e-mail při překročení limitu (edge-trigger) + auto-omezení přetoků
   na 0 přes goodwe set_grid_export_limit (po ověření chování měniče).
+
+
+## v0.12.1
+- Oprava znaménka sítě: kladný grid_power = dodávka (export), záporný = odběr
+  (import) — dle reálných dat z ČEZ. Upraven i popisek živého grafu sítě.
+- Baseline per lokalita: ruční dodávka/odběr (kWh) od začátku období do spuštění
+  měření; přičítá se k součtu za období, váže se na začátek období (po přechodu
+  na další období se neuplatní). Řádek „Před spuštěním měření" v tabulce.

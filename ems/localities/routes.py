@@ -76,6 +76,15 @@ async def remove_device(loc_id: int, module_id: str, _: dict = Depends(require_p
 async def set_billing(loc_id: int, body: BillingSettings,
                       _: dict = Depends(require_permission("admin"))):
     patch = body.model_dump(exclude_unset=True)
+    if "baseline_export_kwh" in patch or "baseline_import_kwh" in patch:
+        from datetime import date
+        from ems.billing.period import current_period
+        cur = await db.get(loc_id)
+        bstart = patch.get("billing_start") or (cur and cur.get("billing_start"))
+        months = patch.get("billing_months") or (cur and cur.get("billing_months")) or 12
+        if bstart:
+            start, _e = current_period(bstart, months, date.today())
+            patch["baseline_period_start"] = start
     loc = await db.set_billing(loc_id, patch)
     if not loc:
         raise HTTPException(status_code=404, detail="Lokalita nenalezena")

@@ -34,10 +34,21 @@ async def locality_billing(loc_id: int, _: dict = Depends(require_permission("re
     months = await billing_db.monthly_energy(devs, start, end)
     totals = {k: round(sum(r[k] for r in months), 1)
               for k in ("prod_kwh", "cons_kwh", "export_kwh", "import_kwh")}
+
+    # Baseline (odběr/dodávka od začátku období do spuštění měření) — jen pro
+    # aktuální období; po přechodu na další období se neuplatní.
+    base_exp = base_imp = 0.0
+    if loc.get("baseline_period_start") == start:
+        base_exp = float(loc.get("baseline_export_kwh") or 0)
+        base_imp = float(loc.get("baseline_import_kwh") or 0)
+    totals["export_kwh"] = round(totals["export_kwh"] + base_exp, 1)
+    totals["import_kwh"] = round(totals["import_kwh"] + base_imp, 1)
+
     return {
         "configured": True,
         "settings": settings,
         "period": {"start": start.isoformat(), "end": end.isoformat()},
         "months": months,
+        "baseline": {"export_kwh": round(base_exp, 1), "import_kwh": round(base_imp, 1)},
         "totals": totals,
     }

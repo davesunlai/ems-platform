@@ -48,6 +48,9 @@ async def ensure_schema() -> None:
             ("alert_fired", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ("limit_applied", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ("period_anchor", "DATE"),
+            ("baseline_export_kwh", "DOUBLE PRECISION"),
+            ("baseline_import_kwh", "DOUBLE PRECISION"),
+            ("baseline_period_start", "DATE"),
         ):
             await conn.execute(
                 f"ALTER TABLE localities ADD COLUMN IF NOT EXISTS {col} {ddl}"
@@ -58,7 +61,8 @@ async def set_billing(loc_id: int, patch: dict) -> dict | None:
     if not patch:
         return await get(loc_id)
     cols = ["billing_start", "billing_months", "export_limit_kwh",
-            "alert_enabled", "autolimit_enabled", "alert_email"]
+            "alert_enabled", "autolimit_enabled", "alert_email",
+            "baseline_export_kwh", "baseline_import_kwh", "baseline_period_start"]
     sets, args = [], []
     for k in cols:
         if k in patch:

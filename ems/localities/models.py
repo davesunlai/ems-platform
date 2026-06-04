@@ -35,3 +35,5 @@ class BillingSettings(BaseModel):
     alert_enabled: bool | None = None
     autolimit_enabled: bool | None = None
     alert_email: str | None = None
+    baseline_export_kwh: float | None = None
+    baseline_import_kwh: float | None = None
