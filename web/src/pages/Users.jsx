@@ -26,6 +26,11 @@ export default function Users() {
   const setRole = async (id, role) => { try { await api.updateUser(id, { role }); load(); } catch (e) { setErr(e.message); } };
   const toggle = async (u) => { try { await api.updateUser(u.id, { active: !u.active }); load(); } catch (e) { setErr(e.message); } };
   const remove = async (id) => { if (!confirm("Smazat uživatele?")) return; try { await api.deleteUser(id); load(); } catch (e) { setErr(e.message); } };
+  const editName = async (u) => {
+    const full_name = prompt(`Jméno uživatele ${u.username}:`, u.full_name || "");
+    if (full_name === null) return;
+    try { await api.updateUser(u.id, { full_name: full_name || null }); load(); } catch (e) { setErr(e.message); }
+  };
   const editEmail = async (u) => {
     const email = prompt(`E-mail uživatele ${u.username}:`, u.email || "");
     if (email === null) return;
@@ -87,7 +92,9 @@ export default function Users() {
               <tr key={u.id}>
                 <td className="muted">{u.id}</td>
                 <td>{u.username}</td>
-                <td className="muted">{u.full_name || "—"}</td>
+                <td className="muted">{u.full_name || "—"}
+                  <button className="btn" style={{ marginLeft: 6, padding: "2px 7px" }} onClick={() => editName(u)}>✎</button>
+                </td>
                 <td className="muted" style={{ fontSize: 13 }}>
                   {u.email || "—"}
                   <button className="btn" style={{ marginLeft: 6, padding: "2px 7px" }} onClick={() => editEmail(u)}>✎</button>
