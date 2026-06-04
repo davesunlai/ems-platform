@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.20.1 — Souhrn lokality: klik na popisek skryje/zobrazí řadu (přepočte osu), přidána řada Baterie.
+
 ## v0.20.0 — Grafy: hover svislá čára u kurzoru s časem a hodnotou (MultiChart ukáže všechny řady naráz).
 
 ## v0.19.1 — deploy.sh na konci restartuje web (nginx), aby po přegenerování api nedržel starou IP (konec opakovaných Bad Gateway).

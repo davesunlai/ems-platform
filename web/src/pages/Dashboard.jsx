@@ -168,7 +168,7 @@ function LocalityChart({ deviceIds }) {
 
   useEffect(() => {
     let alive = true;
-    const load = () => api.aggregate(deviceIds, ["pv_power", "load_power", "grid_power"], WIN[win].min, offset)
+    const load = () => api.aggregate(deviceIds, ["pv_power", "load_power", "grid_power", "battery_power"], WIN[win].min, offset)
       .then((r) => alive && setData(r.metrics)).catch(() => {});
     load();
     const t = offset === 0 ? setInterval(load, 60000) : null;
@@ -179,6 +179,7 @@ function LocalityChart({ deviceIds }) {
     { label: "Výroba FVE", color: "#3fb950", points: data.pv_power || [] },
     { label: "Spotřeba lokality", color: "#d29922", points: data.load_power || [] },
     { label: "Síť (export +/odběr −)", color: "#58a6ff", points: data.grid_power || [] },
+    { label: "Baterie", color: "#a371f7", points: data.battery_power || [] },
   ].filter((x) => x.points.length >= 2) : [];
 
   return (
