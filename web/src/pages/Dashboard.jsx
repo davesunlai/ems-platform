@@ -142,9 +142,9 @@ function DevicePanel({ id, locality, lastSeen }) {
           <span>{LABELS[chartMetric] || chartMetric}</span>
           <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· {rangeLabel(WIN[win].min, offset)}</span>
           <span style={{ flex: 1 }} />
+          {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
           <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
           <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
-          {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
           <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1, marginLeft: 6 }}
                   onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0} title="kratší okno">−</button>
           <span className="muted" style={{ minWidth: 50, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{WIN[win].label}</span>
@@ -188,9 +188,9 @@ function LocalityChart({ deviceIds }) {
         <h3 style={{ margin: 0 }}>Souhrn lokality</h3>
         <span className="muted" style={{ fontSize: 12 }}>· {rangeLabel(WIN[win].min, offset)}</span>
         <span style={{ flex: 1 }} />
+        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
         <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
         <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
-        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
         <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1, marginLeft: 6 }}
                 onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0}>−</button>
         <span className="muted" style={{ minWidth: 50, textAlign: "center" }}>{WIN[win].label}</span>
