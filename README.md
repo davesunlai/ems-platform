@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.22.4 — Oprava časového pásma spotových slotů: stavějí se v Europe/Prague (ne v UTC kontejneru), takže graf i aktuální slot sedí s reálným časem.
+
 ## v0.22.3 — Spotový graf: hover svislá čára s datem, časem a cenou (jako ostatní grafy).
 
 ## v0.22.2 — eWeLink: oprava zapínání/vypínání (dvojí JSON kódování) a výpisu zařízení (num=0 místo nefunkčního beginIndex).

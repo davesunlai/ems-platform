@@ -82,7 +82,8 @@ async def fetch_day_slots() -> list[dict] | None:
     do čtyř čtvrthodin (přibližné, ale UI zůstane funkční).
     """
     from datetime import datetime, timedelta, time as _time
-    tz = datetime.now().astimezone().tzinfo
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Europe/Prague")
     today = datetime.now(tz).date()
 
     def mk(day_date, minute_of_day, price):
