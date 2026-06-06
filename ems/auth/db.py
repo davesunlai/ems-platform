@@ -30,6 +30,8 @@ async def ensure_schema() -> None:
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS note TEXT")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme TEXT DEFAULT 'midnight'")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_custom JSONB")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS password_resets (
@@ -62,7 +64,7 @@ async def get_user(username: str) -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, username, password_hash, role, active, email, full_name, phone, note FROM users WHERE username = $1",
+            "SELECT id, username, password_hash, role, active, email, full_name, phone, note, theme, theme_custom FROM users WHERE username = $1",
             username,
         )
     return dict(row) if row else None
@@ -150,6 +152,15 @@ async def get_user_by_email(email: str) -> dict | None:
             email,
         )
     return dict(row) if row else None
+
+
+async def set_theme(user_id: int, theme: str, custom: dict | None) -> None:
+    import json as _json
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET theme = $1, theme_custom = $2::jsonb WHERE id = $3",
+            theme, _json.dumps(custom) if custom is not None else None, user_id)
 
 
 async def set_password(user_id: int, password: str) -> bool:

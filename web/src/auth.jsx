@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { applyTheme } from "./theme";
 import { api, getToken, setToken, clearToken, setUnauthorizedHandler } from "./api";
 
 const AuthCtx = createContext(null);
@@ -13,7 +14,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     setUnauthorizedHandler(() => setUser(null));
     if (!getToken()) { setLoading(false); return; }
-    api.me().then(setUser).catch(() => clearToken()).finally(() => setLoading(false));
+    api.me().then((u) => { setUser(u); if (u) applyTheme(u.theme, u.theme_custom); }).catch(() => clearToken()).finally(() => setLoading(false));
   }, []);
 
   const login = async (username, password) => {

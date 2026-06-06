@@ -89,6 +89,7 @@ export default function Layout() {
           <span>{user?.username}</span>
           <span className="role">{user?.role}</span>
           <button className="btn" onClick={() => setTour(true)} title="Průvodce systémem">Průvodce</button>
+          <NavLink to="/vzhled" className="btn">Vzhled</NavLink>
           <NavLink to="/change-password" className="btn">Změnit heslo</NavLink>
           <button className="btn" onClick={logout}>Odhlásit</button>
         </div>

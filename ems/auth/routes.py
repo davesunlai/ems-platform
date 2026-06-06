@@ -7,6 +7,7 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ems.notify.email import send_email, smtp_configured
@@ -51,7 +52,35 @@ async def me(user: dict = Depends(get_current_user)):
         "permissions": sorted(user["permissions"]),
         "email": full.get("email") if full else None,
         "full_name": full.get("full_name") if full else None,
+        "theme": (full.get("theme") if full else None) or "midnight",
+        "theme_custom": _parse_custom(full.get("theme_custom") if full else None),
     }
+
+
+def _parse_custom(v):
+    if v is None:
+        return None
+    if isinstance(v, (dict, list)):
+        return v
+    try:
+        import json as _json
+        return _json.loads(v)
+    except (ValueError, TypeError):
+        return None
+
+
+class ThemeBody(BaseModel):
+    theme: str
+    custom: dict | None = None
+
+
+@router.put("/auth/me/theme")
+async def set_theme(body: ThemeBody, user: dict = Depends(get_current_user)):
+    full = await db.get_user(user["username"])
+    if not full:
+        raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+    await db.set_theme(full["id"], body.theme, body.custom)
+    return {"ok": True, "theme": body.theme, "custom": body.custom}
 
 
 @router.post("/auth/change-password")

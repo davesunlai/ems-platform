@@ -15,6 +15,7 @@ import Automation from "./pages/Automation";
 import Ewelink from "./pages/Ewelink";
 import Billing from "./pages/Billing";
 import Localities from "./pages/Localities";
+import Vzhled from "./pages/Vzhled";
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route element={<ProtectedRoute permission="read"><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/vzhled" element={<Vzhled />} />
             <Route path="/users" element={
               <ProtectedRoute permission="admin"><Users /></ProtectedRoute>
             } />
