@@ -14,7 +14,8 @@ class RuleType(str, Enum):
 class SpotChargeParams(BaseModel):
     target_module: str                       # id řiditelného (goodwe) modulu
     price_threshold: float                   # Kč/MWh — pod tím nabíjet
-    soc_max: int = Field(default=95, ge=5, le=100)     # nenabíjet nad tento SoC
+    soc_start: int = Field(default=100, ge=0, le=100)  # začít nabíjet jen pod tímto SoC
+    soc_max: int = Field(default=95, ge=5, le=100)     # nabíjet až po tento SoC (pak stop)
     charge_power: int = Field(default=100, ge=1, le=100)
 
 

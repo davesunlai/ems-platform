@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.23.0 — Automatizace: editace pravidel + hystereze nabíjení (soc_start → soc_max), např. nabíjet jen pod 50 % a dojet do 100 %.
+
 ## v0.22.5 — Tlačítko „teď" v ovládání grafů přesunuto vlevo od šipek, aby se při posouvání času šipky neposouvaly pod kurzorem.
 
 ## v0.22.4 — Oprava časového pásma spotových slotů: stavějí se v Europe/Prague (ne v UTC kontejneru), takže graf i aktuální slot sedí s reálným časem.

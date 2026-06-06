@@ -83,6 +83,8 @@ async def evaluate_all(price) -> None:
 
 async def _eval_device(target: str, rules: list, price) -> None:
     soc = await _latest_soc(target)
+    actual = await _actual_mode(target)
+    charging_now = actual in CHARGE_MODES
 
     # 1) spočítej rozhodnutí každého pravidla (pro UI) a najdi aktivní kandidáty
     charge_rule = None
@@ -94,9 +96,11 @@ async def _eval_device(target: str, rules: list, price) -> None:
             continue
         if r.type == "spot_charge":
             thr = float(p.get("price_threshold", 0)); smax = float(p.get("soc_max", 95))
-            on = price < thr and soc < smax
+            sstart = float(p.get("soc_start", smax))   # začni nabíjet jen pod tímto SoC
+            # hystereze: spustí se až pod sstart, nabíjí dál až po smax (drží přes skutečný režim)
+            on = price < thr and soc < smax and (charging_now or soc <= sstart)
             await auto_db.mark_eval(
-                r.id, f"{'force_charge' if on else 'normal'} (cena={price:.0f} práh<{thr:.0f} SoC={soc:.0f}/{smax:.0f})"
+                r.id, f"{'force_charge' if on else 'normal'} (cena={price:.0f} práh<{thr:.0f} SoC={soc:.0f} start≤{sstart:.0f} stop≥{smax:.0f})"
             )
             if on and charge_rule is None:
                 charge_rule = r
@@ -128,7 +132,6 @@ async def _eval_device(target: str, rules: list, price) -> None:
     await _set_automation_state(target, chosen.id if chosen else None)
 
     # 4) edge-trigger podle skutečného režimu
-    actual = await _actual_mode(target)
     satisfied = (
         (desired == "force_charge" and actual in CHARGE_MODES)
         or (desired == "force_discharge" and actual in DISCHARGE_MODES)
