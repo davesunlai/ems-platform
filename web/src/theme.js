@@ -42,21 +42,27 @@ export const PRESETS = {
   },
 };
 
-export function resolveVars(theme, custom) {
+export function resolveVars(theme, custom, saved) {
   if (theme === "custom") return { ...PRESETS.midnight.vars, ...(custom || {}) };
+  if (theme && theme.startsWith("saved:")) {
+    const name = theme.slice(6);
+    const it = (saved || []).find((s) => s.name === name);
+    if (it) return { ...PRESETS.midnight.vars, ...it.vars };
+    return PRESETS.midnight.vars;
+  }
   return (PRESETS[theme] || PRESETS.midnight).vars;
 }
 
-export function applyTheme(theme, custom) {
-  const vars = resolveVars(theme, custom);
+export function applyTheme(theme, custom, saved) {
+  const vars = resolveVars(theme, custom, saved);
   const root = document.documentElement;
   for (const k of THEME_VARS) if (vars[k]) root.style.setProperty(k, vars[k]);
-  try { localStorage.setItem("tera_theme", JSON.stringify({ theme, custom: custom || null })); } catch { /* ignore */ }
+  try { localStorage.setItem("tera_theme", JSON.stringify({ theme, custom: custom || null, saved: saved || [] })); } catch { /* ignore */ }
 }
 
 export function applyInitial() {
   try {
     const raw = localStorage.getItem("tera_theme");
-    if (raw) { const { theme, custom } = JSON.parse(raw); applyTheme(theme, custom); }
+    if (raw) { const { theme, custom, saved } = JSON.parse(raw); applyTheme(theme, custom, saved); }
   } catch { /* ignore */ }
 }

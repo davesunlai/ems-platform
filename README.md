@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.24.1 — Vzhled: ukládání vlastních motivů pod názvem (knihovna „Moje uložené motivy") a návrat k nim.
+
 ## v0.24.0 — Vzhled: přednastavené barevné motivy uložené u uživatele (Půlnoc/Břidlice/Karbon/Oceán/Světlý) + základní editor vlastního motivu.
 
 ## v0.23.0 — Automatizace: editace pravidel + hystereze nabíjení (soc_start → soc_max), např. nabíjet jen pod 50 % a dojet do 100 %.

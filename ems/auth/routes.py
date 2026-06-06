@@ -54,6 +54,7 @@ async def me(user: dict = Depends(get_current_user)):
         "full_name": full.get("full_name") if full else None,
         "theme": (full.get("theme") if full else None) or "midnight",
         "theme_custom": _parse_custom(full.get("theme_custom") if full else None),
+        "theme_saved": _parse_custom(full.get("theme_saved") if full else None) or [],
     }
 
 
@@ -72,6 +73,7 @@ def _parse_custom(v):
 class ThemeBody(BaseModel):
     theme: str
     custom: dict | None = None
+    saved: list | None = None
 
 
 @router.put("/auth/me/theme")
@@ -79,8 +81,8 @@ async def set_theme(body: ThemeBody, user: dict = Depends(get_current_user)):
     full = await db.get_user(user["username"])
     if not full:
         raise HTTPException(status_code=404, detail="Uživatel nenalezen")
-    await db.set_theme(full["id"], body.theme, body.custom)
-    return {"ok": True, "theme": body.theme, "custom": body.custom}
+    await db.set_theme(full["id"], body.theme, body.custom, body.saved)
+    return {"ok": True, "theme": body.theme, "custom": body.custom, "saved": body.saved}
 
 
 @router.post("/auth/change-password")
