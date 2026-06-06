@@ -6,6 +6,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from ems.auth.deps import require_permission
+from ems.api.db import get_pool
 from ems.modules import db as modules_db
 from . import db
 from .goodwe_control import read_battery_mode, set_battery_mode
@@ -15,10 +16,25 @@ logger = logging.getLogger("ems.control")
 router = APIRouter(prefix="/api/control", tags=["control"])
 
 
+async def _has_battery(device_id: str, days: int = 7) -> bool:
+    """Řiditelná baterie = měnič v posledních dnech hlásil battery_soc (hybrid ano, grid-tie ne)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        v = await conn.fetchval(
+            "SELECT 1 FROM samples WHERE device_id=$1 AND metric='battery_soc' "
+            "AND time > now() - ($2 || ' days')::interval LIMIT 1",
+            device_id, str(days))
+    return v is not None
+
+
 @router.get("/modules")
 async def controllable_modules(_: dict = Depends(require_permission("control"))):
     mods = await modules_db.list_all()
-    return [{"id": m.id, "name": m.name} for m in mods if m.adapter == "goodwe" and m.enabled]
+    out = []
+    for m in mods:
+        if m.adapter == "goodwe" and m.enabled and await _has_battery(m.id):
+            out.append({"id": m.id, "name": m.name})
+    return out
 
 
 async def _get_controllable(module_id: str):
@@ -28,6 +44,8 @@ async def _get_controllable(module_id: str):
         raise HTTPException(status_code=404, detail="Modul nenalezen")
     if m.adapter != "goodwe":
         raise HTTPException(status_code=400, detail="Řízení podporuje zatím jen adaptér goodwe")
+    if not await _has_battery(module_id):
+        raise HTTPException(status_code=400, detail="Tento měnič nemá řiditelnou baterii (grid-tie).")
     host = m.params.get("host")
     if not host:
         raise HTTPException(status_code=400, detail="Modul nemá nastavenou IP (host)")
