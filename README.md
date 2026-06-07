@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.29.0 — Ikona a splash aplikace (mobile/assets): blesk v oblouku, zelená na tmavém pozadí; z předlohy 1024px se přes @capacitor/assets vygenerují všechna rozlišení pro Android i iOS.
+
 ## v0.28.1 — nginx: index.html se necachuje (appka/prohlížeč hned vidí novou verzi po nasazení), hashované assety cachovány natrvalo.
 
 ## v0.28.0 — Responzivní design pro mobil: menu se na úzké obrazovce skládá do ☰ (nav + účet), skryté nepodstatné prvky, tabulky se rolují vodorovně, žádné přetékání mimo obrazovku.

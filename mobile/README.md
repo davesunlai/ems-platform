@@ -41,3 +41,14 @@ npx capacitor-assets generate
 3. Ve webu přepni router na hash režim a Vite `base: "./"`.
 4. Na backendu povol CORS pro origin appky (`capacitor://localhost`).
 5. Pro aktualizace bez schvalování v obchodě zvaž OTA (Capgo / Appflow).
+
+## Ikona a splash – generování všech rozlišení
+Předlohy jsou v `mobile/assets/` (icon-only, icon-foreground, icon-background, splash, splash-dark).
+Z nich se jedním příkazem vygenerují všechny velikosti pro Android i iOS:
+```bash
+cd mobile
+npm i -D @capacitor/assets
+npx capacitor-assets generate
+npx cap sync
+```
+Pak v Android Studiu znovu Build/Run – appka i launcher budou mít novou ikonu a splash.
