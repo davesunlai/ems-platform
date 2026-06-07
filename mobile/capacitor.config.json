@@ -1,0 +1,11 @@
+{
+  "appId": "com.teraems.app",
+  "appName": "TERA EMS",
+  "webDir": "www",
+  "server": {
+    "url": "https://teraems.com",
+    "cleartext": false
+  },
+  "ios": { "contentInset": "always" },
+  "android": { "allowMixedContent": false }
+}

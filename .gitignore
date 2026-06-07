@@ -9,3 +9,7 @@ devices.yaml
 web/node_modules/
 web/dist/
 *.tar.gz
+mobile/node_modules/
+mobile/android/
+mobile/ios/
+mobile/.gradle/

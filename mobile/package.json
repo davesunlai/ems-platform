@@ -1,0 +1,20 @@
+{
+  "name": "teraems-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TERA EMS – nativní obal (Capacitor) pro Android a iOS. Načítá živý web teraems.com.",
+  "scripts": {
+    "sync": "cap sync",
+    "copy": "cap copy",
+    "android": "cap open android",
+    "ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/ios": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}
