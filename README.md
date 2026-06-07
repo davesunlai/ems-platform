@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.29.3 — Splash: „TERA EMS" celé v zelené (značková barva).
+
 ## v0.29.2 — Splash: „TERA EMS" jednotně světle (bez zeleného EMS), zelené jen iniciály E·M·S v podtitulu.
 
 ## v0.29.1 — Web favicon + manifest (ikona v Chrome/záložce, „přidat na plochu") a splash s rozepsanou zkratkou E·M·S (Energy Management System).
