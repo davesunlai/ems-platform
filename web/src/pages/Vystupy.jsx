@@ -8,6 +8,42 @@ const empty = {
   surplus_kw: 1.5, soc_min: 80, spot_max: "", min_on_min: 10,
 };
 
+const norm = (s) => (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+function SearchSelect({ value, options, onChange, placeholder = "— vyber —", allowEmpty = true, emptyLabel }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const sel = options.find((o) => String(o.id) === String(value));
+  const filtered = q ? options.filter((o) => norm(o.label).includes(norm(q))) : options;
+  const item = { padding: "6px 10px", cursor: "pointer", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        value={open ? q : (sel ? sel.label : "")}
+        placeholder={placeholder}
+        onFocus={() => { setOpen(true); setQ(""); }}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && (
+        <div style={{ position: "absolute", zIndex: 30, top: "100%", left: 0, right: 0, maxHeight: 240, overflowY: "auto",
+          background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 2, boxShadow: "0 8px 22px rgba(0,0,0,.45)" }}>
+          {allowEmpty && (
+            <div onMouseDown={() => { onChange(""); setOpen(false); }} style={{ ...item, color: "var(--muted)" }}>{emptyLabel || placeholder}</div>
+          )}
+          {filtered.map((o) => (
+            <div key={o.id} onMouseDown={() => { onChange(String(o.id)); setOpen(false); }}
+              style={{ ...item, background: String(o.id) === String(value) ? "var(--panel-2)" : "transparent" }}>
+              {o.label}
+            </div>
+          ))}
+          {!filtered.length && <div style={{ ...item, color: "var(--muted)" }}>nic nenalezeno</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Vystupy() {
   const [list, setList] = useState([]);
   const [gw, setGw] = useState([]);
@@ -91,19 +127,16 @@ export default function Vystupy() {
               <option value="goodwe_contact">Kontakt střídače</option>
             </select>
           </div>
-          <div className="field" style={{ marginBottom: 0 }}>
+          <div className="field" style={{ marginBottom: 0, minWidth: 220 }}>
             <label>Zařízení</label>
-            <select value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })}>
-              <option value="">— vyber —</option>
-              {targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
+            <SearchSelect value={f.target} options={targets} placeholder="— vyber —"
+              onChange={(id) => setF({ ...f, target: id })} />
           </div>
-          <div className="field" style={{ marginBottom: 0 }}>
+          <div className="field" style={{ marginBottom: 0, minWidth: 200 }}>
             <label>Lokalita {f.trigger === "surplus" ? "(nutná)" : "(pro SoC volitelná)"}</label>
-            <select value={f.locality_id} onChange={(e) => setF({ ...f, locality_id: e.target.value })}>
-              <option value="">— žádná —</option>
-              {locs.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
+            <SearchSelect value={f.locality_id} emptyLabel="— žádná —" placeholder="— žádná —"
+              options={locs.map((l) => ({ id: l.id, label: l.name }))}
+              onChange={(id) => setF({ ...f, locality_id: id })} />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Spouštěč</label>

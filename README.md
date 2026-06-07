@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.26.1 — Spínací výstupy: vyhledávací (fulltext) rozbalovací pole u Zařízení a Lokality, bez ohledu na diakritiku.
+
 ## v0.26.0 — Spínací výstupy: sjednocení kontaktů střídače a eWeLink spínačů; spouštěče SoC hystereze i přebytek/FVE + levný/záporný spot (sepnutí spirály přes eWeLink) s hysterezí a min. dobou sepnutí.
 
 ## v0.25.0 — Dashboard: u názvu lokality živý souhrn (součet výkonu FVE kW, baterie %, dnešní výroba kWh).
