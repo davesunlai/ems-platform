@@ -136,6 +136,31 @@ async def latest_states(device_id: str) -> dict:
     return {r["key"]: r["value"] for r in rows}
 
 
+async def aggregate_now(device_ids: list[str]) -> dict:
+    """Aktuální souhrn lokality: součet výkonu FVE (W), průměrný SoC (%), dnešní výroba (kWh)."""
+    if not device_ids:
+        return {"pv_w": 0.0, "soc": None, "today_kwh": 0.0}
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        pv = await conn.fetchval(
+            "SELECT COALESCE(SUM(v),0) FROM ("
+            "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
+            "  WHERE device_id = ANY($1::text[]) AND metric='pv_power' AND time > now() - interval '5 minutes'"
+            "  ORDER BY device_id, time DESC) t", device_ids)
+        soc = await conn.fetchval(
+            "SELECT AVG(v) FROM ("
+            "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
+            "  WHERE device_id = ANY($1::text[]) AND metric='battery_soc' AND time > now() - interval '5 minutes'"
+            "  ORDER BY device_id, time DESC) t", device_ids)
+        kwh = await conn.fetchval(
+            "SELECT COALESCE(SUM(mx - mn),0) FROM ("
+            "  SELECT device_id, MAX(value) mx, MIN(value) mn FROM samples"
+            "  WHERE device_id = ANY($1::text[]) AND metric='energy_pv_total'"
+            "    AND time >= date_trunc('day', now() AT TIME ZONE 'Europe/Prague') AT TIME ZONE 'Europe/Prague'"
+            "  GROUP BY device_id) t", device_ids)
+    return {"pv_w": float(pv or 0), "soc": float(soc) if soc is not None else None, "today_kwh": float(kwh or 0)}
+
+
 async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 360,
                             offset: int = 0, target_points: int = 400) -> list[dict]:
     """Součet veličiny přes více zařízení v čase (per-bucket suma průměrů zařízení)."""

@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.25.0 — Dashboard: u názvu lokality živý souhrn (součet výkonu FVE kW, baterie %, dnešní výroba kWh).
+
 ## v0.24.2 — Řízení/Automatizace nabízí bateriové ovládání jen u měničů s baterií (auto-detekce dle battery_soc); grid-tie GW10K-DT se už nezobrazuje jako řiditelný.
 
 ## v0.24.1 — Vzhled: ukládání vlastních motivů pod názvem (knihovna „Moje uložené motivy") a návrat k nim.

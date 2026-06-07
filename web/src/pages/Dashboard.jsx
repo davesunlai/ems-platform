@@ -160,6 +160,27 @@ function DevicePanel({ id, locality, lastSeen }) {
   );
 }
 
+function LocalityNow({ deviceIds }) {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.aggregateNow(deviceIds).then((r) => alive && setD(r)).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [deviceIds.join(",")]);
+  if (!d) return null;
+  const kw = (d.pv_w / 1000);
+  const fmt = (v, dec = 1) => (Math.abs(v) >= 10 ? v.toFixed(dec) : v.toFixed(dec));
+  return (
+    <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: 10 }}>
+      · součet <strong style={{ color: "var(--green)" }}>{fmt(kw)} kW</strong>
+      {d.soc != null && <> · baterie <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
+      {" · dnes Σ "}<strong style={{ color: "var(--fg)" }}>{fmt(d.today_kwh)} kWh</strong>
+    </span>
+  );
+}
+
 function LocalityChart({ deviceIds }) {
   const [win, setWin] = useState(2); // default 24 h
   const [offset, setOffset] = useState(0);
@@ -315,6 +336,7 @@ export default function Dashboard() {
           <section key={name} style={{ marginBottom: 26 }}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>
               {name === "—" ? "Bez lokality" : `📍 ${name}`}
+              <LocalityNow deviceIds={ids} />
             </h2>
             <LocalityChart deviceIds={ids} />
             {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}

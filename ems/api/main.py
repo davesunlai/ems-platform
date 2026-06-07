@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.24.2", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.25.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -104,6 +104,12 @@ async def latest(device_id: str, _: dict = Depends(read)) -> dict:
     }
     states = await db.latest_states(device_id)
     return {"device_id": device_id, "metrics": metrics, "states": states, "active": bool(metrics)}
+
+
+@app.get("/api/devices/aggregate-now")
+async def devices_aggregate_now(ids: str, _: dict = Depends(read)) -> dict:
+    dev_ids = [x for x in ids.split(",") if x]
+    return await db.aggregate_now(dev_ids)
 
 
 @app.get("/api/devices/aggregate")

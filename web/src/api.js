@@ -40,6 +40,7 @@ export const api = {
     request(`/api/devices/${encodeURIComponent(id)}/history?metric=${metric}&minutes=${minutes}&offset=${offset}`),
   aggregate: (ids, metrics, minutes = 360, offset = 0) =>
     request(`/api/devices/aggregate?ids=${encodeURIComponent(ids.join(","))}&metrics=${metrics.join(",")}&minutes=${minutes}&offset=${offset}`),
+  aggregateNow: (ids) => request(`/api/devices/aggregate-now?ids=${encodeURIComponent(ids.join(","))}`),
   listUsers: () => request("/api/admin/users"),
   createUser: (u) => request("/api/admin/users", { method: "POST", body: u }),
   updateUser: (id, patch) => request(`/api/admin/users/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
