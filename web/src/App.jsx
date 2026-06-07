@@ -11,6 +11,7 @@ import Users from "./pages/Users";
 import Modules from "./pages/Modules";
 import Control from "./pages/Control";
 import Contact from "./pages/Contact";
+import Vystupy from "./pages/Vystupy";
 import Automation from "./pages/Automation";
 import Ewelink from "./pages/Ewelink";
 import Billing from "./pages/Billing";
@@ -38,8 +39,11 @@ export default function App() {
             <Route path="/control" element={
               <ProtectedRoute permission="control"><Control /></ProtectedRoute>
             } />
+            <Route path="/outputs" element={
+              <ProtectedRoute permission="control"><Vystupy /></ProtectedRoute>
+            } />
             <Route path="/contact" element={
-              <ProtectedRoute permission="control"><Contact /></ProtectedRoute>
+              <ProtectedRoute permission="control"><Vystupy /></ProtectedRoute>
             } />
             <Route path="/automation" element={
               <ProtectedRoute permission="admin"><Automation /></ProtectedRoute>

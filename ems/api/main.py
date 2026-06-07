@@ -21,6 +21,7 @@ from ems.automation.routes import router as automation_router
 from ems.ewelink.routes import router as ewelink_router
 from ems.billing.routes import router as billing_router
 from ems.contact.routes import router as contact_router
+from ems.outputs.routes import router as outputs_router
 from ems.localities import db as localities_db
 from ems.localities.routes import router as localities_router
 from . import db
@@ -43,6 +44,8 @@ async def lifespan(app: FastAPI):
         await localities_db.ensure_schema()
         from ems.contact import db as contact_db
         await contact_db.ensure_schema()
+        from ems.outputs import db as outputs_db
+        await outputs_db.ensure_schema()
         from ems.outages import db as outages_db
         await outages_db.ensure_schema()
         from ems.ewelink import store as ewelink_store
@@ -53,7 +56,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.25.0", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.26.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +73,7 @@ app.include_router(automation_router)
 app.include_router(ewelink_router)
 app.include_router(billing_router)
 app.include_router(contact_router)
+app.include_router(outputs_router)
 app.include_router(localities_router)
 from ems.outages.routes import router as outages_router
 app.include_router(outages_router)

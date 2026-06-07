@@ -23,7 +23,7 @@ from ems.market import db as market_db
 from ems.market.spot import fetch_current_price_czk, fetch_day_slots
 from ems.automation import db as automation_db
 from ems.automation.engine import evaluate_all
-from ems.contact.engine import evaluate_contacts
+from ems.outputs.engine import evaluate_outputs
 from ems.outages.service import refresh_all as refresh_outages_all
 from .config import build_adapter, build_sink
 
@@ -159,7 +159,7 @@ async def tick_market_and_automation(state: dict) -> None:
         logger.warning("Automatizace selhala: %s", exc)
     # spínání kontaktu dle SOC (hystereze)
     try:
-        await evaluate_contacts()
+        await evaluate_outputs()
     except Exception as exc:
         logger.warning("Spínání kontaktu selhalo: %s", exc)
 
