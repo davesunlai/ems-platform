@@ -54,7 +54,7 @@ function SpotChip() {
     load(); const t = setInterval(load, 30000); return () => clearInterval(t);
   }, []);
   if (!p || p.price == null) return null;
-  return <span className="role" title="Spotová cena (OTE)" style={{ color: "var(--blue)", borderColor: "var(--border)" }}>
+  return <span className="role hide-sm" title="Spotová cena (OTE)" style={{ color: "var(--blue)", borderColor: "var(--border)" }}>
     spot {Math.round(p.price)} Kč/MWh{p.manual ? " (test)" : ""}
   </span>;
 }
@@ -62,16 +62,18 @@ function SpotChip() {
 export default function Layout() {
   const { user, logout, has } = useAuth();
   const [tour, setTour] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => { if (!tourSeen()) setTour(true); }, []);
+  const close = () => setMenuOpen(false);
   return (
     <>
       <header className="topbar">
         <div className="brand">
           <span className="dot" />
           <b>TERA EMS</b>
-          <span>pilot</span>
+          <span className="hide-sm">pilot</span>
         </div>
-        <nav className="nav">
+        <nav className={`nav ${menuOpen ? "open" : ""}`} onClick={close}>
           <NavLink to="/" end>Dashboard</NavLink>
           {has("control") && <NavLink to="/control">Řízení</NavLink>}
           {has("control") && <NavLink to="/outputs">Spínací výstupy</NavLink>}
@@ -81,17 +83,27 @@ export default function Layout() {
           {has("admin") && <NavLink to="/localities">Lokality</NavLink>}
           {has("admin") && <NavLink to="/modules">Moduly</NavLink>}
           {has("admin") && <NavLink to="/users">Uživatelé</NavLink>}
+          <div className="nav-account mobile-only">
+            <div className="nav-id">{user?.username} · {user?.role}</div>
+            <button className="navbtn" onClick={() => setTour(true)}>Průvodce</button>
+            <NavLink to="/vzhled">Vzhled</NavLink>
+            <NavLink to="/change-password">Změnit heslo</NavLink>
+            <button className="navbtn" onClick={logout}>Odhlásit</button>
+          </div>
         </nav>
         <div className="spacer" />
         <div className="userbox">
           <AlertsBell />
           <SpotChip />
-          <span>{user?.username}</span>
-          <span className="role">{user?.role}</span>
-          <button className="btn" onClick={() => setTour(true)} title="Průvodce systémem">Průvodce</button>
-          <NavLink to="/vzhled" className="btn">Vzhled</NavLink>
-          <NavLink to="/change-password" className="btn">Změnit heslo</NavLink>
-          <button className="btn" onClick={logout}>Odhlásit</button>
+          <span className="hide-sm">{user?.username}</span>
+          <span className="role hide-sm">{user?.role}</span>
+          <button className="btn desktop-only" onClick={() => setTour(true)} title="Průvodce systémem">Průvodce</button>
+          <NavLink to="/vzhled" className="btn desktop-only">Vzhled</NavLink>
+          <NavLink to="/change-password" className="btn desktop-only">Změnit heslo</NavLink>
+          <button className="btn desktop-only" onClick={logout}>Odhlásit</button>
+          <button className="menu-toggle" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
+            {menuOpen ? "✕" : "☰"}
+          </button>
         </div>
       </header>
       <Outlet />

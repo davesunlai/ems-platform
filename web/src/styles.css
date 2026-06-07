@@ -144,3 +144,48 @@ td .role { font-family: var(--mono); font-size: 12px; }
   font-size: 13px; padding: 0 2px; margin-left: 2px;
 }
 .linkx:hover { color: var(--red, #e06c75); }
+
+/* ---------- Responzivita / mobil ---------- */
+.menu-toggle {
+  display: none; background: var(--panel); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 18px; line-height: 1; padding: 6px 11px; cursor: pointer;
+}
+.mobile-only { display: none; }
+html, body { max-width: 100%; overflow-x: hidden; }
+
+@media (max-width: 820px) {
+  .desktop-only { display: none !important; }
+  .hide-sm { display: none !important; }
+  .menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .mobile-only { display: block; }
+
+  .topbar { gap: 10px; padding: 0 12px; }
+  .userbox { gap: 8px; }
+
+  .nav {
+    position: absolute; top: 58px; left: 0; right: 0; display: none;
+    flex-direction: column; gap: 2px; background: var(--panel);
+    border-bottom: 1px solid var(--border); padding: 8px 12px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.4);
+    max-height: calc(100vh - 58px); overflow-y: auto; z-index: 20;
+  }
+  .nav.open { display: flex; }
+  .nav a, .nav .navbtn {
+    padding: 12px 12px; border-radius: 8px; font-size: 15px; width: 100%;
+    text-align: left; background: none; border: none; color: var(--muted);
+    font-family: var(--sans); cursor: pointer;
+  }
+  .nav a.active { background: var(--panel-2, var(--panel)); color: var(--fg); }
+  .nav-account {
+    margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .nav-id { font-size: 12px; color: var(--muted); padding: 6px 12px; }
+
+  main { padding: 16px 12px; }
+  .panel { padding: 14px; border-radius: 12px; }
+
+  /* tabulky se na mobilu rolují vodorovně místo přetékání stránky */
+  table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+}

@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.28.0 — Responzivní design pro mobil: menu se na úzké obrazovce skládá do ☰ (nav + účet), skryté nepodstatné prvky, tabulky se rolují vodorovně, žádné přetékání mimo obrazovku.
+
 ## v0.27.0 — Přidán mobilní obal Capacitor ve složce mobile/ (Android + iOS), varianta B: appka načítá živý web teraems.com. Server/web build nedotčen.
 
 ## v0.26.1 — Spínací výstupy: vyhledávací (fulltext) rozbalovací pole u Zařízení a Lokality, bez ohledu na diakritiku.
