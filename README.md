@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.30.0 — Zásady ochrany soukromí (/privacy.html) pro Google Play.
+
 ## v0.29.4 — Ikony: logo zvětšeno na maximum (Chrome favicon, iOS, Android adaptivní v rámci bezpečné zóny) — lépe čitelné v malém.
 
 ## v0.29.3 — Splash: „TERA EMS" celé v zelené (značková barva).

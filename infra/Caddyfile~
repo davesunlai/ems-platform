@@ -1,0 +1,8 @@
+teraems.com {
+	encode gzip
+	reverse_proxy web:80
+}
+narozeniny.eu, www.narozeniny.eu {
+	encode gzip
+	reverse_proxy narozeniny-eu:4321
+}
