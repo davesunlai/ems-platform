@@ -4,6 +4,10 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.30.2 — EMS čistě jen teraems.com (narozeniny.eu/edge odebráno z repa); privacy.html zachováno.
+
+## v0.30.1 — narozeniny.eu (tipomat) zapečeno do infra/Caddyfile + Caddy připojen na sdílenou externí síť „edge" (přežije deploy, oddělené projekty).
+
 ## v0.30.0 — Zásady ochrany soukromí (/privacy.html) pro Google Play.
 
 ## v0.29.4 — Ikony: logo zvětšeno na maximum (Chrome favicon, iOS, Android adaptivní v rámci bezpečné zóny) — lépe čitelné v malém.
