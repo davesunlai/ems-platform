@@ -1,0 +1,9 @@
+teraems.com {
+	encode gzip
+	reverse_proxy web:80
+}
+
+tipomat.net {
+	encode gzip
+	reverse_proxy tipomat_app:8000
+}

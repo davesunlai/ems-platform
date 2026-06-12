@@ -98,8 +98,16 @@ services:
       - caddydata:/data
       - caddyconfig:/config
     depends_on: [web]
+    networks:
+      - default
+      - edge
 
 volumes:
   tsdata:
   caddydata:
   caddyconfig:
+
+networks:
+  default:
+  edge:
+    external: true

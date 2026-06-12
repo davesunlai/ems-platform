@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.30.3 — Caddy: teraems.com + tipomat.net (reverse_proxy tipomat_app:8000), Caddy na sdílené externí síti „edge". Zapečeno v repu.
+
 ## v0.30.2 — EMS čistě jen teraems.com (narozeniny.eu/edge odebráno z repa); privacy.html zachováno.
 
 ## v0.30.1 — narozeniny.eu (tipomat) zapečeno do infra/Caddyfile + Caddy připojen na sdílenou externí síť „edge" (přežije deploy, oddělené projekty).
