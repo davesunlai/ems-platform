@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.30.4 — Safe-area pro mobilni appku: .topbar padding-top + height calc(58px + env(safe-area-inset-top)), body spodni inset. V prohlizeci beze zmeny (env()=0). Zapeceno v repo styles.css.
+
 ## v0.30.3 — Caddy: teraems.com + tipomat.net (reverse_proxy tipomat_app:8000), Caddy na sdílené externí síti „edge". Zapečeno v repu.
 
 ## v0.30.2 — EMS čistě jen teraems.com (narozeniny.eu/edge odebráno z repa); privacy.html zachováno.

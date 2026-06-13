@@ -189,3 +189,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
   /* tabulky se na mobilu rolují vodorovně místo přetékání stránky */
   table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
 }
+
+/* Safe area pro mobilni appku (Capacitor, edge-to-edge Android/iOS).
+   V beznem prohlizeci je env() = 0, takze pro web beze zmeny. */
+.topbar {
+  padding-top: env(safe-area-inset-top, 0px);
+  height: calc(58px + env(safe-area-inset-top, 0px));
+}
+body {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
