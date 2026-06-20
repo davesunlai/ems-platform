@@ -1,13 +1,47 @@
 """Měsíční energetické bilance lokality (kWh) z výkonových vzorků.
 
-Energie ≈ Σ (hodinový průměr výkonu × 1 h). Přetoky/odběr z čisté výkonu sítě
-(součet grid_power přes zařízení): znaménko: kladný grid_power = dodávka do sítě (export), záporný = odběr (import).
+Energie ≈ Σ (hodinový průměr výkonu × 1 h). Čistý výkon sítě = součet grid_power
+přes zařízení. Konvence EMS (shodná se souhrnem dashboardu): **grid_power
++ = odběr ZE sítě (import), − = dodávka DO sítě (export)**.
 """
 from __future__ import annotations
 
 from datetime import date
 
 from ems.api.db import get_pool
+
+# Spotová cena: hodinová energie sítě (kWh) × hodinová spot cena (CZK/kWh).
+# spot_history je v 15min slotech, cena v CZK/MWh.
+_SPOT_COST_SQL = """
+WITH gh AS (
+    SELECT h, sum(p) / 1000.0 AS np_kwh FROM (
+        SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS p
+        FROM samples
+        WHERE device_id = ANY($1::text[]) AND metric = 'grid_power'
+          AND time >= $2 AND time < $3
+        GROUP BY 1, device_id
+    ) x GROUP BY h
+), sp AS (
+    SELECT time_bucket('1 hour', slot) AS h, avg(price) / 1000.0 AS czk
+    FROM spot_history WHERE slot >= $2 AND slot < $3 GROUP BY 1
+)
+SELECT to_char(date_trunc('month', gh.h), 'YYYY-MM') AS m,
+       sum(greatest(0,  np_kwh) * coalesce(sp.czk, 0)) AS import_czk,
+       sum(greatest(0, -np_kwh) * coalesce(sp.czk, 0)) AS export_czk
+FROM gh LEFT JOIN sp ON sp.h = gh.h
+GROUP BY 1
+"""
+
+
+async def monthly_spot_cost(device_ids: list[str], start: date, end: date) -> dict[str, dict]:
+    """Spotová cena importu/exportu po měsících: {YYYY-MM: {import_czk, export_czk}}."""
+    if not device_ids:
+        return {}
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(_SPOT_COST_SQL, device_ids, start, end)
+    return {r["m"]: {"import_czk": float(r["import_czk"] or 0),
+                     "export_czk": float(r["export_czk"] or 0)} for r in rows}
 
 _GRID_SQL = """
 WITH hourly AS (
@@ -20,8 +54,8 @@ WITH hourly AS (
     SELECT h, sum(p) AS np FROM hourly GROUP BY h
 )
 SELECT to_char(date_trunc('month', h), 'YYYY-MM') AS m,
-       sum(greatest(0,  np)) / 1000.0 AS export_kwh,
-       sum(greatest(0, -np)) / 1000.0 AS import_kwh
+       sum(greatest(0, -np)) / 1000.0 AS export_kwh,
+       sum(greatest(0,  np)) / 1000.0 AS import_kwh
 FROM net GROUP BY 1
 """
 
@@ -73,3 +107,10 @@ async def period_export_kwh(device_ids: list[str], start: date, end: date) -> fl
     """Jen přetoky (export) za období — pro kontrolu limitu."""
     rows = await monthly_energy(device_ids, start, end)
     return round(sum(r["export_kwh"] for r in rows), 1)
+
+
+async def spot_cost_total(device_ids: list[str], start: date, end: date) -> dict:
+    """Spotová cena importu/exportu za celé období (součet měsíců) — pro souhrn."""
+    m = await monthly_spot_cost(device_ids, start, end)
+    return {"import_czk": round(sum(v["import_czk"] for v in m.values()), 2),
+            "export_czk": round(sum(v["export_czk"] for v in m.values()), 2)}

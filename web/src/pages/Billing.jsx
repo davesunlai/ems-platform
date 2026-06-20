@@ -12,6 +12,9 @@ function LocRow({ loc, onSaved }) {
     alert_email: loc.alert_email || "",
     baseline_export: loc.baseline_export_kwh != null ? loc.baseline_export_kwh : "",
     baseline_import: loc.baseline_import_kwh != null ? loc.baseline_import_kwh : "",
+    pricing_mode: loc.pricing_mode || "spot",
+    tariff_import: loc.tariff_import_czk != null ? loc.tariff_import_czk : "",
+    tariff_export: loc.tariff_export_czk != null ? loc.tariff_export_czk : "",
   });
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
@@ -30,6 +33,9 @@ function LocRow({ loc, onSaved }) {
         alert_email: f.alert_email || null,
         baseline_export_kwh: f.baseline_export === "" ? null : Number(f.baseline_export),
         baseline_import_kwh: f.baseline_import === "" ? null : Number(f.baseline_import),
+        pricing_mode: f.pricing_mode,
+        tariff_import_czk: f.tariff_import === "" ? null : Number(f.tariff_import),
+        tariff_export_czk: f.tariff_export === "" ? null : Number(f.tariff_export),
       });
       setMsg("Uloženo ✓"); onSaved && onSaved();
     } catch (e) { setMsg("Chyba: " + e.message); }
@@ -49,6 +55,23 @@ function LocRow({ loc, onSaved }) {
       </div>
       <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
         Dodávka/odběr před měřením = hodnoty z ČEZ od začátku zúčtovacího období do dne spuštění měření; přičtou se k součtu za období (platí jen pro aktuální období).
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+        <label style={lbl}>Cenění
+          <select value={f.pricing_mode} onChange={upd("pricing_mode")}>
+            <option value="spot">Spot (dle OTE)</option>
+            <option value="tariff">Pevný tarif</option>
+          </select>
+        </label>
+        {f.pricing_mode === "tariff" && <>
+          <label style={lbl}>Cena ze sítě (Kč/kWh)<input type="number" step="0.01" value={f.tariff_import} onChange={upd("tariff_import")} placeholder="např. 5.50" /></label>
+          <label style={lbl}>Cena do sítě (Kč/kWh)<input type="number" step="0.01" value={f.tariff_export} onChange={upd("tariff_export")} placeholder="např. 1.20" /></label>
+        </>}
+      </div>
+      <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+        {f.pricing_mode === "spot"
+          ? "Spot: ceny ze sítě i do sítě se počítají z hodinové spotové ceny OTE v době odběru/dodávky."
+          : "Tarif: pevná cena za kWh — ze sítě (nákup) a do sítě (výkupní cena)."}
       </p>
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 13 }}>
         <input type="checkbox" checked={f.alert_enabled} onChange={upd("alert_enabled")} style={{ width: "auto" }} />

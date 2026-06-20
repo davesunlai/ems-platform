@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.31.18", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.31.19", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -112,9 +112,26 @@ async def latest(device_id: str, _: dict = Depends(read)) -> dict:
 
 
 @app.get("/api/devices/aggregate-now")
-async def devices_aggregate_now(ids: str, _: dict = Depends(read)) -> dict:
+async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depends(read)) -> dict:
     dev_ids = [x for x in ids.split(",") if x]
-    return await db.aggregate_now(dev_ids)
+    out = await db.aggregate_now(dev_ids)
+    if loc is not None:
+        from datetime import date, timedelta
+        from ems.localities import db as loc_db
+        from ems.billing import db as billing_db
+        L = await loc_db.get(loc)
+        if L:
+            mode = L.get("pricing_mode") or "spot"
+            out["pricing_mode"] = mode
+            if mode == "tariff":
+                ti, te = float(L.get("tariff_import_czk") or 0), float(L.get("tariff_export_czk") or 0)
+                out["import_czk"] = round(out.get("import_kwh", 0) * ti, 2)
+                out["export_czk"] = round(out.get("export_kwh", 0) * te, 2)
+            else:
+                today = date.today()
+                c = await billing_db.spot_cost_total(dev_ids, today, today + timedelta(days=1))
+                out["import_czk"], out["export_czk"] = c["import_czk"], c["export_czk"]
+    return out
 
 
 @app.get("/api/devices/aggregate")

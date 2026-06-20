@@ -56,6 +56,10 @@ async def ensure_schema() -> None:
             ("addr_zip", "TEXT"),
             ("addr_city", "TEXT"),
             ("addr_street", "TEXT"),
+            # Cenění: spot (dle OTE) / tariff (pevná cena). U tarifu cena Kč/kWh.
+            ("pricing_mode", "TEXT NOT NULL DEFAULT 'spot'"),
+            ("tariff_import_czk", "DOUBLE PRECISION"),
+            ("tariff_export_czk", "DOUBLE PRECISION"),
         ):
             await conn.execute(
                 f"ALTER TABLE localities ADD COLUMN IF NOT EXISTS {col} {ddl}"
@@ -67,7 +71,8 @@ async def set_billing(loc_id: int, patch: dict) -> dict | None:
         return await get(loc_id)
     cols = ["billing_start", "billing_months", "export_limit_kwh",
             "alert_enabled", "autolimit_enabled", "alert_email",
-            "baseline_export_kwh", "baseline_import_kwh", "baseline_period_start"]
+            "baseline_export_kwh", "baseline_import_kwh", "baseline_period_start",
+            "pricing_mode", "tariff_import_czk", "tariff_export_czk"]
     sets, args = [], []
     for k in cols:
         if k in patch:

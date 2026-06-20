@@ -292,27 +292,28 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
   );
 }
 
-function LocalityNow({ deviceIds }) {
+function LocalityNow({ deviceIds, localityId }) {
   const [d, setD] = useState(null);
   useEffect(() => {
     let alive = true;
-    const load = () => api.aggregateNow(deviceIds).then((r) => alive && setD(r)).catch(() => {});
+    const load = () => api.aggregateNow(deviceIds, localityId).then((r) => alive && setD(r)).catch(() => {});
     load();
     const t = setInterval(load, 30000);
     return () => { alive = false; clearInterval(t); };
-  }, [deviceIds.join(",")]);
+  }, [deviceIds.join(","), localityId]);
   if (!d) return null;
   const kw = (d.pv_w / 1000);
   const loadKw = (d.load_w ?? 0) / 1000;
   const fmt = (v, dec = 1) => (Math.abs(v) >= 10 ? v.toFixed(dec) : v.toFixed(dec));
+  const czk = (v) => `${v >= 100 ? v.toFixed(0) : v.toFixed(2)} Kč`;
   return (
     <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: 10 }}>
       · spotřeba <strong style={{ color: "var(--amber, #d29922)", fontSize: "1.05em" }}>{fmt(loadKw)} kW</strong>
       {" · FVE "}<strong style={{ color: "var(--green)" }}>{fmt(kw)} kW</strong>
       {d.soc != null && <> · baterie <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
       {" · dnes Σ "}<strong style={{ color: "var(--fg)" }}>{fmt(d.today_kwh)} kWh</strong>
-      {d.import_kwh != null && <> · ze sítě <strong style={{ color: "var(--blue)" }}>{fmt(d.import_kwh)} kWh</strong></>}
-      {d.export_kwh != null && <> · do sítě <strong style={{ color: "var(--green)" }}>{fmt(d.export_kwh)} kWh</strong></>}
+      {d.import_kwh != null && <> · ze sítě <strong style={{ color: "var(--blue)" }}>{fmt(d.import_kwh)} kWh{d.import_czk != null ? ` / ${czk(d.import_czk)}` : ""}</strong></>}
+      {d.export_kwh != null && <> · do sítě <strong style={{ color: "var(--green)" }}>{fmt(d.export_kwh)} kWh{d.export_czk != null ? ` / ${czk(d.export_czk)}` : ""}</strong></>}
     </span>
   );
 }
@@ -410,6 +411,8 @@ function BillingTable({ localityId }) {
           <th style={{ textAlign: "right" }}>Spotřeba</th>
           <th style={{ textAlign: "right" }}>Přetoky</th>
           <th style={{ textAlign: "right" }}>Nákup od distributora</th>
+          <th style={{ textAlign: "right" }}>Cena ze sítě</th>
+          <th style={{ textAlign: "right" }}>Cena do sítě</th>
         </tr></thead>
         <tbody>
           {b.baseline && (b.baseline.export_kwh || b.baseline.import_kwh) ? (
@@ -419,6 +422,8 @@ function BillingTable({ localityId }) {
               <td style={{ textAlign: "right" }}>—</td>
               <td style={{ textAlign: "right" }}>{b.baseline.export_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right" }}>{b.baseline.import_kwh.toFixed(0)} kWh</td>
+              <td style={{ textAlign: "right" }}>—</td>
+              <td style={{ textAlign: "right" }}>—</td>
             </tr>
           ) : null}
           {b.months.map((r) => (
@@ -428,9 +433,11 @@ function BillingTable({ localityId }) {
               <td style={{ textAlign: "right" }}>{r.cons_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right", color: "var(--green)" }}>{r.export_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right" }}>{r.import_kwh.toFixed(0)} kWh</td>
+              <td style={{ textAlign: "right" }}>{r.import_czk != null ? `${r.import_czk.toFixed(0)} Kč` : "—"}</td>
+              <td style={{ textAlign: "right", color: "var(--green)" }}>{r.export_czk != null ? `${r.export_czk.toFixed(0)} Kč` : "—"}</td>
             </tr>
           ))}
-          {!b.months.length && <tr><td colSpan="5" className="muted">Zatím žádná data v tomto období.</td></tr>}
+          {!b.months.length && <tr><td colSpan="7" className="muted">Zatím žádná data v tomto období.</td></tr>}
         </tbody>
         {b.months.length > 0 && (
           <tfoot><tr style={{ fontWeight: 600, borderTop: "1px solid var(--border)" }}>
@@ -439,6 +446,8 @@ function BillingTable({ localityId }) {
             <td style={{ textAlign: "right" }}>{fmtKWh(b.totals.cons_kwh)}</td>
             <td style={{ textAlign: "right", color: "var(--green)" }}>{fmtKWh(b.totals.export_kwh)}</td>
             <td style={{ textAlign: "right" }}>{fmtKWh(b.totals.import_kwh)}</td>
+            <td style={{ textAlign: "right" }}>{b.totals.import_czk != null ? `${b.totals.import_czk.toFixed(0)} Kč` : "—"}</td>
+            <td style={{ textAlign: "right", color: "var(--green)" }}>{b.totals.export_czk != null ? `${b.totals.export_czk.toFixed(0)} Kč` : "—"}</td>
           </tr></tfoot>
         )}
       </table>
@@ -487,7 +496,7 @@ export default function Dashboard() {
       <section style={{ marginBottom: 26 }}>
         <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>
           {current === "—" ? "Bez lokality" : `📍 ${current}`}
-          <LocalityNow deviceIds={ids} />
+          <LocalityNow deviceIds={ids} localityId={devs[0].locality_id} />
         </h2>
         <LocalityChart deviceIds={ids} />
         {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}

@@ -25,6 +25,9 @@ async def locality_billing(loc_id: int, _: dict = Depends(require_permission("re
         "alert_enabled": bool(loc.get("alert_enabled")),
         "autolimit_enabled": bool(loc.get("autolimit_enabled")),
         "alert_email": loc.get("alert_email"),
+        "pricing_mode": loc.get("pricing_mode") or "spot",
+        "tariff_import_czk": loc.get("tariff_import_czk"),
+        "tariff_export_czk": loc.get("tariff_export_czk"),
     }
     if not loc.get("billing_start"):
         return {"configured": False, "settings": settings}
@@ -32,8 +35,26 @@ async def locality_billing(loc_id: int, _: dict = Depends(require_permission("re
     start, end = current_period(loc["billing_start"], settings["billing_months"], date.today())
     devs = [d["id"] for d in await loc_db.devices_for_locality(loc_id)]
     months = await billing_db.monthly_energy(devs, start, end)
+
+    # Ceny ze sítě / do sítě dle režimu lokality (spot z OTE, nebo pevný tarif).
+    mode = settings["pricing_mode"]
+    if mode == "tariff":
+        ti = float(settings["tariff_import_czk"] or 0)
+        te = float(settings["tariff_export_czk"] or 0)
+        for r in months:
+            r["import_czk"] = round(r["import_kwh"] * ti, 2)
+            r["export_czk"] = round(r["export_kwh"] * te, 2)
+    else:  # spot
+        spot = await billing_db.monthly_spot_cost(devs, start, end)
+        for r in months:
+            c = spot.get(r["month"], {})
+            r["import_czk"] = round(c.get("import_czk", 0.0), 2)
+            r["export_czk"] = round(c.get("export_czk", 0.0), 2)
+
     totals = {k: round(sum(r[k] for r in months), 1)
               for k in ("prod_kwh", "cons_kwh", "export_kwh", "import_kwh")}
+    for k in ("import_czk", "export_czk"):
+        totals[k] = round(sum(r.get(k, 0) for r in months), 2)
 
     # Baseline (odběr/dodávka od začátku období do spuštění měření) — jen pro
     # aktuální období; po přechodu na další období se neuplatní.
