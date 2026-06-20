@@ -18,15 +18,17 @@ def load_devices(path: str) -> list[Device]:
 def build_adapter(device: Device) -> TelemetryAdapter:
     """Vytvoří instanci adaptéru podle device.adapter. Sem se přidávají nové typy."""
     name = device.adapter.lower()
+    # Klíče určené jen pro UI/zobrazení — do konstruktoru adaptéru NEPATŘÍ.
+    DISPLAY_ONLY = {"hidden_metrics"}
+    params = {k: v for k, v in device.params.items() if k not in DISPLAY_ONLY}
     if name == "mock":
         from ems.adapters.goodwe import MockInverterAdapter
-        return MockInverterAdapter(device_id=device.id, **device.params)
+        return MockInverterAdapter(device_id=device.id, **params)
     if name == "goodwe":
         from ems.adapters.goodwe import GoodweAdapter
-        return GoodweAdapter(device_id=device.id, **device.params)
+        return GoodweAdapter(device_id=device.id, **params)
     if name == "solis":
         from ems.adapters.solis import SolisAdapter
-        params = dict(device.params)
         # V UI je Modbus jednotka pojmenovaná 'device_id' (=1) — koliduje s EMS
         # device_id (id modulu). Přemapuj na 'unit', ať se nepřepíše.
         if "device_id" in params and "unit" not in params:
