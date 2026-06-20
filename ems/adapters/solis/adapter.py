@@ -20,7 +20,10 @@ import asyncio
 import logging
 
 from ems.core.model import DeviceType, Measurement, Metric, Reading, UNIT_OF, utcnow
-from .mapping import BATTERY_PACKS, REG_ENERGY_TOTAL, REG_GRID_METER, REG_PV_POWER
+from .mapping import (
+    BATTERY_PACKS, REG_ENERGY_TODAY, REG_ENERGY_TOTAL, REG_GRID_METER,
+    REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_PV_POWER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,19 +110,17 @@ class SolisAdapter:
             raise IOError(f"čtení registru {addr} selhalo: {rr}")
         return _decode(rr.registers, rtype, scale)
 
-    def _read_pack(self, pack_id: int):
-        """Vrátí (soc, voltage, current) battery packu; None u nepřečtených."""
-        pack = BATTERY_PACKS.get(pack_id)
-        if not pack:
-            return (None, None, None)
-        out = []
-        for field in ("soc", "voltage", "current"):
+    def _read_pack(self, pack_id: int) -> dict:
+        """Vrátí dict polí packu (soc, voltage, current, soh, temp); None u nepřečtených."""
+        pack = BATTERY_PACKS.get(pack_id) or {}
+        out = {}
+        for field, spec in pack.items():
             try:
-                out.append(self._read_reg(pack[field]))
+                out[field] = self._read_reg(spec)
             except Exception as exc:
                 logger.debug("Solis '%s' pack%s %s: %s", self.device_id, pack_id, field, exc)
-                out.append(None)
-        return tuple(out)
+                out[field] = None
+        return out
 
     async def read(self) -> Reading:
         return await asyncio.to_thread(self._read_sync)
@@ -134,11 +135,16 @@ class SolisAdapter:
             measurements.append(Measurement(metric=metric, value=float(value), unit=UNIT_OF[metric]))
 
         def add_system() -> None:
-            # FVE + celková energie + síť (Solis +export/−import -> EMS +import/−export => OTOČIT)
+            # FVE + energie (celk./dnes) + síť + 3f napětí
+            # (síť: Solis +export/−import -> EMS +import/−export => OTOČIT)
             for metric, spec, transform in (
                 (Metric.PV_POWER, REG_PV_POWER, None),
                 (Metric.ENERGY_PV_TOTAL, REG_ENERGY_TOTAL, None),
+                (Metric.ENERGY_TODAY, REG_ENERGY_TODAY, None),
                 (Metric.GRID_POWER, REG_GRID_METER, lambda v: -v),
+                (Metric.GRID_VOLTAGE_L1, REG_GRID_V_L1, None),
+                (Metric.GRID_VOLTAGE_L2, REG_GRID_V_L2, None),
+                (Metric.GRID_VOLTAGE_L3, REG_GRID_V_L3, None),
             ):
                 try:
                     v = self._read_reg(spec)
@@ -147,16 +153,16 @@ class SolisAdapter:
                     logger.debug("Solis '%s': reg %s (%s) nepřečten: %s", self.device_id, spec[0], metric, exc)
 
         def add_pack(pack_id: int) -> None:
-            soc, volt, curr = self._read_pack(pack_id)
-            if soc is not None:
-                add(Metric.BATTERY_SOC, soc)
-            if volt is not None:
-                add(Metric.VOLTAGE, volt)
-            if curr is not None:
-                add(Metric.CURRENT, curr)
+            d = self._read_pack(pack_id)
+            if d.get("soc") is not None:
+                add(Metric.BATTERY_SOC, d["soc"])
+            if d.get("voltage") is not None:
+                add(Metric.VOLTAGE, d["voltage"])
+            if d.get("current") is not None:
+                add(Metric.CURRENT, d["current"])
             # battery_power = U*I (W); znaménko nese proud: + nabíjení / − vybíjení (shodné s EMS)
-            if volt is not None and curr is not None:
-                add(Metric.BATTERY_POWER, volt * curr)
+            if d.get("voltage") is not None and d.get("current") is not None:
+                add(Metric.BATTERY_POWER, d["voltage"] * d["current"])
 
         dtype = self.device_type
 
@@ -180,25 +186,33 @@ class SolisAdapter:
             volt_m = {1: Metric.BATTERY_VOLTAGE_1, 2: Metric.BATTERY_VOLTAGE_2}
             curr_m = {1: Metric.BATTERY_CURRENT_1, 2: Metric.BATTERY_CURRENT_2}
             pow_m = {1: Metric.BATTERY_POWER_1, 2: Metric.BATTERY_POWER_2}
+            soh_m = {1: Metric.BATTERY_SOH_1, 2: Metric.BATTERY_SOH_2}
+            temp_m = {1: Metric.BATTERY_TEMP_1, 2: Metric.BATTERY_TEMP_2}
             explicit = str(self.battery_packs).isdigit()
             candidates = ([p for p in range(1, int(self.battery_packs) + 1) if p in BATTERY_PACKS]
                           if explicit else list(BATTERY_PACKS))   # "auto" -> zkus všechny
             socs, powers = [], []
             for pid in candidates:
-                soc, volt, curr = self._read_pack(pid)
+                d = self._read_pack(pid)
+                soc = d.get("soc")
                 # auto: zahrň pack jen když reálně vrací platný SOC (jinak fyzicky není)
                 if soc is None or (not explicit and not (0 < soc <= 100)):
                     continue
-                add(soc_m[pid], soc)                       # battery_soc_1 / _2
+                add(soc_m[pid], soc)                              # battery_soc_1 / _2
                 socs.append(soc)
+                volt, curr = d.get("voltage"), d.get("current")
                 if volt is not None:
-                    add(volt_m[pid], volt)                 # battery_voltage_1 / _2
+                    add(volt_m[pid], volt)                        # battery_voltage_1 / _2
                 if curr is not None:
-                    add(curr_m[pid], curr)                 # battery_current_1 / _2 (+nabíjení/−vybíjení)
+                    add(curr_m[pid], curr)                        # battery_current_1 / _2 (+nabíjení/−vybíjení)
                 if volt is not None and curr is not None:
                     p = volt * curr
-                    add(pow_m[pid], p)                     # battery_power_1 / _2
+                    add(pow_m[pid], p)                            # battery_power_1 / _2
                     powers.append(p)
+                if d.get("soh") is not None:
+                    add(soh_m[pid], d["soh"])                     # battery_soh_1 / _2
+                if d.get("temp") is not None:
+                    add(temp_m[pid], d["temp"])                   # battery_temp_1 / _2
             if socs:
                 add(Metric.BATTERY_SOC, sum(socs) / len(socs))   # průměr přes packy (pro souhrn)
             if powers:

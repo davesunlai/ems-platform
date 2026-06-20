@@ -22,6 +22,10 @@ const METRIC_LABEL = {
   battery_voltage_1: "Baterie 1 napětí", battery_voltage_2: "Baterie 2 napětí",
   battery_current_1: "Baterie 1 proud", battery_current_2: "Baterie 2 proud",
   battery_power_1: "Baterie 1 výkon", battery_power_2: "Baterie 2 výkon",
+  battery_soh_1: "Baterie 1 SOH", battery_soh_2: "Baterie 2 SOH",
+  battery_temp_1: "Baterie 1 teplota", battery_temp_2: "Baterie 2 teplota",
+  energy_today: "FVE dnes",
+  grid_voltage_l1: "Síť napětí L1", grid_voltage_l2: "Síť napětí L2", grid_voltage_l3: "Síť napětí L3",
   active_power: "Činný výkon", voltage: "Napětí", current: "Proud",
   energy_pv_total: "FVE celkem", frequency: "Frekvence", temperature: "Teplota",
 };
@@ -30,9 +34,11 @@ const MAX_TRACKED = 20;
 
 // Kompletní evidence veličin podle adaptéru a typu zařízení (co umíme sledovat).
 const METRIC_CATALOG = {
-  "solis:hybrid": ["pv_power", "grid_power", "energy_pv_total", "battery_soc", "battery_power",
-    "battery_soc_1", "battery_voltage_1", "battery_current_1", "battery_power_1",
-    "battery_soc_2", "battery_voltage_2", "battery_current_2", "battery_power_2"],
+  "solis:hybrid": ["pv_power", "grid_power", "energy_pv_total", "energy_today",
+    "grid_voltage_l1", "grid_voltage_l2", "grid_voltage_l3",
+    "battery_soc", "battery_power",
+    "battery_soc_1", "battery_voltage_1", "battery_current_1", "battery_power_1", "battery_soh_1", "battery_temp_1",
+    "battery_soc_2", "battery_voltage_2", "battery_current_2", "battery_power_2", "battery_soh_2", "battery_temp_2"],
   "solis:generation": ["pv_power", "grid_power", "energy_pv_total"],
   "solis:storage": ["battery_soc", "voltage", "current", "battery_power"],
   "solis:grid_point": ["grid_power"],
@@ -214,7 +220,11 @@ export default function Modules() {
             const checked = shown.filter((k) => !f.hidden.includes(k)).length;
             return (
               <div className="field" style={{ marginBottom: 8 }}>
-                <label>Co sledovat (zobrazovat) · vybráno {checked}/{MAX_TRACKED}</label>
+                <label>
+                  Co sledovat (zobrazovat) ·{" "}
+                  <span style={{ color: checked > MAX_TRACKED ? "#e06c75" : "inherit" }}>vybráno {checked}/{MAX_TRACKED}</span>
+                  {checked > MAX_TRACKED && <span style={{ color: "#e06c75", fontWeight: 400 }}> — přes limit o {checked - MAX_TRACKED} (příplatek)</span>}
+                </label>
                 {shown.length === 0 ? (
                   <p className="muted" style={{ fontSize: 12, margin: 0 }}>
                     Načítám měřené veličiny — modul je musí nejdřív aspoň jednou změřit (~10 s).

@@ -45,6 +45,11 @@ const LABELS = {
   battery_voltage_1: "Baterie 1 napětí", battery_voltage_2: "Baterie 2 napětí",
   battery_current_1: "Baterie 1 proud", battery_current_2: "Baterie 2 proud",
   battery_power_1: "Baterie 1 výkon", battery_power_2: "Baterie 2 výkon",
+  battery_power_1: "Baterie 1 výkon", battery_power_2: "Baterie 2 výkon",
+  battery_soh_1: "Baterie 1 SOH", battery_soh_2: "Baterie 2 SOH",
+  battery_temp_1: "Baterie 1 teplota", battery_temp_2: "Baterie 2 teplota",
+  energy_today: "FVE dnes",
+  grid_voltage_l1: "Síť napětí L1", grid_voltage_l2: "Síť napětí L2", grid_voltage_l3: "Síť napětí L3",
   grid_power: "Síť", active_power: "Činný výkon",
   reactive_power: "Jalový výkon", frequency: "Frekvence", temperature: "Teplota",
   energy_pv_total: "FVE celkem", energy_import: "Import celkem", energy_export: "Export celkem",
@@ -53,10 +58,10 @@ const LABELS = {
 const ACCENT = { pv_power: "green", battery_power: "blue", battery_soc: "blue", battery_soc_1: "blue", battery_soc_2: "blue", grid_power: "amber", load_power: "" };
 const CHART_COLOR = { pv_power: "#3fb950", load_power: "#8b949e", battery_power: "#58a6ff", battery_soc: "#58a6ff", battery_soc_1: "#58a6ff", battery_soc_2: "#7ee787", grid_power: "#d29922", active_power: "#3fb950" };
 const ORDER = ["pv_power","load_power","battery_power","battery_soc",
-               "battery_soc_1","battery_voltage_1","battery_current_1","battery_power_1",
-               "battery_soc_2","battery_voltage_2","battery_current_2","battery_power_2",
-               "grid_power","active_power",
-               "frequency","temperature","energy_pv_total","energy_import","energy_export"];
+               "battery_soc_1","battery_voltage_1","battery_current_1","battery_power_1","battery_soh_1","battery_temp_1",
+               "battery_soc_2","battery_voltage_2","battery_current_2","battery_power_2","battery_soh_2","battery_temp_2",
+               "grid_power","grid_voltage_l1","grid_voltage_l2","grid_voltage_l3","active_power",
+               "frequency","temperature","energy_pv_total","energy_today","energy_import","energy_export"];
 const WIN = [
   { min: 360, label: "6 h" }, { min: 720, label: "12 h" }, { min: 1440, label: "24 h" },
   { min: 4320, label: "3 dny" }, { min: 10080, label: "7 dní" }, { min: 20160, label: "14 dní" },
