@@ -31,6 +31,19 @@ _stav 11.6.2026_
    5433 (timescaledb), 5434 (plakatovaciplocha_db), 6333-4 (qdrant),
    10200/10300 (piper/whisper). Nové porty jen s prefixem `127.0.0.1:`.
 
+7. **Po `tar -xzf`, který přepíše Caddyfile, NEpomáhá `caddy reload`.**
+   `tar` soubor smaže a vytvoří znovu (**nový inode**), takže běžící
+   kontejner přes bind-mount vidí pořád **starou** verzi. Po každém
+   rozbalení taru je nutný **RESTART Caddy**, ne reload:
+   ```bash
+   docker compose -f infra/docker-compose.yml restart caddy
+   # nebo: docker restart infra-caddy-1
+   ```
+   `bash scripts/deploy.sh` tento restart dělá automaticky — proto po
+   rozbalení taru **nasazuj přes `deploy.sh`** a neřeš ruční reload.
+   Reload (`caddy reload`) stačí jen po ručním `cat >>` / `cat >`, které
+   inode zachovají.
+
 ## AKTUÁLNÍ ROUTING
 _(vše přes `edge`, kromě teraems přes `infra_default`)_
 

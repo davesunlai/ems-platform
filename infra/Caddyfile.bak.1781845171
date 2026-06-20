@@ -1,0 +1,19 @@
+teraems.com {
+	encode gzip
+	reverse_proxy infra-web-1:80
+}
+
+tipomat.net {
+	encode gzip
+	reverse_proxy tipomat_app:8000
+}
+
+narozeniny.eu {
+	encode gzip
+	reverse_proxy narozeniny-eu:4321
+}
+
+plakatovaciplocha.cz {
+	encode gzip
+	reverse_proxy plakatovaciplocha_app:80
+}

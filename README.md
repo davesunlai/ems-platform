@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.30.8 — docs/INFRA-FRANTA.md bod 7: po tar -xzf nutný RESTART Caddy (ne reload) kvůli inode; deploy.sh to dělá sám.
+
 ## v0.30.7 — Caddyfile všechny 4 domény (teraems.com, tipomat.net, narozeniny.eu, plakatovaciplocha.cz) na jména kontejnerů; pravidla infry uložena v docs/INFRA-FRANTA.md.
 
 ## v0.30.6 — Caddy: reverse_proxy na JMÉNO KONTEJNERU (infra-web-1, tipomat_app) — odstraňuje kolizi aliasu „web" na sdílené edge síti; + dynamický re-resolve (refresh 10s). Toto je správná verze místo v0.30.5.

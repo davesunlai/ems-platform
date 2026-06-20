@@ -1,8 +1,31 @@
 teraems.com {
 	encode gzip
-	reverse_proxy web:80
+	reverse_proxy infra-web-1:80
 }
-narozeniny.eu, www.narozeniny.eu {
+
+tipomat.net {
+    encode gzip
+
+    @dbadmin path /administracedb /administracedb/*
+    handle @dbadmin {
+        route {
+            @notallowed not remote_ip 1.2.3.4 5.6.7.8
+            respond @notallowed 403
+            reverse_proxy pgadmin_app:80
+        }
+    }
+
+    handle {
+        reverse_proxy tipomat_app:8000
+    }
+}
+
+narozeniny.eu {
 	encode gzip
 	reverse_proxy narozeniny-eu:4321
+}
+
+plakatovaciplocha.cz {
+	encode gzip
+	reverse_proxy plakatovaciplocha_app:80
 }
