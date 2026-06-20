@@ -22,6 +22,7 @@ import logging
 from ems.core.model import DeviceType, Measurement, Metric, Reading, UNIT_OF, utcnow
 from .mapping import (
     BATTERY_PACKS, BLOCK_BAT1, BLOCK_BAT2, BLOCK_GRID, BLOCK_SYS1, BLOCK_SYS2,
+    CTRL_FORCE, CTRL_FORCE_POWER, CTRL_WORK_MODE,
     REG_ENERGY_TODAY, REG_ENERGY_TOTAL, REG_GRID_METER,
     REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_INV_TEMP, REG_PV_POWER,
 )
@@ -123,6 +124,78 @@ class SolisAdapter:
         if rr.isError() or not getattr(rr, "registers", None):
             raise IOError(f"blok {start}+{count} selhal: {rr}")
         return rr.registers
+
+    # --- ZÁPIS (řízení) — FC06 zápis, FC03 read-back. ---
+    # Vše ověřuje zpětným čtením; scale/sémantiku řídicích registrů u 3f modelu
+    # je nutné předem ověřit write-probem (brief §11).
+    def _write_reg(self, addr: int, value: int, _retry: bool = True) -> None:
+        try:
+            rr = self._client.write_register(addr, int(value), device_id=self.unit)
+        except Exception:
+            if _retry:
+                self._reconnect()
+                return self._write_reg(addr, value, _retry=False)
+            raise
+        if rr.isError():
+            raise IOError(f"zápis registru {addr}={value} selhal: {rr}")
+
+    def _read_holding(self, addr: int, count: int = 1, _retry: bool = True) -> list:
+        try:
+            rr = self._client.read_holding_registers(addr, count=count, device_id=self.unit)
+        except Exception:
+            if _retry:
+                self._reconnect()
+                return self._read_holding(addr, count, _retry=False)
+            raise
+        if rr.isError() or not getattr(rr, "registers", None):
+            raise IOError(f"čtení holding {addr} selhalo: {rr}")
+        return rr.registers
+
+    async def write_holding(self, addr: int, value: int, verify: bool = True) -> dict:
+        """Zapíše jeden holding registr a (default) ověří zpětným čtením.
+
+        Vrací {addr, written, readback, ok}. `ok` je best-effort — některé
+        registry hodnotu transformují/ořežou, takže readback != written nemusí
+        nutně znamenat chybu.
+        """
+        def _run() -> dict:
+            if self._client is None or not getattr(self._client, "connected", False):
+                self._connect_sync()
+            self._write_reg(addr, int(value))
+            out = {"addr": int(addr), "written": int(value), "ok": True}
+            if verify:
+                got = self._read_holding(addr, 1)[0]
+                out["readback"] = got
+                out["ok"] = (got == int(value))
+            logger.info("Solis '%s' zápis holding %s=%s -> %s", self.device_id, addr, value, out)
+            return out
+        return await asyncio.to_thread(_run)
+
+    async def read_holding(self, addr: int, count: int = 1) -> list:
+        """Přečte aktuální hodnoty holding registrů (pro ověření / UI stav)."""
+        def _run() -> list:
+            if self._client is None or not getattr(self._client, "connected", False):
+                self._connect_sync()
+            return self._read_holding(addr, count)
+        return await asyncio.to_thread(_run)
+
+    async def set_force(self, mode: int, power: int | None = None) -> dict:
+        """Hlavní řídicí páka: 0 = off, 1 = nucené nabíjení, 2 = nucené vybíjení.
+
+        `power` (pokud zadáno) se zapíše do CTRL_FORCE_POWER PŘED přepnutím módu.
+        Hodnoty jsou syrové (int) — scale u 3f modelu je nutné mít ověřený.
+        """
+        if int(mode) not in (0, 1, 2):
+            raise ValueError("force mode musí být 0 (off), 1 (charge) nebo 2 (discharge)")
+        res = {}
+        if power is not None:
+            res["power"] = await self.write_holding(CTRL_FORCE_POWER, int(power))
+        res["force"] = await self.write_holding(CTRL_FORCE, int(mode))
+        return res
+
+    async def set_work_mode(self, word: int) -> dict:
+        """Nastaví pracovní režim (CTRL_WORK_MODE, bitfield; 0x21 = Self-Use)."""
+        return await self.write_holding(CTRL_WORK_MODE, int(word))
 
     def _load(self, blocks: list) -> dict:
         """Načte zadané bloky do mapy {adresa: u16}.

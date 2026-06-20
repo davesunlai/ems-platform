@@ -48,3 +48,26 @@ BLOCK_SYS2 = (33073, 21)   # 33073..33093: 3f napětí L1-3 + teplota měniče
 BLOCK_GRID = (33130, 2)    # 33130..33131: síťový meter (S32)
 BLOCK_BAT1 = (33133, 18)   # 33133..33150: baterie 1
 BLOCK_BAT2 = (34275, 16)   # 34275..34290: baterie 2
+
+# --- ŘÍDICÍ (holding) registry — FC03 čtení / FC06 zápis. ---
+# POZOR: scale a sémantika u 3f 50kW modelu NEPOTVRZENO (brief §11, hodnoty
+# z 1f/S5 dokumentace). Před prvním ostrým zápisem ověřit write-probem na
+# reálném kuse a testovat na malém výkonu. Některé zápisy jdou do flash.
+CTRL_WORK_MODE = 43110               # pracovní režim (bitfield; 0x21 = Self-Use)
+CTRL_FORCE = 43135                   # 0 = off, 1 = nucené nabíjení, 2 = nucené vybíjení
+CTRL_FORCE_POWER = 43136             # výkon nuceného režimu (scale ověřit)
+CTRL_CHARGE_CURRENT_LIMIT = 43012    # limit nabíjecího proudu (0.1 A)
+CTRL_DISCHARGE_CURRENT_LIMIT = 43013 # limit vybíjecího proudu (0.1 A)
+CTRL_SOC_BACKUP = 43024              # SOC práh backup
+CTRL_SOC_FORCE = 43030              # SOC práh force
+
+# Řídicí registry pro write-probe (přečtení aktuálního stavu, FC03).
+CONTROL_REGISTERS = [
+    ("Pracovní režim     ", CTRL_WORK_MODE),
+    ("Force 0/1/2        ", CTRL_FORCE),
+    ("Force výkon        ", CTRL_FORCE_POWER),
+    ("Limit nabíj. proudu", CTRL_CHARGE_CURRENT_LIMIT),
+    ("Limit vybíj. proudu", CTRL_DISCHARGE_CURRENT_LIMIT),
+    ("SOC backup         ", CTRL_SOC_BACKUP),
+    ("SOC force          ", CTRL_SOC_FORCE),
+]
