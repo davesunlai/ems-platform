@@ -53,6 +53,7 @@ const LABELS = {
   grid_power: "Síť", active_power: "Činný výkon",
   reactive_power: "Jalový výkon", frequency: "Frekvence", temperature: "Teplota",
   energy_pv_total: "FVE celkem", energy_import: "Import celkem", energy_export: "Export celkem",
+  temperature: "Teplota měniče",
   voltage: "Napětí", current: "Proud",
 };
 const ACCENT = { pv_power: "green", battery_power: "blue", battery_soc: "blue", battery_soc_1: "blue", battery_soc_2: "blue", grid_power: "amber", load_power: "" };

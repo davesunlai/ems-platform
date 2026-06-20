@@ -27,19 +27,20 @@ const METRIC_LABEL = {
   energy_today: "FVE dnes",
   grid_voltage_l1: "Síť napětí L1", grid_voltage_l2: "Síť napětí L2", grid_voltage_l3: "Síť napětí L3",
   active_power: "Činný výkon", voltage: "Napětí", current: "Proud",
-  energy_pv_total: "FVE celkem", frequency: "Frekvence", temperature: "Teplota",
+  energy_pv_total: "FVE celkem", frequency: "Frekvence", temperature: "Teplota měniče",
 };
 
 const MAX_TRACKED = 20;
 
 // Kompletní evidence veličin podle adaptéru a typu zařízení (co umíme sledovat).
 const METRIC_CATALOG = {
-  "solis:hybrid": ["pv_power", "grid_power", "energy_pv_total", "energy_today",
+  "solis:hybrid": ["pv_power", "grid_power", "energy_pv_total", "energy_today", "temperature",
     "grid_voltage_l1", "grid_voltage_l2", "grid_voltage_l3",
     "battery_soc", "battery_power",
     "battery_soc_1", "battery_voltage_1", "battery_current_1", "battery_power_1", "battery_soh_1", "battery_temp_1",
     "battery_soc_2", "battery_voltage_2", "battery_current_2", "battery_power_2", "battery_soh_2", "battery_temp_2"],
-  "solis:generation": ["pv_power", "grid_power", "energy_pv_total"],
+  "solis:generation": ["pv_power", "grid_power", "energy_pv_total", "energy_today", "temperature",
+    "grid_voltage_l1", "grid_voltage_l2", "grid_voltage_l3"],
   "solis:storage": ["battery_soc", "voltage", "current", "battery_power"],
   "solis:grid_point": ["grid_power"],
 };

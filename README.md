@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.9 — Solis: HROMADNÉ čtení v blocích (5 dotazů/cyklus místo ~20) — řeší pády/neaktivitu při mnoha veličinách (měnič/stick nedával rychlé jednotlivé dotazy). Přidána teplota měniče (33093). Teplota Bat2 přehozena na 34282 (34281 vracelo nesmysl). Teploty znaménkové (s16).
+
 ## v0.31.8 — Solis hybrid čte i: dnešní energii, 3f síťová napětí L1/L2/L3, SOH a teplotu obou baterií (vše ověřené registry §9/§10). Katalog v editaci doplněn — 21 veličin (počitadlo zčervená nad limitem 20).
 
 ## v0.31.7 — Editace modulu: checklist veličin ve sloupcích (3–4 dle šířky) + kompletní katalog co umíme u daného hybridu/typu sledovat; limit 20 zatržených (počitadlo + text „další za příplatek", přes limit nejde zaškrtnout).
