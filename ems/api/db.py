@@ -149,7 +149,7 @@ async def aggregate_now(device_ids: list[str]) -> dict:
     """Aktuální souhrn lokality: součet výkonu FVE (W), průměrný SoC (%), dnešní výroba (kWh)."""
     if not device_ids:
         return {"pv_w": 0.0, "soc": None, "today_kwh": 0.0, "load_w": 0.0, "grid_w": 0.0,
-                "battery_w": 0.0, "import_kwh": 0.0, "export_kwh": 0.0}
+                "battery_w": 0.0, "import_kwh": 0.0, "export_kwh": 0.0, "cons_today_kwh": 0.0}
     pool = await get_pool()
     async with pool.acquire() as conn:
         pv = await conn.fetchval(
@@ -211,10 +211,26 @@ async def aggregate_now(device_ids: list[str]) -> dict:
             "      AND time >= date_trunc('day', now() AT TIME ZONE 'Europe/Prague') AT TIME ZONE 'Europe/Prague'"
             "  ) s WHERE dt IS NOT NULL AND dt < 120"
             "  GROUP BY device_id) t", device_ids)
+        # Dnešní čistá energie baterie (∫battery_power; + nabíjení / − vybíjení)
+        bat_net = await conn.fetchval(
+            "SELECT COALESCE(SUM(e),0) FROM ("
+            "  SELECT device_id, SUM(value * dt)/3.6e6 AS e FROM ("
+            "    SELECT device_id, value,"
+            "           EXTRACT(epoch FROM (lead(time) OVER (PARTITION BY device_id ORDER BY time) - time)) AS dt"
+            "    FROM samples"
+            "    WHERE device_id = ANY($1::text[]) AND metric='battery_power'"
+            "      AND time >= date_trunc('day', now() AT TIME ZONE 'Europe/Prague') AT TIME ZONE 'Europe/Prague'"
+            "  ) s WHERE dt IS NOT NULL AND dt < 120"
+            "  GROUP BY device_id) t", device_ids)
+    imp_kwh, exp_kwh = float(ie["imp"] or 0), float(ie["exp"] or 0)
+    # Dnešní spotřeba z energetické bilance: cons = FVE + import − export − Δbaterie
+    cons_today = float(kwh or 0) + imp_kwh - exp_kwh - float(bat_net or 0)
+    cons_today = max(0.0, cons_today)
     return {"pv_w": pv_w, "soc": float(soc) if soc is not None else None,
             "today_kwh": float(kwh or 0), "load_w": load_w,
             "grid_w": grid_w, "battery_w": bat_w,
-            "import_kwh": float(ie["imp"] or 0), "export_kwh": float(ie["exp"] or 0)}
+            "cons_today_kwh": round(cons_today, 1),
+            "import_kwh": imp_kwh, "export_kwh": exp_kwh}
 
 
 async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 360,

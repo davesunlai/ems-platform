@@ -308,10 +308,9 @@ function LocalityNow({ deviceIds, localityId }) {
   const czk = (v) => `${v >= 100 ? v.toFixed(0) : v.toFixed(2)} Kč`;
   return (
     <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: 10 }}>
-      · spotřeba <strong style={{ color: "var(--amber, #d29922)", fontSize: "1.05em" }}>{fmt(loadKw)} kW</strong>
-      {" · FVE "}<strong style={{ color: "var(--green)" }}>{fmt(kw)} kW</strong>
-      {d.soc != null && <> · baterie <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
-      {" · dnes Σ "}<strong style={{ color: "var(--fg)" }}>{fmt(d.today_kwh)} kWh</strong>
+      · spotřeba <strong style={{ color: "var(--amber, #d29922)" }}>{fmt(loadKw)} kW / {fmt(d.cons_today_kwh ?? 0)} kWh</strong>
+      {" · FVE "}<strong style={{ color: "var(--green)" }}>{fmt(kw)} kW / {fmt(d.today_kwh)} kWh</strong>
+      {d.soc != null && <> · <Icon name="battery" size={14} style={{ verticalAlign: "-2px", opacity: 0.85 }} /> <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
       {d.import_kwh != null && <> · ze sítě <strong style={{ color: "var(--blue)" }}>{fmt(d.import_kwh)} kWh{d.import_czk != null ? ` / ${czk(d.import_czk)}` : ""}</strong></>}
       {d.export_kwh != null && <> · do sítě <strong style={{ color: "var(--green)" }}>{fmt(d.export_kwh)} kWh{d.export_czk != null ? ` / ${czk(d.export_czk)}` : ""}</strong></>}
     </span>

@@ -1,7 +1,7 @@
 {
   "name": "ems-web",
   "private": true,
-  "version": "0.31.19",
+  "version": "0.31.20",
   "type": "module",
   "scripts": {
     "dev": "vite",
