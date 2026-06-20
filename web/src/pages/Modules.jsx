@@ -26,6 +26,22 @@ const METRIC_LABEL = {
   energy_pv_total: "FVE celkem", frequency: "Frekvence", temperature: "Teplota",
 };
 
+const MAX_TRACKED = 20;
+
+// Kompletní evidence veličin podle adaptéru a typu zařízení (co umíme sledovat).
+const METRIC_CATALOG = {
+  "solis:hybrid": ["pv_power", "grid_power", "energy_pv_total", "battery_soc", "battery_power",
+    "battery_soc_1", "battery_voltage_1", "battery_current_1", "battery_power_1",
+    "battery_soc_2", "battery_voltage_2", "battery_current_2", "battery_power_2"],
+  "solis:generation": ["pv_power", "grid_power", "energy_pv_total"],
+  "solis:storage": ["battery_soc", "voltage", "current", "battery_power"],
+  "solis:grid_point": ["grid_power"],
+};
+const metricsFor = (adapter, dtype, live) => {
+  const cat = METRIC_CATALOG[`${adapter}:${dtype}`] || [];
+  return [...cat, ...live.filter((k) => !cat.includes(k))];   // katalog + cokoli navíc reálně měřené
+};
+
 function emptyForm() {
   return { id: "", name: "", adapter: "goodwe", device_type: "storage", kind: "source_read",
            host: "", port: 8899, device_id: 1, battery_pack: 1, battery_packs: "auto", hidden: [], pv_peak_w: 16000, battery_capacity_kwh: 52 };
@@ -54,7 +70,16 @@ export default function Modules() {
     return p;
   };
 
-  const toggleMetric = (k) => setF((s) => ({ ...s, hidden: s.hidden.includes(k) ? s.hidden.filter((x) => x !== k) : [...s.hidden, k] }));
+  const toggleMetric = (k) => setF((s) => {
+    if (s.hidden.includes(k)) {
+      // zapínáme (odebíráme ze skrytých) -> hlídej limit
+      const shown = metricsFor(s.adapter, s.device_type, avail);
+      const checked = shown.filter((m) => !s.hidden.includes(m)).length;
+      if (checked >= MAX_TRACKED) return s;   // přes limit nepovolíme
+      return { ...s, hidden: s.hidden.filter((x) => x !== k) };
+    }
+    return { ...s, hidden: [...s.hidden, k] };
+  });
 
   const startEdit = (m) => {
     const p = m.params || {};
@@ -184,25 +209,38 @@ export default function Modules() {
               <input value={f.battery_capacity_kwh} onChange={(e) => setF({ ...f, battery_capacity_kwh: e.target.value })} />
             </div>
           </>)}
-          {editing && (
-            <div className="field" style={{ marginBottom: 8 }}>
-              <label>Co zobrazovat (monitorovat)</label>
-              {avail.length === 0 ? (
-                <p className="muted" style={{ fontSize: 12, margin: 0 }}>
-                  Načítám měřené veličiny — modul je musí nejdřív aspoň jednou změřit (~10 s).
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 4 }}>
-                  {avail.map((k) => (
-                    <label key={k} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400, cursor: "pointer" }}>
-                      <input type="checkbox" checked={!f.hidden.includes(k)} onChange={() => toggleMetric(k)} />
-                      {METRIC_LABEL[k] || k}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {editing && (() => {
+            const shown = metricsFor(f.adapter, f.device_type, avail);
+            const checked = shown.filter((k) => !f.hidden.includes(k)).length;
+            return (
+              <div className="field" style={{ marginBottom: 8 }}>
+                <label>Co sledovat (zobrazovat) · vybráno {checked}/{MAX_TRACKED}</label>
+                {shown.length === 0 ? (
+                  <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+                    Načítám měřené veličiny — modul je musí nejdřív aspoň jednou změřit (~10 s).
+                  </p>
+                ) : (<>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "6px 14px", marginTop: 4 }}>
+                    {shown.map((k) => {
+                      const on = !f.hidden.includes(k);
+                      const blocked = !on && checked >= MAX_TRACKED;
+                      return (
+                        <label key={k} title={blocked ? `Limit ${MAX_TRACKED} veličin — odeber jinou nebo přikup příplatek` : ""}
+                               style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400,
+                                        cursor: blocked ? "not-allowed" : "pointer", opacity: blocked ? 0.45 : 1 }}>
+                          <input type="checkbox" checked={on} disabled={blocked} onChange={() => toggleMetric(k)} />
+                          {METRIC_LABEL[k] || k}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                    Sledování až <strong>{MAX_TRACKED}</strong> veličin je v základu. Další veličiny nad rámec {MAX_TRACKED} jsou za příplatek — ozvi se nám.
+                  </p>
+                </>)}
+              </div>
+            );
+          })()}
           {editing ? (<>
             <button className="btn primary" onClick={save}>Uložit změny</button>
             <button className="btn" onClick={cancelEdit} style={{ marginLeft: 8 }}>Zrušit</button>

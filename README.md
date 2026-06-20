@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.7 — Editace modulu: checklist veličin ve sloupcích (3–4 dle šířky) + kompletní katalog co umíme u daného hybridu/typu sledovat; limit 20 zatržených (počitadlo + text „další za příplatek", přes limit nejde zaškrtnout).
+
 ## v0.31.6 — Hybrid baterie per-pack: napětí/proud/výkon zvlášť pro Bat1 i Bat2 (místo matoucího součtového proudu). Editace modulu: checklist „Co zobrazovat" (z reálně měřených veličin) — skryté metriky se neukazují na dashboardu (uloženo v params.hidden_metrics).
 
 ## v0.31.5 — Hybrid Solis: SOC obou baterií zvlášť (battery_soc_1/2) vedle průměru; volba „Počet baterií" (Auto/1/2) — auto zahrne pack jen když reálně odpovídá. Registry z probe potvrzeny (PV 33057, síť 33130, pack1 331xx, pack2 342xx).
