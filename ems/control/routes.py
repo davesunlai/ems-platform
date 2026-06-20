@@ -10,7 +10,7 @@ from ems.api.db import get_pool
 from ems.modules import db as modules_db
 from . import db
 from .goodwe_control import read_battery_mode, set_battery_mode
-from .models import BatteryModeCommand, CommandResult
+from .models import BatteryModeCommand, CommandRequest, CommandResult, SOLIS_ACTIONS
 
 logger = logging.getLogger("ems.control")
 router = APIRouter(prefix="/api/control", tags=["control"])
@@ -87,3 +87,52 @@ async def set_mode(module_id: str, body: BatteryModeCommand,
 @router.get("/audit")
 async def audit(_: dict = Depends(require_permission("control"))):
     return await db.list_recent()
+
+
+# --- Solis (a další adaptéry s jediným spojením): povely jdou FRONTOU,
+#     kterou vyřizuje kolektor (drží jediné Modbus spojení na měnič). ---
+async def _get_solis(module_id: str):
+    mods = await modules_db.list_all()
+    m = next((x for x in mods if x.id == module_id), None)
+    if not m:
+        raise HTTPException(status_code=404, detail="Modul nenalezen")
+    if m.adapter != "solis":
+        raise HTTPException(status_code=400, detail="Fronta povelů je zatím pro adaptér solis")
+    if not m.enabled:
+        raise HTTPException(status_code=400, detail="Modul není aktivní (čtecí)")
+    return m
+
+
+def _validate_command(action: str, params: dict) -> None:
+    if action not in SOLIS_ACTIONS:
+        raise HTTPException(status_code=400, detail=f"Neznámý povel '{action}'")
+    if action in ("force_charge", "force_discharge"):
+        p = params.get("power")
+        if p is not None and (not isinstance(p, int) or not (0 <= p <= 65535)):
+            raise HTTPException(status_code=400, detail="power musí být celé číslo 0–65535 (syrová hodnota registru)")
+    if action == "set_work_mode" and not isinstance(params.get("word"), int):
+        raise HTTPException(status_code=400, detail="set_work_mode vyžaduje celé číslo 'word'")
+    if action == "write_holding":
+        if not isinstance(params.get("addr"), int) or not isinstance(params.get("value"), int):
+            raise HTTPException(status_code=400, detail="write_holding vyžaduje celé 'addr' a 'value'")
+
+
+@router.post("/{module_id}/command")
+async def enqueue_command(module_id: str, body: CommandRequest,
+                          user: dict = Depends(require_permission("control"))):
+    """Zařadí povel do fronty; kolektor ho provede do ~jednoho cyklu (~10 s).
+    Stav lze pollovat na /api/control/command/{id}."""
+    await _get_solis(module_id)
+    _validate_command(body.action, body.params)
+    await db.ensure_queue_schema()
+    cmd_id = await db.enqueue(module_id, body.action, body.params, user["username"])
+    await db.record(user["username"], module_id, body.action, body.params, True, {"queued": cmd_id})
+    return {"id": cmd_id, "status": "pending"}
+
+
+@router.get("/command/{cmd_id}")
+async def command_status(cmd_id: int, _: dict = Depends(require_permission("control"))):
+    c = await db.get_command(cmd_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Povel nenalezen")
+    return c

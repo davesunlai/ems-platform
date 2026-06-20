@@ -50,6 +50,8 @@ async def list_devices() -> list[dict]:
                    max(l.name)  AS locality,
                    max(m.locality_id) AS locality_id,
                    max(m.params->>'hidden_metrics') AS hidden_metrics,
+                   max(m.params->>'control_enabled') AS control_enabled,
+                   max(m.adapter) AS adapter,
                    max(s.time)  AS last_seen,
                    (max(s.time) > now() - interval '5 minutes') AS active
             FROM samples s
@@ -66,6 +68,8 @@ async def list_devices() -> list[dict]:
         "locality": r["locality"],
         "locality_id": r["locality_id"],
         "hidden_metrics": json.loads(r["hidden_metrics"]) if r["hidden_metrics"] else [],
+        "control_enabled": json.loads(r["control_enabled"]) if r["control_enabled"] else [],
+        "adapter": r["adapter"],
         "last_seen": r["last_seen"].isoformat() if r["last_seen"] else None,
         "active": bool(r["active"]),
     } for r in rows]

@@ -72,7 +72,96 @@ function fmt(metric, m) {
   return { value: typeof v === "number" ? v.toFixed(1) : v, unit: u };
 }
 
-function DevicePanel({ id, locality, lastSeen, hidden = [] }) {
+function ControlPanel({ id, control }) {
+  const [canControl, setCanControl] = useState(false);
+  const [power, setPower] = useState(1000);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.me().then((u) => alive && setCanControl((u.permissions || []).includes("control"))).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  if (!canControl) return null;
+  const has = (k) => control.includes(k);
+
+  const send = async (action, params, label) => {
+    setBusy(true); setConfirm(null); setStatus({ state: "pending", text: `Odesílám: ${label}…` });
+    try {
+      const { id: cmdId } = await api.enqueueCommand(id, action, params);
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const c = await api.commandStatus(cmdId);
+        if (c.status === "done") {
+          const rb = c.result?.force?.readback ?? c.result?.readback;
+          setStatus({ state: "done", text: `✓ ${label} provedeno${rb != null ? ` (registr=${rb})` : ""}` }); break;
+        }
+        if (c.status === "error") { setStatus({ state: "error", text: `✗ ${label}: ${c.result?.error || "chyba"}` }); break; }
+        setStatus({ state: "pending", text: `Čekám na provedení kolektorem (#${cmdId})…` });
+      }
+    } catch (e) {
+      setStatus({ state: "error", text: `✗ ${e.message || e}` });
+    } finally { setBusy(false); }
+  };
+
+  const ask = (action, params, label) => setConfirm({ action, params, label });
+  const btn = { padding: "7px 12px", borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "var(--card, #161b22)", color: "var(--fg)" };
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", margin: "8px 0", background: "color-mix(in srgb, var(--amber, #d29922) 6%, transparent)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+        <Icon name="sliders" size={15} /> Ovládání
+      </div>
+      <p className="muted" style={{ fontSize: 11.5, margin: "0 0 8px" }}>
+        ⚠️ Výkon je <strong>syrová hodnota registru</strong> (scale u 3f modelu ověřujeme) — začni nízko a sleduj výkon baterie výše.
+        <strong> Stop</strong> kdykoli vrátí měnič do normálu (Self-Use).
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        {(has("force_charge") || has("force_discharge")) && (
+          <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+            výkon
+            <input type="number" value={power} onChange={(e) => setPower(e.target.value)} disabled={busy}
+                   style={{ width: 90, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" }} />
+          </label>
+        )}
+        {has("force_charge") && (
+          <button style={{ ...btn, borderColor: "var(--green)" }} disabled={busy}
+                  onClick={() => ask("force_charge", { power: Number(power) }, `Nabíjet teď (výkon ${power})`)}>
+            <Icon name="bolt" size={13} style={{ marginRight: 4, verticalAlign: "-2px" }} />Nabíjet teď
+          </button>
+        )}
+        {has("force_discharge") && (
+          <button style={{ ...btn, borderColor: "var(--amber, #d29922)" }} disabled={busy}
+                  onClick={() => ask("force_discharge", { power: Number(power) }, `Vybíjet teď (výkon ${power})`)}>
+            <Icon name="bolt" size={13} style={{ marginRight: 4, verticalAlign: "-2px" }} />Vybíjet teď
+          </button>
+        )}
+        <button style={{ ...btn, borderColor: "#e06c75", color: "#e06c75" }} disabled={busy}
+                onClick={() => ask("stop", {}, "Stop (návrat do normálu)")}>
+          <Icon name="power" size={13} style={{ marginRight: 4, verticalAlign: "-2px" }} />Stop
+        </button>
+      </div>
+      {confirm && (
+        <div style={{ marginTop: 8, padding: 8, border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)" }}>
+          <div style={{ fontSize: 13, marginBottom: 6 }}>Opravdu poslat do měniče: <strong>{confirm.label}</strong>?</div>
+          <button style={{ ...btn, borderColor: "var(--green)", marginRight: 8 }} onClick={() => send(confirm.action, confirm.params, confirm.label)}>Potvrdit</button>
+          <button style={btn} onClick={() => setConfirm(null)}>Zrušit</button>
+        </div>
+      )}
+      {status && (
+        <div style={{ marginTop: 8, fontSize: 12.5,
+                      color: status.state === "error" ? "#e06c75" : status.state === "done" ? "var(--green)" : "var(--muted)" }}>
+          {status.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [] }) {
   const [latest, setLatest] = useState(null);
   const [hist, setHist] = useState([]);
   const [chartMetric, setChartMetric] = useState("pv_power");
@@ -178,6 +267,7 @@ function DevicePanel({ id, locality, lastSeen, hidden = [] }) {
           </div>
         </div>
       ))}
+      {adapter === "solis" && control.length > 0 && <ControlPanel id={id} control={control} />}
       {active && (
       <div className="chart-wrap">
         <div className="chart-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -399,7 +489,7 @@ export default function Dashboard() {
         </h2>
         <LocalityChart deviceIds={ids} />
         {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}
-        {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} />)}
+        {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} adapter={d.adapter} control={d.control_enabled || []} />)}
       </section>
     </main>
   );

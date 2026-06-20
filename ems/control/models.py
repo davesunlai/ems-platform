@@ -24,3 +24,12 @@ class CommandResult(BaseModel):
     requested: str
     confirmed_mode: str | None = None
     message: str = ""
+
+
+# Povely fronty (Solis přes kolektor — jediné Modbus spojení).
+SOLIS_ACTIONS = {"force_charge", "force_discharge", "stop", "set_work_mode", "write_holding", "read_holding"}
+
+
+class CommandRequest(BaseModel):
+    action: str
+    params: dict = Field(default_factory=dict)

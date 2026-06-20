@@ -51,6 +51,9 @@ export const api = {
   updateModule: (id, patch) => request(`/api/admin/modules/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
   deleteModule: (id) => request(`/api/admin/modules/${encodeURIComponent(id)}`, { method: "DELETE" }),
   controlModules: () => request("/api/control/modules"),
+  enqueueCommand: (id, action, params = {}) =>
+    request(`/api/control/${encodeURIComponent(id)}/command`, { method: "POST", body: { action, params } }),
+  commandStatus: (cmdId) => request(`/api/control/command/${cmdId}`),
   listOutputs: () => request("/api/outputs"),
   createOutput: (o) => request("/api/outputs", { method: "POST", body: o }),
   updateOutput: (id, patch) => request(`/api/outputs/${id}`, { method: "PUT", body: patch }),

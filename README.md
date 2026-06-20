@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.16 — Řízení Solis přes portál (fáze C): povelová FRONTA (control_queue) vyřizovaná kolektorem (drží jediné Modbus spojení) — dispatch force_charge/force_discharge/stop/set_work_mode/write_holding/read_holding. API POST /api/control/{id}/command + GET /api/control/command/{id}. Ovládací panel na dashboardu (gating dle control_enabled + oprávnění control): Nabíjet/Vybíjet teď (syrový výkon — scale ověřujeme), Stop, potvrzení + polling stavu. Výkon 43136 scale zatím syrový.
+
 ## v0.31.15 — Souhrn lokality: výrazná aktuální SPOTŘEBA (dopočet z bilance FVE + síť − baterie), přejmenováno „součet" -> „FVE". aggregate_now vrací load_w/grid_w/battery_w.
 
 ## v0.31.14 — Řízení (fáze C, krok 1): zápisová vrstva adaptéru Solis — write_holding s ověřením zpětným čtením, set_force(0/1/2 + výkon), set_work_mode; read_holding pro stav. Nový write-probe (ems.adapters.solis.wprobe) pro BEZPEČNÉ ověření řídicích registrů na reálném kuse (čte stav; zápis jen explicitně + potvrzení). ADR 0008. UI/API ovládání až po ověření registrů.

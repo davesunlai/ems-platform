@@ -197,6 +197,22 @@ class SolisAdapter:
         """Nastaví pracovní režim (CTRL_WORK_MODE, bitfield; 0x21 = Self-Use)."""
         return await self.write_holding(CTRL_WORK_MODE, int(word))
 
+    async def read_controls(self) -> dict:
+        """Načte aktuální stav všech řídicích registrů (pro UI / ověření)."""
+        from .mapping import CONTROL_REGISTERS
+
+        def _run() -> dict:
+            if self._client is None or not getattr(self._client, "connected", False):
+                self._connect_sync()
+            out = {}
+            for _label, addr in CONTROL_REGISTERS:
+                try:
+                    out[str(addr)] = self._read_holding(addr, 1)[0]
+                except Exception:
+                    out[str(addr)] = None
+            return out
+        return await asyncio.to_thread(_run)
+
     def _load(self, blocks: list) -> dict:
         """Načte zadané bloky do mapy {adresa: u16}.
 

@@ -23,6 +23,7 @@ from ems.market import db as market_db
 from ems.market.spot import fetch_current_price_czk, fetch_day_slots
 from ems.automation import db as automation_db
 from ems.automation.engine import evaluate_all
+from ems.control import db as control_db
 from ems.outputs.engine import evaluate_outputs
 from ems.outages.service import refresh_all as refresh_outages_all
 from .config import build_adapter, build_sink
@@ -57,6 +58,49 @@ async def poll_device(adapter, sink) -> None:
             await sink.write_states(reading.device_id, reading.states)
     except Exception as exc:
         logger.warning("Čtení '%s' selhalo: %s", getattr(adapter, "device_id", "?"), exc)
+
+
+async def dispatch_command(adapter, action: str, params: dict) -> dict:
+    """Provede povel přes adaptér (drží jediné Modbus spojení). Vrací výsledek."""
+    p = params or {}
+    if action == "force_charge":
+        return await adapter.set_force(1, p.get("power"))
+    if action == "force_discharge":
+        return await adapter.set_force(2, p.get("power"))
+    if action == "stop":
+        return await adapter.set_force(0)
+    if action == "set_work_mode":
+        return await adapter.set_work_mode(int(p["word"]))
+    if action == "write_holding":
+        return await adapter.write_holding(int(p["addr"]), int(p["value"]))
+    if action == "read_holding":
+        regs = await adapter.read_holding(int(p["addr"]), int(p.get("count", 1)))
+        return {"addr": int(p["addr"]), "values": regs}
+    raise ValueError(f"neznámý povel '{action}'")
+
+
+async def process_queue(active: dict) -> None:
+    """Vyřídí čekající povely pro aktivní moduly — SEKVENČNĚ v rámci cyklu,
+    takže nekoliduje se čtením (jediné spojení na měnič)."""
+    ids = list(active)
+    if not ids:
+        return
+    try:
+        cmds = await control_db.fetch_pending(ids)
+    except Exception as exc:
+        logger.debug("Načtení fronty povelů selhalo: %s", exc)
+        return
+    for c in cmds:
+        adapter = (active.get(c["module_id"]) or {}).get("adapter")
+        if adapter is None:
+            continue
+        try:
+            res = await dispatch_command(adapter, c["action"], c["params"] or {})
+            await control_db.complete(c["id"], True, res if isinstance(res, dict) else {"result": res})
+            logger.info("Povel #%s '%s' (%s) OK: %s", c["id"], c["action"], c["module_id"], res)
+        except Exception as exc:
+            await control_db.complete(c["id"], False, {"error": str(exc)})
+            logger.warning("Povel #%s '%s' (%s) selhal: %s", c["id"], c["action"], c["module_id"], exc)
 
 
 async def _connect_module(m):
@@ -122,6 +166,7 @@ async def run() -> None:
         await market_db.ensure_schema()
         await market_db.ensure_history_schema()
         await automation_db.ensure_schema()
+        await control_db.ensure_queue_schema()
     except Exception as exc:
         logger.error("Inicializace registru modulů selhala: %s", exc)
 
@@ -148,6 +193,7 @@ async def run() -> None:
             await reconcile(active, sink)
             if active:
                 await asyncio.gather(*(poll_device(e["adapter"], sink) for e in active.values()))
+                await process_queue(active)
             await tick_market_and_automation(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
