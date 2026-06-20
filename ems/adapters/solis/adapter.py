@@ -125,17 +125,33 @@ class SolisAdapter:
         return rr.registers
 
     def _load(self, blocks: list) -> dict:
-        """Načte zadané bloky do mapy {adresa: u16}. Selhání bloku se přeskočí."""
+        """Načte zadané bloky do mapy {adresa: u16}.
+
+        Když blok selže (např. měnič odmítne rozsah kvůli neimplementovanému
+        registru), rozdělí ho na půlky a zkusí znovu — takže jeden vadný
+        registr neshodí celý blok, ale za normálu jede 1 dotaz na blok.
+        """
         if self._client is None or not getattr(self._client, "connected", False):
             self._connect_sync()
         cache: dict = {}
-        for start, count in blocks:
+
+        def read_range(start: int, count: int) -> None:
+            if count <= 0:
+                return
             try:
                 regs = self._read_block(start, count)
                 for i, v in enumerate(regs):
                     cache[start + i] = v
             except Exception as exc:
-                logger.debug("Solis '%s' blok %s+%s: %s", self.device_id, start, count, exc)
+                if count == 1:
+                    logger.debug("Solis '%s' reg %s nepřečten: %s", self.device_id, start, exc)
+                    return
+                half = count // 2
+                read_range(start, half)
+                read_range(start + half, count - half)
+
+        for start, count in blocks:
+            read_range(start, count)
         return cache
 
     @staticmethod
