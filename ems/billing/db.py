@@ -82,6 +82,7 @@ async def monthly_energy(device_ids: list[str], start: date, end: date) -> list[
         grid = await conn.fetch(_GRID_SQL, device_ids, start, end)
         pv = await conn.fetch(_METRIC_SQL, device_ids, start, end, "pv_power")
         load = await conn.fetch(_METRIC_SQL, device_ids, start, end, "load_power")
+        bat = await conn.fetch(_METRIC_SQL, device_ids, start, end, "battery_power")
 
     months: dict[str, dict] = {}
     for r in grid:
@@ -90,16 +91,24 @@ async def monthly_energy(device_ids: list[str], start: date, end: date) -> list[
     for r in pv:
         months.setdefault(r["m"], {})["prod_kwh"] = float(r["kwh"] or 0)
     for r in load:
-        months.setdefault(r["m"], {})["cons_kwh"] = float(r["kwh"] or 0)
+        months.setdefault(r["m"], {})["load_kwh"] = float(r["kwh"] or 0)
+    for r in bat:
+        months.setdefault(r["m"], {})["bat_net_kwh"] = float(r["kwh"] or 0)
 
     out = []
     for m in sorted(months):
         d = months[m]
+        prod = d.get("prod_kwh", 0.0)
+        imp = d.get("import_kwh", 0.0)
+        exp = d.get("export_kwh", 0.0)
+        # Spotřeba: přímé load_power (goodwe), jinak bilance FVE+import−export−Δbaterie.
+        load_kwh = d.get("load_kwh", 0.0)
+        cons = load_kwh if load_kwh > 0 else max(0.0, prod + imp - exp - d.get("bat_net_kwh", 0.0))
         out.append({"month": m,
-                    "prod_kwh": round(d.get("prod_kwh", 0.0), 1),
-                    "cons_kwh": round(d.get("cons_kwh", 0.0), 1),
-                    "export_kwh": round(d.get("export_kwh", 0.0), 1),
-                    "import_kwh": round(d.get("import_kwh", 0.0), 1)})
+                    "prod_kwh": round(prod, 1),
+                    "cons_kwh": round(cons, 1),
+                    "export_kwh": round(exp, 1),
+                    "import_kwh": round(imp, 1)})
     return out
 
 

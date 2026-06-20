@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.21 — Billing: Spotřeba se už nepočítá z load_power (Solis ho nedává -> bylo 0), ale z bilance FVE+import−export−Δbaterie (fallback na load_power u goodwe). Vše integrací telemetrie = konzistentní.
+
 ## v0.31.20 — Souhrn lokality zpřehledněn: spotřeba „kW / dnešní kWh" (dopočet spotřeby dne z bilance FVE+import−export−Δbaterie), FVE „kW / dnes Σ kWh" pohromadě stejnou barvou, baterie jako ikonka místo textu. aggregate_now vrací cons_today_kwh.
 
 ## v0.31.19 — Cenění lokality (spot dle OTE / pevný tarif Kč/kWh) volitelné v Zúčtování. Souhrn lokality: u „ze sítě/do sítě" přibyla cena v Kč. Billing tabulka: sloupce „Cena ze sítě" a „Cena do sítě" (spot z spot_history, nebo tarif). OPRAVA: billing import/export byly prohozené vůči konvenci +import/−export (jako v souhrnu) — sjednoceno.
