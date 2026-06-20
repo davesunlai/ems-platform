@@ -27,7 +27,7 @@ export default function Modules() {
   const [editing, setEditing] = useState(null);   // id editovaného modulu, nebo null
 
   const load = () => api.listModules().then(setMods).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
 
   const buildParams = () => {
     if (f.adapter === "goodwe") return { host: f.host, port: Number(f.port) };
@@ -164,15 +164,21 @@ export default function Modules() {
       <div className="panel">
         <h3>Moduly</h3>
         <table>
-          <thead><tr><th>ID</th><th>Název</th><th>Typ</th><th>Adaptér</th><th>Zařízení</th><th>Parametry</th><th>Stav</th><th></th></tr></thead>
+          <thead><tr><th></th><th>ID</th><th>Název</th><th>Typ</th><th>Adaptér</th><th>Zařízení</th><th>Lokalita</th><th>Parametry</th><th>Stav</th><th></th></tr></thead>
           <tbody>
             {mods.map((m) => (
               <tr key={m.id}>
+                <td style={{ width: 18, textAlign: "center" }}>
+                  <span title={m.active ? "aktivní — čerstvá data" : "neaktivní — žádná čerstvá data"}
+                        style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%",
+                                 background: m.active ? "var(--green)" : "#e06c75" }} />
+                </td>
                 <td>{m.id}</td>
                 <td className="muted">{m.name}</td>
                 <td style={{ fontSize: 12 }}>{KIND_LABEL[m.kind] || m.kind}</td>
                 <td className="role">{m.adapter}</td>
                 <td className="muted">{m.device_type}</td>
+                <td className="muted">{m.locality || "—"}</td>
                 <td className="muted" style={{ fontFamily: "var(--mono)", fontSize: 12 }}>
                   {m.params.host ? `${m.params.host}:${m.params.port}` : JSON.stringify(m.params)}
                 </td>

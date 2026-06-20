@@ -49,6 +49,35 @@ async def list_all() -> list[Module]:
     return [_row_to_module(r) for r in rows]
 
 
+async def list_all_with_status() -> list[dict]:
+    """Moduly + název lokality + příznak aktivity (čerstvá telemetrie < 5 min)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT m.*,
+                   l.name AS locality,
+                   (max(s.time) > now() - interval '5 minutes') AS active,
+                   max(s.time) AS last_seen
+            FROM modules m
+            LEFT JOIN localities l ON l.id = m.locality_id
+            LEFT JOIN samples s    ON s.device_id = m.id
+            GROUP BY m.id, l.name
+            ORDER BY m.id
+            """
+        )
+    out = []
+    for r in rows:
+        d = _row_to_module(r).model_dump()
+        d["device_type"] = d["device_type"].value if hasattr(d["device_type"], "value") else d["device_type"]
+        d["kind"] = d["kind"].value if hasattr(d["kind"], "value") else d["kind"]
+        d["locality"] = r["locality"]
+        d["active"] = bool(r["active"]) if r["active"] is not None else False
+        d["last_seen"] = r["last_seen"].isoformat() if r["last_seen"] else None
+        out.append(d)
+    return out
+
+
 async def list_enabled_reads() -> list[Module]:
     pool = await get_pool()
     async with pool.acquire() as conn:

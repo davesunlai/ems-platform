@@ -17,9 +17,9 @@ async def adapters(_: dict = Depends(require_permission("admin"))) -> list[str]:
     return ADAPTERS
 
 
-@router.get("/modules", response_model=list[Module])
+@router.get("/modules")
 async def list_modules(_: dict = Depends(require_permission("admin"))):
-    return await db.list_all()
+    return await db.list_all_with_status()
 
 
 @router.post("/modules", response_model=Module, status_code=201)
