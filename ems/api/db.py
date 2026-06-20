@@ -54,6 +54,8 @@ async def list_devices() -> list[dict]:
             LEFT JOIN modules m    ON m.id = s.device_id
             LEFT JOIN localities l ON l.id = m.locality_id
             GROUP BY s.device_id
+            HAVING (max(s.time) > now() - interval '5 minutes')
+                OR max(m.locality_id) IS NOT NULL
             ORDER BY s.device_id
             """
         )

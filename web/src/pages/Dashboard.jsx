@@ -3,6 +3,42 @@ import { api } from "../api";
 import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
 
+const norm = (s) => (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+function SearchSelect({ value, options, onChange, placeholder = "— vyber —", allowEmpty = false, emptyLabel }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const sel = options.find((o) => String(o.id) === String(value));
+  const filtered = q ? options.filter((o) => norm(o.label).includes(norm(q))) : options;
+  const item = { padding: "6px 10px", cursor: "pointer", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        value={open ? q : (sel ? sel.label : "")}
+        placeholder={placeholder}
+        onFocus={() => { setOpen(true); setQ(""); }}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && (
+        <div style={{ position: "absolute", zIndex: 30, top: "100%", left: 0, right: 0, maxHeight: 240, overflowY: "auto",
+          background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 2, boxShadow: "0 8px 22px rgba(0,0,0,.45)" }}>
+          {allowEmpty && (
+            <div onMouseDown={() => { onChange(""); setOpen(false); }} style={{ ...item, color: "var(--muted)" }}>{emptyLabel || placeholder}</div>
+          )}
+          {filtered.map((o) => (
+            <div key={o.id} onMouseDown={() => { onChange(String(o.id)); setOpen(false); }}
+              style={{ ...item, background: String(o.id) === String(value) ? "var(--panel-2)" : "transparent" }}>
+              {o.label}
+            </div>
+          ))}
+          {!filtered.length && <div style={{ ...item, color: "var(--muted)" }}>nic nenalezeno</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const LABELS = {
   pv_power: "FVE výkon", load_power: "Spotřeba", battery_power: "Baterie",
   battery_soc: "Baterie SoC", grid_power: "Síť", active_power: "Činný výkon",
@@ -313,6 +349,7 @@ function BillingTable({ localityId }) {
 export default function Dashboard() {
   const [devices, setDevices] = useState(null);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState(() => localStorage.getItem("ems.dash.locality") || "");
 
   useEffect(() => {
     api.devices().then(setDevices).catch((e) => setError(e.message));
@@ -327,23 +364,35 @@ export default function Dashboard() {
   const names = Object.keys(groups).sort((a, b) =>
     a === "—" ? 1 : b === "—" ? -1 : a.localeCompare(b, "cs"));
 
+  // vybraná lokalita: uložená poslední (pokud pořád existuje), jinak první
+  const current = names.includes(selected) ? selected : names[0];
+  const pick = (name) => { if (name) { setSelected(name); localStorage.setItem("ems.dash.locality", name); } };
+
+  const devs = groups[current];
+  const ids = devs.map((d) => d.device_id);
+  const locOptions = names.map((n) => ({ id: n, label: n === "—" ? "Bez lokality" : n }));
+
   return (
     <main>
-      {names.map((name) => {
-        const devs = groups[name];
-        const ids = devs.map((d) => d.device_id);
-        return (
-          <section key={name} style={{ marginBottom: 26 }}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>
-              {name === "—" ? "Bez lokality" : `📍 ${name}`}
-              <LocalityNow deviceIds={ids} />
-            </h2>
-            <LocalityChart deviceIds={ids} />
-            {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}
-            {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} />)}
-          </section>
-        );
-      })}
+      {names.length > 1 && (
+        <div className="panel" style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <strong style={{ fontSize: 14 }}>Lokalita</strong>
+          <div style={{ minWidth: 240, flex: "0 1 360px" }}>
+            <SearchSelect value={current} options={locOptions} allowEmpty={false}
+              placeholder="Hledat lokalitu…" onChange={pick} />
+          </div>
+          <span className="muted" style={{ fontSize: 12 }}>{names.length} lokalit k dispozici</span>
+        </div>
+      )}
+      <section style={{ marginBottom: 26 }}>
+        <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>
+          {current === "—" ? "Bez lokality" : `📍 ${current}`}
+          <LocalityNow deviceIds={ids} />
+        </h2>
+        <LocalityChart deviceIds={ids} />
+        {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}
+        {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} />)}
+      </section>
     </main>
   );
 }

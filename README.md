@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.3 — Solis: čtení odolné proti pádu socketu (jeden vadný registr neshodí hybrid/pack2) + diagnostika `python -m ems.adapters.solis.probe`. Dashboard: neaktivní moduly jen když mají lokalitu; výběr lokality fulltextem s pamatováním poslední (hlavně pro adminy).
+
 ## v0.31.2 — Nový typ zařízení „hybrid": jeden modul ukáže celý střídač (FVE + síť + energie + baterie agregovaně přes oba packy). Solis emituje vše najednou; device_type už nic neomezuje (souhrn jde dle metrik). Backup/load 3f registry zatím nepotvrzené.
 
 ## v0.31.1 — Editace modulu v UI („Upravit": změna IP/portu/názvu přes PATCH) + kolektor reconnectuje modul při změně parametrů za běhu (~10 s, bez restartu). Obsahuje i v0.31.0 (solis adaptér).

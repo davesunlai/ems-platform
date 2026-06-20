@@ -77,12 +77,31 @@ class SolisAdapter:
             self.device_id, self.host, self.port, self.unit, self.device_type, self.battery_pack,
         )
 
+    def _reconnect(self) -> None:
+        try:
+            if self._client is not None:
+                self._client.close()
+        except Exception:
+            pass
+        self._connect_sync()
+
     # --- čtení ---
-    def _read_reg(self, spec: tuple) -> float:
+    def _read_reg(self, spec: tuple, _retry: bool = True) -> float:
         addr, rtype, scale = spec
         count = 2 if rtype in ("u32", "s32") else 1
-        rr = self._client.read_input_registers(addr, count=count, device_id=self.unit)
+        try:
+            rr = self._client.read_input_registers(addr, count=count, device_id=self.unit)
+        except Exception:
+            # výjimka = socket nejspíš spadl (často po předchozím nevalidním čtení
+            # tentýž cyklus). Reconnectni a zkus JEN tento registr ještě jednou,
+            # ať jeden vadný registr neotráví čtení ostatních (hybrid, pack 2…).
+            if _retry:
+                self._reconnect()
+                return self._read_reg(spec, _retry=False)
+            raise
         if rr.isError() or not getattr(rr, "registers", None):
+            # chybová ODPOVĚĎ (např. illegal address) — socket je v pořádku,
+            # další registry půjdou číst dál; jen tento přeskočíme.
             raise IOError(f"čtení registru {addr} selhalo: {rr}")
         return _decode(rr.registers, rtype, scale)
 
