@@ -157,12 +157,24 @@ async def aggregate_now(device_ids: list[str]) -> dict:
             "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
             "  WHERE device_id = ANY($1::text[]) AND metric='battery_soc' AND time > now() - interval '5 minutes'"
             "  ORDER BY device_id, time DESC) t", device_ids)
+        # Dnešní výroba: PŘEDNOST má energy_today (měnič si ho počítá sám -> odolné
+        # proti výpadkům kolektoru). Fallback = max-min kumulativního energy_pv_total
+        # za dnešek (pro adaptéry bez energy_today, např. goodwe).
         kwh = await conn.fetchval(
-            "SELECT COALESCE(SUM(mx - mn),0) FROM ("
-            "  SELECT device_id, MAX(value) mx, MIN(value) mn FROM samples"
+            "WITH et AS ("
+            "  SELECT DISTINCT ON (device_id) device_id, value AS v FROM samples"
+            "  WHERE device_id = ANY($1::text[]) AND metric='energy_today'"
+            "    AND time > now() - interval '15 minutes'"
+            "  ORDER BY device_id, time DESC), "
+            "tot AS ("
+            "  SELECT device_id, MAX(value) - MIN(value) AS v FROM samples"
             "  WHERE device_id = ANY($1::text[]) AND metric='energy_pv_total'"
             "    AND time >= date_trunc('day', now() AT TIME ZONE 'Europe/Prague') AT TIME ZONE 'Europe/Prague'"
-            "  GROUP BY device_id) t", device_ids)
+            "  GROUP BY device_id) "
+            "SELECT COALESCE(SUM(COALESCE(et.v, tot.v, 0)), 0) "
+            "FROM (SELECT unnest($1::text[]) AS device_id) ids "
+            "LEFT JOIN et  ON et.device_id  = ids.device_id "
+            "LEFT JOIN tot ON tot.device_id = ids.device_id", device_ids)
     return {"pv_w": float(pv or 0), "soc": float(soc) if soc is not None else None, "today_kwh": float(kwh or 0)}
 
 

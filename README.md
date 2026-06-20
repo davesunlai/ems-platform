@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.12 — Souhrn lokality „dnes Σ": přednostně bere energy_today z měniče (sám si ho počítá -> odolné proti výpadkům kolektoru), fallback max−min energy_pv_total. Obsahuje i v0.31.11 (fix hidden_metrics).
+
 ## v0.31.11 — OPRAVA: display-only param `hidden_metrics` (z volby „Co zobrazovat") se cpal do konstruktoru adaptéru a shazoval připojení každý cyklus (modul neaktivní). Nyní se u všech adaptérů odfiltruje.
 
 ## v0.31.10 — Solis: když měnič odmítne blok (neimplementovaný registr v rozsahu), čtení blok automaticky rozpůlí a dojede zbytek — jeden vadný registr neshodí ostatní. Za normálu pořád 5 dotazů/cyklus.
