@@ -17,7 +17,7 @@ const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
 function emptyForm() {
   return { id: "", name: "", adapter: "goodwe", device_type: "storage", kind: "source_read",
-           host: "", port: 8899, device_id: 1, battery_pack: 1, pv_peak_w: 16000, battery_capacity_kwh: 52 };
+           host: "", port: 8899, device_id: 1, battery_pack: 1, battery_packs: "auto", pv_peak_w: 16000, battery_capacity_kwh: 52 };
 }
 
 export default function Modules() {
@@ -31,7 +31,12 @@ export default function Modules() {
 
   const buildParams = () => {
     if (f.adapter === "goodwe") return { host: f.host, port: Number(f.port) };
-    if (f.adapter === "solis") return { host: f.host, port: Number(f.port), device_id: Number(f.device_id), battery_pack: Number(f.battery_pack) };
+    if (f.adapter === "solis") {
+      const p = { host: f.host, port: Number(f.port), device_id: Number(f.device_id) };
+      if (f.device_type === "hybrid") p.battery_packs = f.battery_packs;
+      else if (f.device_type === "storage") p.battery_pack = Number(f.battery_pack);
+      return p;
+    }
     if (f.adapter === "mock") return { pv_peak_w: Number(f.pv_peak_w), battery_capacity_kwh: Number(f.battery_capacity_kwh) };
     return {};
   };
@@ -43,7 +48,7 @@ export default function Modules() {
     setF({
       id: m.id, name: m.name || "", adapter: m.adapter, device_type: m.device_type, kind: m.kind,
       host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : 8899),
-      device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1,
+      device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1, battery_packs: p.battery_packs ?? "auto",
       pv_peak_w: p.pv_peak_w ?? 16000, battery_capacity_kwh: p.battery_capacity_kwh ?? 52,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -137,6 +142,16 @@ export default function Modules() {
                 <select value={f.battery_pack} onChange={(e) => setF({ ...f, battery_pack: e.target.value })}>
                   <option value={1}>1</option>
                   <option value={2}>2</option>
+                </select>
+              </div>
+            )}
+            {f.device_type === "hybrid" && (
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Počet baterií</label>
+                <select value={f.battery_packs} onChange={(e) => setF({ ...f, battery_packs: e.target.value })}>
+                  <option value="auto">Auto (najde se)</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
                 </select>
               </div>
             )}

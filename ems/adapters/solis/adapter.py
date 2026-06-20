@@ -51,6 +51,7 @@ class SolisAdapter:
         unit: int = 1,
         device_type: str = "storage",
         battery_pack: int = 1,
+        battery_packs="auto",
         timeout: float = 3.0,
     ) -> None:
         self.device_id = device_id
@@ -59,6 +60,7 @@ class SolisAdapter:
         self.unit = int(unit)            # Modbus device_id / unit (jedno spojení čte vše)
         self.device_type = str(device_type)
         self.battery_pack = int(battery_pack)
+        self.battery_packs = battery_packs   # hybrid: "auto" | 1 | 2 (počet packů)
         self.timeout = float(timeout)
         self._client = None
 
@@ -171,13 +173,22 @@ class SolisAdapter:
                 logger.debug("Solis '%s' grid: %s", self.device_id, exc)
 
         elif dtype == DeviceType.HYBRID.value:
-            # Vše v jednom modulu: FVE + síť + energie + baterie (OBĚ packy agregovaně).
+            # Vše v jednom modulu: FVE + síť + energie + baterie.
+            # Per-pack SOC (battery_soc_1/2) + agregát (průměr SOC, součet výkonu).
             add_system()
+            soc_metric = {1: Metric.BATTERY_SOC_1, 2: Metric.BATTERY_SOC_2}
+            explicit = str(self.battery_packs).isdigit()
+            candidates = ([p for p in range(1, int(self.battery_packs) + 1) if p in BATTERY_PACKS]
+                          if explicit else list(BATTERY_PACKS))   # "auto" -> zkus všechny
             socs, volts, currs, powers = [], [], [], []
-            for pid in BATTERY_PACKS:
+            for pid in candidates:
                 soc, volt, curr = self._read_pack(pid)
-                if soc is not None:
-                    socs.append(soc)
+                # auto: zahrň pack jen když reálně vrací platný SOC (jinak fyzicky není)
+                if soc is None or (not explicit and not (0 < soc <= 100)):
+                    continue
+                if pid in soc_metric:
+                    add(soc_metric[pid], soc)          # battery_soc_1 / battery_soc_2
+                socs.append(soc)
                 if volt is not None:
                     volts.append(volt)
                 if curr is not None:
@@ -185,13 +196,13 @@ class SolisAdapter:
                 if volt is not None and curr is not None:
                     powers.append(volt * curr)
             if socs:
-                add(Metric.BATTERY_SOC, sum(socs) / len(socs))   # průměr packů
+                add(Metric.BATTERY_SOC, sum(socs) / len(socs))   # průměr přes packy (pro souhrn)
             if volts:
-                add(Metric.VOLTAGE, sum(volts) / len(volts))     # paralelní HV bus ≈ stejné
+                add(Metric.VOLTAGE, sum(volts) / len(volts))
             if currs:
-                add(Metric.CURRENT, sum(currs))                  # celkový proud baterie
+                add(Metric.CURRENT, sum(currs))
             if powers:
-                add(Metric.BATTERY_POWER, sum(powers))           # celkový výkon baterie
+                add(Metric.BATTERY_POWER, sum(powers))
             # LOAD_POWER (domácí zátěž) a BACKUP: registry pro 3f model zatím
             # nepotvrzené (brief §9) -> doplníme po živém dočtení proti střídači.
 

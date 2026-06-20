@@ -41,14 +41,15 @@ function SearchSelect({ value, options, onChange, placeholder = "— vyber —",
 
 const LABELS = {
   pv_power: "FVE výkon", load_power: "Spotřeba", battery_power: "Baterie",
-  battery_soc: "Baterie SoC", grid_power: "Síť", active_power: "Činný výkon",
+  battery_soc: "Baterie SoC (Ø)", battery_soc_1: "Baterie 1 SoC", battery_soc_2: "Baterie 2 SoC",
+  grid_power: "Síť", active_power: "Činný výkon",
   reactive_power: "Jalový výkon", frequency: "Frekvence", temperature: "Teplota",
   energy_pv_total: "FVE celkem", energy_import: "Import celkem", energy_export: "Export celkem",
   voltage: "Napětí", current: "Proud",
 };
-const ACCENT = { pv_power: "green", battery_power: "blue", battery_soc: "blue", grid_power: "amber", load_power: "" };
-const CHART_COLOR = { pv_power: "#3fb950", load_power: "#8b949e", battery_power: "#58a6ff", battery_soc: "#58a6ff", grid_power: "#d29922", active_power: "#3fb950" };
-const ORDER = ["pv_power","load_power","battery_power","battery_soc","grid_power","active_power",
+const ACCENT = { pv_power: "green", battery_power: "blue", battery_soc: "blue", battery_soc_1: "blue", battery_soc_2: "blue", grid_power: "amber", load_power: "" };
+const CHART_COLOR = { pv_power: "#3fb950", load_power: "#8b949e", battery_power: "#58a6ff", battery_soc: "#58a6ff", battery_soc_1: "#58a6ff", battery_soc_2: "#7ee787", grid_power: "#d29922", active_power: "#3fb950" };
+const ORDER = ["pv_power","load_power","battery_power","battery_soc","battery_soc_1","battery_soc_2","grid_power","active_power",
                "frequency","temperature","energy_pv_total","energy_import","energy_export"];
 const WIN = [
   { min: 360, label: "6 h" }, { min: 720, label: "12 h" }, { min: 1440, label: "24 h" },
@@ -165,7 +166,7 @@ function DevicePanel({ id, locality, lastSeen }) {
                  style={{ cursor: "pointer", outline: k === chartMetric ? "1.5px solid var(--blue, #58a6ff)" : "none", outlineOffset: 1 }}>
               <div className="label">{LABELS[k] || k}</div>
               <div className="value">{f.value}<span className="unit">{f.unit}</span></div>
-              {k === "battery_soc" && (
+              {k.startsWith("battery_soc") && (
                 <div className="soc-bar"><i style={{ width: `${Math.min(100, Math.max(0, metrics[k].value))}%` }} /></div>
               )}
             </div>
