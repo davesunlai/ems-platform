@@ -27,6 +27,7 @@ class DeviceType(str, Enum):
     STORAGE = "storage"         # BESS, PVE, vodík
     LOAD = "load"               # domácnost, nabíječka, spirály
     GRID_POINT = "grid_point"   # přípojný/měřicí bod
+    HYBRID = "hybrid"           # hybridní střídač: FVE + baterie + síť (+ backup) v jednom
 
 
 class Metric(str, Enum):

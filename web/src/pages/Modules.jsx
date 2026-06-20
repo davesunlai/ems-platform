@@ -12,7 +12,7 @@ const KINDS = [
   { v: "source_write", l: "Zápisový (řízení) — fáze C" },
   { v: "logic", l: "Logika (automatizace) — fáze D" },
 ];
-const DTYPES = ["generation", "storage", "load", "grid_point"];
+const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point"];
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
 function emptyForm() {
@@ -95,7 +95,7 @@ export default function Modules() {
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Adaptér</label>
-            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" ? 502 : a === "goodwe" ? 8899 : f.port }); }}>
+            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" ? 502 : a === "goodwe" ? 8899 : f.port, device_type: a === "solis" ? "hybrid" : f.device_type }); }}>
               {ADAPTERS.map((a) => <option key={a} value={a}>{ADAPTER_LABEL[a] || a}</option>)}
             </select>
           </div>
@@ -131,13 +131,15 @@ export default function Modules() {
               <label>Modbus device_id</label>
               <input value={f.device_id} onChange={(e) => setF({ ...f, device_id: e.target.value })} />
             </div>
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label>Baterie (pack)</label>
-              <select value={f.battery_pack} onChange={(e) => setF({ ...f, battery_pack: e.target.value })}>
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-              </select>
-            </div>
+            {f.device_type === "storage" && (
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Baterie (pack)</label>
+                <select value={f.battery_pack} onChange={(e) => setF({ ...f, battery_pack: e.target.value })}>
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                </select>
+              </div>
+            )}
           </>)}
           {f.adapter === "mock" && (<>
             <div className="field" style={{ marginBottom: 0 }}>

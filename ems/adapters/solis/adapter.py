@@ -86,6 +86,20 @@ class SolisAdapter:
             raise IOError(f"čtení registru {addr} selhalo: {rr}")
         return _decode(rr.registers, rtype, scale)
 
+    def _read_pack(self, pack_id: int):
+        """Vrátí (soc, voltage, current) battery packu; None u nepřečtených."""
+        pack = BATTERY_PACKS.get(pack_id)
+        if not pack:
+            return (None, None, None)
+        out = []
+        for field in ("soc", "voltage", "current"):
+            try:
+                out.append(self._read_reg(pack[field]))
+            except Exception as exc:
+                logger.debug("Solis '%s' pack%s %s: %s", self.device_id, pack_id, field, exc)
+                out.append(None)
+        return tuple(out)
+
     async def read(self) -> Reading:
         return await asyncio.to_thread(self._read_sync)
 
@@ -98,53 +112,69 @@ class SolisAdapter:
         def add(metric: Metric, value: float) -> None:
             measurements.append(Measurement(metric=metric, value=float(value), unit=UNIT_OF[metric]))
 
-        def try_metric(metric: Metric, spec: tuple, transform=None) -> None:
-            try:
-                v = self._read_reg(spec)
-                add(metric, transform(v) if transform else v)
-            except Exception as exc:
-                logger.debug("Solis '%s': reg %s (%s) nepřečten: %s", self.device_id, spec[0], metric, exc)
+        def add_system() -> None:
+            # FVE + celková energie + síť (Solis +export/−import -> EMS +import/−export => OTOČIT)
+            for metric, spec, transform in (
+                (Metric.PV_POWER, REG_PV_POWER, None),
+                (Metric.ENERGY_PV_TOTAL, REG_ENERGY_TOTAL, None),
+                (Metric.GRID_POWER, REG_GRID_METER, lambda v: -v),
+            ):
+                try:
+                    v = self._read_reg(spec)
+                    add(metric, transform(v) if transform else v)
+                except Exception as exc:
+                    logger.debug("Solis '%s': reg %s (%s) nepřečten: %s", self.device_id, spec[0], metric, exc)
 
-        dtype = self.device_type
-
-        if dtype == DeviceType.GENERATION.value:
-            try_metric(Metric.PV_POWER, REG_PV_POWER)
-            try_metric(Metric.ENERGY_PV_TOTAL, REG_ENERGY_TOTAL)
-            # Solis +export/−import  ->  EMS +import/−export  => OTOČIT znaménko
-            try_metric(Metric.GRID_POWER, REG_GRID_METER, transform=lambda v: -v)
-
-        elif dtype == DeviceType.STORAGE.value:
-            pack = BATTERY_PACKS.get(self.battery_pack, BATTERY_PACKS[1])
-            soc = volt = curr = None
-            try:
-                soc = self._read_reg(pack["soc"])
-            except Exception as exc:
-                logger.debug("Solis SOC pack%s: %s", self.battery_pack, exc)
-            try:
-                volt = self._read_reg(pack["voltage"])
-            except Exception as exc:
-                logger.debug("Solis U pack%s: %s", self.battery_pack, exc)
-            try:
-                curr = self._read_reg(pack["current"])
-            except Exception as exc:
-                logger.debug("Solis I pack%s: %s", self.battery_pack, exc)
-
+        def add_pack(pack_id: int) -> None:
+            soc, volt, curr = self._read_pack(pack_id)
             if soc is not None:
                 add(Metric.BATTERY_SOC, soc)
             if volt is not None:
                 add(Metric.VOLTAGE, volt)
             if curr is not None:
                 add(Metric.CURRENT, curr)
-            # battery_power = U*I (W); znaménko nese proud: + nabíjení / − vybíjení
-            # (shodné s EMS i goodwe — neotáčíme)
+            # battery_power = U*I (W); znaménko nese proud: + nabíjení / − vybíjení (shodné s EMS)
             if volt is not None and curr is not None:
                 add(Metric.BATTERY_POWER, volt * curr)
 
-        elif dtype == DeviceType.GRID_POINT.value:
-            try_metric(Metric.GRID_POWER, REG_GRID_METER, transform=lambda v: -v)
+        dtype = self.device_type
 
-        # LOAD_POWER: registr výkonu domácí zátěže není pro 3f model potvrzen
-        # (brief §9 — jednofázoví kandidáti nesedí). Doplníme po živém dočtení.
+        if dtype == DeviceType.GENERATION.value:
+            add_system()
+
+        elif dtype == DeviceType.STORAGE.value:
+            add_pack(self.battery_pack)
+
+        elif dtype == DeviceType.GRID_POINT.value:
+            try:
+                add(Metric.GRID_POWER, -self._read_reg(REG_GRID_METER))
+            except Exception as exc:
+                logger.debug("Solis '%s' grid: %s", self.device_id, exc)
+
+        elif dtype == DeviceType.HYBRID.value:
+            # Vše v jednom modulu: FVE + síť + energie + baterie (OBĚ packy agregovaně).
+            add_system()
+            socs, volts, currs, powers = [], [], [], []
+            for pid in BATTERY_PACKS:
+                soc, volt, curr = self._read_pack(pid)
+                if soc is not None:
+                    socs.append(soc)
+                if volt is not None:
+                    volts.append(volt)
+                if curr is not None:
+                    currs.append(curr)
+                if volt is not None and curr is not None:
+                    powers.append(volt * curr)
+            if socs:
+                add(Metric.BATTERY_SOC, sum(socs) / len(socs))   # průměr packů
+            if volts:
+                add(Metric.VOLTAGE, sum(volts) / len(volts))     # paralelní HV bus ≈ stejné
+            if currs:
+                add(Metric.CURRENT, sum(currs))                  # celkový proud baterie
+            if powers:
+                add(Metric.BATTERY_POWER, sum(powers))           # celkový výkon baterie
+            # LOAD_POWER (domácí zátěž) a BACKUP: registry pro 3f model zatím
+            # nepotvrzené (brief §9) -> doplníme po živém dočtení proti střídači.
 
         return Reading(device_id=self.device_id, timestamp=utcnow(), measurements=measurements)
 
