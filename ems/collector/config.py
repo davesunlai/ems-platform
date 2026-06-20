@@ -19,7 +19,7 @@ def build_adapter(device: Device) -> TelemetryAdapter:
     """Vytvoří instanci adaptéru podle device.adapter. Sem se přidávají nové typy."""
     name = device.adapter.lower()
     # Klíče určené jen pro UI/zobrazení — do konstruktoru adaptéru NEPATŘÍ.
-    DISPLAY_ONLY = {"hidden_metrics"}
+    DISPLAY_ONLY = {"hidden_metrics", "control_enabled"}
     params = {k: v for k, v in device.params.items() if k not in DISPLAY_ONLY}
     if name == "mock":
         from ems.adapters.goodwe import MockInverterAdapter

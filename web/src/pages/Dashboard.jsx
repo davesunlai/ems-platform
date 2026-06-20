@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
 import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
+import Icon from "../components/Icon";
+import { METRIC_LABEL as LABELS, iconFor, groupMetrics } from "../metrics";
 
 const norm = (s) => (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -39,30 +41,8 @@ function SearchSelect({ value, options, onChange, placeholder = "— vyber —",
   );
 }
 
-const LABELS = {
-  pv_power: "FVE výkon", load_power: "Spotřeba", battery_power: "Baterie",
-  battery_soc: "Baterie SoC (Ø)", battery_soc_1: "Baterie 1 SoC", battery_soc_2: "Baterie 2 SoC",
-  battery_voltage_1: "Baterie 1 napětí", battery_voltage_2: "Baterie 2 napětí",
-  battery_current_1: "Baterie 1 proud", battery_current_2: "Baterie 2 proud",
-  battery_power_1: "Baterie 1 výkon", battery_power_2: "Baterie 2 výkon",
-  battery_power_1: "Baterie 1 výkon", battery_power_2: "Baterie 2 výkon",
-  battery_soh_1: "Baterie 1 SOH", battery_soh_2: "Baterie 2 SOH",
-  battery_temp_1: "Baterie 1 teplota", battery_temp_2: "Baterie 2 teplota",
-  energy_today: "FVE dnes",
-  grid_voltage_l1: "Síť napětí L1", grid_voltage_l2: "Síť napětí L2", grid_voltage_l3: "Síť napětí L3",
-  grid_power: "Síť", active_power: "Činný výkon",
-  reactive_power: "Jalový výkon", frequency: "Frekvence", temperature: "Teplota",
-  energy_pv_total: "FVE celkem", energy_import: "Import celkem", energy_export: "Export celkem",
-  temperature: "Teplota měniče",
-  voltage: "Napětí", current: "Proud",
-};
 const ACCENT = { pv_power: "green", battery_power: "blue", battery_soc: "blue", battery_soc_1: "blue", battery_soc_2: "blue", grid_power: "amber", load_power: "" };
 const CHART_COLOR = { pv_power: "#3fb950", load_power: "#8b949e", battery_power: "#58a6ff", battery_soc: "#58a6ff", battery_soc_1: "#58a6ff", battery_soc_2: "#7ee787", grid_power: "#d29922", active_power: "#3fb950" };
-const ORDER = ["pv_power","load_power","battery_power","battery_soc",
-               "battery_soc_1","battery_voltage_1","battery_current_1","battery_power_1","battery_soh_1","battery_temp_1",
-               "battery_soc_2","battery_voltage_2","battery_current_2","battery_power_2","battery_soh_2","battery_temp_2",
-               "grid_power","grid_voltage_l1","grid_voltage_l2","grid_voltage_l3","active_power",
-               "frequency","temperature","energy_pv_total","energy_today","energy_import","energy_export"];
 const WIN = [
   { min: 360, label: "6 h" }, { min: 720, label: "12 h" }, { min: 1440, label: "24 h" },
   { min: 4320, label: "3 dny" }, { min: 10080, label: "7 dní" }, { min: 20160, label: "14 dní" },
@@ -140,8 +120,26 @@ function DevicePanel({ id, locality, lastSeen, hidden = [] }) {
   const mode = latest.states?.operation_mode;
   const auto = latest.states?.automation;
   const forcing = (mode && !["GENERAL", "SELF_USE"].includes(mode)) || !!auto;
-  const keys = ORDER.filter((k) => k in metrics).concat(Object.keys(metrics).filter((k) => !ORDER.includes(k)))
-                    .filter((k) => !hidden.includes(k));
+  const present = Object.keys(metrics).filter((k) => !hidden.includes(k));
+  const groups = groupMetrics(present);
+
+  const renderCard = (k) => {
+    const f = fmt(k, metrics[k]);
+    return (
+      <div key={k} className={`card ${ACCENT[k] ? "accent-" + ACCENT[k] : ""}`}
+           onClick={() => { picked.current = true; setChartMetric(k); }}
+           title="Zobrazit v grafu"
+           style={{ cursor: "pointer", outline: k === chartMetric ? "1.5px solid var(--blue, #58a6ff)" : "none", outlineOffset: 1 }}>
+        <div className="label" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <Icon name={iconFor(k)} size={14} style={{ opacity: 0.65 }} />{LABELS[k] || k}
+        </div>
+        <div className="value">{f.value}<span className="unit">{f.unit}</span></div>
+        {k.startsWith("battery_soc") && (
+          <div className="soc-bar"><i style={{ width: `${Math.min(100, Math.max(0, metrics[k].value))}%` }} /></div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <section className="device">
@@ -169,23 +167,17 @@ function DevicePanel({ id, locality, lastSeen, hidden = [] }) {
           })()}
         </div>
       )}
-      <div className="cards">
-        {keys.map((k) => {
-          const f = fmt(k, metrics[k]);
-          return (
-            <div key={k} className={`card ${ACCENT[k] ? "accent-" + ACCENT[k] : ""}`}
-                 onClick={() => { picked.current = true; setChartMetric(k); }}
-                 title="Zobrazit v grafu"
-                 style={{ cursor: "pointer", outline: k === chartMetric ? "1.5px solid var(--blue, #58a6ff)" : "none", outlineOffset: 1 }}>
-              <div className="label">{LABELS[k] || k}</div>
-              <div className="value">{f.value}<span className="unit">{f.unit}</span></div>
-              {k.startsWith("battery_soc") && (
-                <div className="soc-bar"><i style={{ width: `${Math.min(100, Math.max(0, metrics[k].value))}%` }} /></div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {groups.map((g) => (
+        <div key={g.id} style={{ marginBottom: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600,
+                        textTransform: "uppercase", letterSpacing: 0.4, opacity: 0.55, margin: "8px 2px 4px" }}>
+            <Icon name={g.icon} size={13} /> {g.label}
+          </div>
+          <div className="cards">
+            {g.items.map(renderCard)}
+          </div>
+        </div>
+      ))}
       {active && (
       <div className="chart-wrap">
         <div className="chart-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>

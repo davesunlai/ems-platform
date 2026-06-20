@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.13 — UI: ikony u veličin (teploměr u teploty atd.) v editaci i na dashboardu, veličiny seskupené (FVE / Síť / Měnič / Baterie 1/2) v editaci i dashboardu, nová sekce „Ovládání a konfigurace" se zatržítky (zápisová vrstva = příprava, fáze C; ukládá se do control_enabled). Sdílené definice web/src/metrics.js + komponenta Icon.jsx. control_enabled odfiltrován z konstruktoru adaptéru.
+
 ## v0.31.12 — Souhrn lokality „dnes Σ": přednostně bere energy_today z měniče (sám si ho počítá -> odolné proti výpadkům kolektoru), fallback max−min energy_pv_total. Obsahuje i v0.31.11 (fix hidden_metrics).
 
 ## v0.31.11 — OPRAVA: display-only param `hidden_metrics` (z volby „Co zobrazovat") se cpal do konstruktoru adaptéru a shazoval připojení každý cyklus (modul neaktivní). Nyní se u všech adaptérů odfiltruje.

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import Icon from "../components/Icon";
+import { MAX_TRACKED, METRIC_LABEL, iconFor, groupMetrics, metricsFor, controlFor } from "../metrics";
 
 const ADAPTERS = ["goodwe", "solis", "mock"];
 const ADAPTER_LABEL = {
@@ -15,43 +17,9 @@ const KINDS = [
 const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point"];
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
-const METRIC_LABEL = {
-  pv_power: "FVE výkon", load_power: "Spotřeba", grid_power: "Síť",
-  battery_power: "Baterie výkon (Σ)", battery_soc: "Baterie SoC (Ø)",
-  battery_soc_1: "Baterie 1 SoC", battery_soc_2: "Baterie 2 SoC",
-  battery_voltage_1: "Baterie 1 napětí", battery_voltage_2: "Baterie 2 napětí",
-  battery_current_1: "Baterie 1 proud", battery_current_2: "Baterie 2 proud",
-  battery_power_1: "Baterie 1 výkon", battery_power_2: "Baterie 2 výkon",
-  battery_soh_1: "Baterie 1 SOH", battery_soh_2: "Baterie 2 SOH",
-  battery_temp_1: "Baterie 1 teplota", battery_temp_2: "Baterie 2 teplota",
-  energy_today: "FVE dnes",
-  grid_voltage_l1: "Síť napětí L1", grid_voltage_l2: "Síť napětí L2", grid_voltage_l3: "Síť napětí L3",
-  active_power: "Činný výkon", voltage: "Napětí", current: "Proud",
-  energy_pv_total: "FVE celkem", frequency: "Frekvence", temperature: "Teplota měniče",
-};
-
-const MAX_TRACKED = 20;
-
-// Kompletní evidence veličin podle adaptéru a typu zařízení (co umíme sledovat).
-const METRIC_CATALOG = {
-  "solis:hybrid": ["pv_power", "grid_power", "energy_pv_total", "energy_today", "temperature",
-    "grid_voltage_l1", "grid_voltage_l2", "grid_voltage_l3",
-    "battery_soc", "battery_power",
-    "battery_soc_1", "battery_voltage_1", "battery_current_1", "battery_power_1", "battery_soh_1", "battery_temp_1",
-    "battery_soc_2", "battery_voltage_2", "battery_current_2", "battery_power_2", "battery_soh_2", "battery_temp_2"],
-  "solis:generation": ["pv_power", "grid_power", "energy_pv_total", "energy_today", "temperature",
-    "grid_voltage_l1", "grid_voltage_l2", "grid_voltage_l3"],
-  "solis:storage": ["battery_soc", "voltage", "current", "battery_power"],
-  "solis:grid_point": ["grid_power"],
-};
-const metricsFor = (adapter, dtype, live) => {
-  const cat = METRIC_CATALOG[`${adapter}:${dtype}`] || [];
-  return [...cat, ...live.filter((k) => !cat.includes(k))];   // katalog + cokoli navíc reálně měřené
-};
-
 function emptyForm() {
   return { id: "", name: "", adapter: "goodwe", device_type: "storage", kind: "source_read",
-           host: "", port: 8899, device_id: 1, battery_pack: 1, battery_packs: "auto", hidden: [], pv_peak_w: 16000, battery_capacity_kwh: 52 };
+           host: "", port: 8899, device_id: 1, battery_pack: 1, battery_packs: "auto", hidden: [], control: [], pv_peak_w: 16000, battery_capacity_kwh: 52 };
 }
 
 export default function Modules() {
@@ -74,6 +42,7 @@ export default function Modules() {
     }
     else if (f.adapter === "mock") p = { pv_peak_w: Number(f.pv_peak_w), battery_capacity_kwh: Number(f.battery_capacity_kwh) };
     if (f.hidden && f.hidden.length) p.hidden_metrics = f.hidden;
+    if (f.control && f.control.length) p.control_enabled = f.control;
     return p;
   };
 
@@ -88,6 +57,11 @@ export default function Modules() {
     return { ...s, hidden: [...s.hidden, k] };
   });
 
+  const toggleControl = (k) => setF((s) => ({
+    ...s,
+    control: s.control.includes(k) ? s.control.filter((x) => x !== k) : [...s.control, k],
+  }));
+
   const startEdit = (m) => {
     const p = m.params || {};
     setEditing(m.id);
@@ -99,6 +73,7 @@ export default function Modules() {
       host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : 8899),
       device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1, battery_packs: p.battery_packs ?? "auto",
       hidden: p.hidden_metrics ?? [],
+      control: p.control_enabled ?? [],
       pv_peak_w: p.pv_peak_w ?? 16000, battery_capacity_kwh: p.battery_capacity_kwh ?? 52,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -219,6 +194,7 @@ export default function Modules() {
           {editing && (() => {
             const shown = metricsFor(f.adapter, f.device_type, avail);
             const checked = shown.filter((k) => !f.hidden.includes(k)).length;
+            const groups = groupMetrics(shown);
             return (
               <div className="field" style={{ marginBottom: 8 }}>
                 <label>
@@ -231,24 +207,54 @@ export default function Modules() {
                     Načítám měřené veličiny — modul je musí nejdřív aspoň jednou změřit (~10 s).
                   </p>
                 ) : (<>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "6px 14px", marginTop: 4 }}>
-                    {shown.map((k) => {
-                      const on = !f.hidden.includes(k);
-                      const blocked = !on && checked >= MAX_TRACKED;
-                      return (
-                        <label key={k} title={blocked ? `Limit ${MAX_TRACKED} veličin — odeber jinou nebo přikup příplatek` : ""}
-                               style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400,
-                                        cursor: blocked ? "not-allowed" : "pointer", opacity: blocked ? 0.45 : 1 }}>
-                          <input type="checkbox" checked={on} disabled={blocked} onChange={() => toggleMetric(k)} />
-                          {METRIC_LABEL[k] || k}
-                        </label>
-                      );
-                    })}
-                  </div>
+                  {groups.map((g) => (
+                    <div key={g.id} style={{ marginTop: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, opacity: 0.75, margin: "2px 0 4px" }}>
+                        <Icon name={g.icon} size={14} /> {g.label}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "6px 14px" }}>
+                        {g.items.map((k) => {
+                          const on = !f.hidden.includes(k);
+                          const blocked = !on && checked >= MAX_TRACKED;
+                          return (
+                            <label key={k} title={blocked ? `Limit ${MAX_TRACKED} veličin — odeber jinou nebo přikup příplatek` : ""}
+                                   style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400,
+                                            cursor: blocked ? "not-allowed" : "pointer", opacity: blocked ? 0.45 : 1 }}>
+                              <input type="checkbox" checked={on} disabled={blocked} onChange={() => toggleMetric(k)} />
+                              <Icon name={iconFor(k)} size={15} style={{ opacity: 0.7 }} />
+                              {METRIC_LABEL[k] || k}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                   <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
                     Sledování až <strong>{MAX_TRACKED}</strong> veličin je v základu. Další veličiny nad rámec {MAX_TRACKED} jsou za příplatek — ozvi se nám.
                   </p>
                 </>)}
+              </div>
+            );
+          })()}
+          {editing && (() => {
+            const ctrl = controlFor(f.adapter, f.device_type);
+            if (!ctrl.length) return null;
+            return (
+              <div className="field" style={{ marginBottom: 8 }}>
+                <label>Ovládání a konfigurace</label>
+                <p className="muted" style={{ fontSize: 12, margin: "0 0 4px" }}>
+                  Co půjde u modulu řídit a nastavovat. Zápisová (řídicí) vrstva je zatím{" "}
+                  <strong>příprava — fáze C</strong>; volby se uloží a aktivují se, jakmile řízení spustíme.
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "6px 14px", marginTop: 4 }}>
+                  {ctrl.map((c) => (
+                    <label key={c.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400, cursor: "pointer" }}>
+                      <input type="checkbox" checked={f.control.includes(c.key)} onChange={() => toggleControl(c.key)} />
+                      <Icon name={c.icon} size={15} style={{ opacity: 0.7 }} />
+                      {c.label}
+                    </label>
+                  ))}
+                </div>
               </div>
             );
           })()}
