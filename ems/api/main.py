@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.31.21", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.31.22", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -116,7 +116,6 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
     dev_ids = [x for x in ids.split(",") if x]
     out = await db.aggregate_now(dev_ids)
     if loc is not None:
-        from datetime import date, timedelta
         from ems.localities import db as loc_db
         from ems.billing import db as billing_db
         L = await loc_db.get(loc)
@@ -128,8 +127,7 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
                 out["import_czk"] = round(out.get("import_kwh", 0) * ti, 2)
                 out["export_czk"] = round(out.get("export_kwh", 0) * te, 2)
             else:
-                today = date.today()
-                c = await billing_db.spot_cost_total(dev_ids, today, today + timedelta(days=1))
+                c = await billing_db.today_spot_cost(dev_ids)
                 out["import_czk"], out["export_czk"] = c["import_czk"], c["export_czk"]
     return out
 
