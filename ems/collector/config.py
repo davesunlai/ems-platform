@@ -24,6 +24,14 @@ def build_adapter(device: Device) -> TelemetryAdapter:
     if name == "goodwe":
         from ems.adapters.goodwe import GoodweAdapter
         return GoodweAdapter(device_id=device.id, **device.params)
+    if name == "solis":
+        from ems.adapters.solis import SolisAdapter
+        params = dict(device.params)
+        # V UI je Modbus jednotka pojmenovaná 'device_id' (=1) — koliduje s EMS
+        # device_id (id modulu). Přemapuj na 'unit', ať se nepřepíše.
+        if "device_id" in params and "unit" not in params:
+            params["unit"] = params.pop("device_id")
+        return SolisAdapter(device_id=device.id, device_type=device.type.value, **params)
     raise ValueError(f"Neznámý adaptér '{device.adapter}' pro zařízení '{device.id}'")
 
 

@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 
-const ADAPTERS = ["goodwe", "mock"];
+const ADAPTERS = ["goodwe", "solis", "mock"];
+const ADAPTER_LABEL = {
+  goodwe: "Goodwe — FVE + baterie (UDP/Modbus)",
+  solis: "Solis S6-EH3P50K-H — FVE + baterie (Modbus TCP)",
+  mock: "Mock — simulace (bez HW)",
+};
 const KINDS = [
   { v: "source_read", l: "Čtecí (telemetrie)" },
   { v: "source_write", l: "Zápisový (řízení) — fáze C" },
@@ -12,7 +17,7 @@ const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
 function emptyForm() {
   return { id: "", name: "", adapter: "goodwe", device_type: "storage", kind: "source_read",
-           host: "", port: 8899, pv_peak_w: 16000, battery_capacity_kwh: 52 };
+           host: "", port: 8899, device_id: 1, battery_pack: 1, pv_peak_w: 16000, battery_capacity_kwh: 52 };
 }
 
 export default function Modules() {
@@ -25,6 +30,7 @@ export default function Modules() {
 
   const buildParams = () => {
     if (f.adapter === "goodwe") return { host: f.host, port: Number(f.port) };
+    if (f.adapter === "solis") return { host: f.host, port: Number(f.port), device_id: Number(f.device_id), battery_pack: Number(f.battery_pack) };
     if (f.adapter === "mock") return { pv_peak_w: Number(f.pv_peak_w), battery_capacity_kwh: Number(f.battery_capacity_kwh) };
     return {};
   };
@@ -63,8 +69,8 @@ export default function Modules() {
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Adaptér</label>
-            <select value={f.adapter} onChange={(e) => setF({ ...f, adapter: e.target.value })}>
-              {ADAPTERS.map((a) => <option key={a} value={a}>{a}</option>)}
+            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" ? 502 : a === "goodwe" ? 8899 : f.port }); }}>
+              {ADAPTERS.map((a) => <option key={a} value={a}>{ADAPTER_LABEL[a] || a}</option>)}
             </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
@@ -84,6 +90,27 @@ export default function Modules() {
             <div className="field" style={{ marginBottom: 0 }}>
               <label>Port</label>
               <input value={f.port} onChange={(e) => setF({ ...f, port: e.target.value })} />
+            </div>
+          </>)}
+          {f.adapter === "solis" && (<>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>IP měniče (host)</label>
+              <input value={f.host} placeholder="192.168.6.180" onChange={(e) => setF({ ...f, host: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Port</label>
+              <input value={f.port} onChange={(e) => setF({ ...f, port: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Modbus device_id</label>
+              <input value={f.device_id} onChange={(e) => setF({ ...f, device_id: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Baterie (pack)</label>
+              <select value={f.battery_pack} onChange={(e) => setF({ ...f, battery_pack: e.target.value })}>
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+              </select>
             </div>
           </>)}
           {f.adapter === "mock" && (<>
