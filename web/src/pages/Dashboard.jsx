@@ -311,6 +311,8 @@ function LocalityNow({ deviceIds }) {
       {" · FVE "}<strong style={{ color: "var(--green)" }}>{fmt(kw)} kW</strong>
       {d.soc != null && <> · baterie <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
       {" · dnes Σ "}<strong style={{ color: "var(--fg)" }}>{fmt(d.today_kwh)} kWh</strong>
+      {d.import_kwh != null && <> · ze sítě <strong style={{ color: "var(--blue)" }}>{fmt(d.import_kwh)} kWh</strong></>}
+      {d.export_kwh != null && <> · do sítě <strong style={{ color: "var(--green)" }}>{fmt(d.export_kwh)} kWh</strong></>}
     </span>
   );
 }
