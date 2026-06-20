@@ -208,22 +208,46 @@ async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 3
     start_min = minutes + offset
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT b, sum(dev_avg) AS value FROM (
-                SELECT time_bucket(($1 || ' seconds')::interval, time) AS b,
-                       device_id, avg(value) AS dev_avg
-                FROM samples
-                WHERE device_id = ANY($2::text[]) AND metric = $3
-                  AND time >  now() - ($4 || ' minutes')::interval
-                  AND time <= now() - ($5 || ' minutes')::interval
-                GROUP BY b, device_id
-            ) t
-            GROUP BY b ORDER BY b
-            """,
-            str(bucket_seconds), device_ids, metric, str(start_min), str(offset),
-        )
+        if metric == "load":
+            # Počítaná spotřeba lokality = Σ FVE + Σ síť − Σ baterie (per bucket).
+            # (znaménka EMS: síť + import/− export, baterie + nabíjení/− vybíjení)
+            rows = await conn.fetch(
+                """
+                SELECT b,
+                       COALESCE(sum(dev_avg) FILTER (WHERE metric='pv_power'), 0)
+                     + COALESCE(sum(dev_avg) FILTER (WHERE metric='grid_power'), 0)
+                     - COALESCE(sum(dev_avg) FILTER (WHERE metric='battery_power'), 0) AS value
+                FROM (
+                    SELECT time_bucket(($1 || ' seconds')::interval, time) AS b,
+                           device_id, metric, avg(value) AS dev_avg
+                    FROM samples
+                    WHERE device_id = ANY($2::text[])
+                      AND metric IN ('pv_power', 'grid_power', 'battery_power')
+                      AND time >  now() - ($3 || ' minutes')::interval
+                      AND time <= now() - ($4 || ' minutes')::interval
+                    GROUP BY b, device_id, metric
+                ) t
+                GROUP BY b ORDER BY b
+                """,
+                str(bucket_seconds), device_ids, str(start_min), str(offset),
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT b, sum(dev_avg) AS value FROM (
+                    SELECT time_bucket(($1 || ' seconds')::interval, time) AS b,
+                           device_id, avg(value) AS dev_avg
+                    FROM samples
+                    WHERE device_id = ANY($2::text[]) AND metric = $3
+                      AND time >  now() - ($4 || ' minutes')::interval
+                      AND time <= now() - ($5 || ' minutes')::interval
+                    GROUP BY b, device_id
+                ) t
+                GROUP BY b ORDER BY b
+                """,
+                str(bucket_seconds), device_ids, metric, str(start_min), str(offset),
+            )
     raw = [(r["b"], float(r["value"])) for r in rows if r["value"] is not None]
-    if metric.endswith("_power"):
+    if metric.endswith("_power") or metric == "load":
         raw = _zero_fill_power(raw, bucket_seconds)
     return [{"time": t.isoformat(), "value": v} for t, v in raw]

@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.17 — Graf „Souhrn lokality": série Spotřeba lokality nově jede z POČÍTANÉ spotřeby (load = Σ FVE + Σ síť − Σ baterie per bucket), takže funguje i bez přímého load_power (Solis 3f). aggregate_history podporuje virtuální metriku „load".
+
 ## v0.31.16 — Řízení Solis přes portál (fáze C): povelová FRONTA (control_queue) vyřizovaná kolektorem (drží jediné Modbus spojení) — dispatch force_charge/force_discharge/stop/set_work_mode/write_holding/read_holding. API POST /api/control/{id}/command + GET /api/control/command/{id}. Ovládací panel na dashboardu (gating dle control_enabled + oprávnění control): Nabíjet/Vybíjet teď (syrový výkon — scale ověřujeme), Stop, potvrzení + polling stavu. Výkon 43136 scale zatím syrový.
 
 ## v0.31.15 — Souhrn lokality: výrazná aktuální SPOTŘEBA (dopočet z bilance FVE + síť − baterie), přejmenováno „součet" -> „FVE". aggregate_now vrací load_w/grid_w/battery_w.
