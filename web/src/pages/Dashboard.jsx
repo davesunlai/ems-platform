@@ -213,10 +213,12 @@ function LocalityNow({ deviceIds }) {
   }, [deviceIds.join(",")]);
   if (!d) return null;
   const kw = (d.pv_w / 1000);
+  const loadKw = (d.load_w ?? 0) / 1000;
   const fmt = (v, dec = 1) => (Math.abs(v) >= 10 ? v.toFixed(dec) : v.toFixed(dec));
   return (
     <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: 10 }}>
-      · součet <strong style={{ color: "var(--green)" }}>{fmt(kw)} kW</strong>
+      · spotřeba <strong style={{ color: "var(--amber, #d29922)", fontSize: "1.05em" }}>{fmt(loadKw)} kW</strong>
+      {" · FVE "}<strong style={{ color: "var(--green)" }}>{fmt(kw)} kW</strong>
       {d.soc != null && <> · baterie <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
       {" · dnes Σ "}<strong style={{ color: "var(--fg)" }}>{fmt(d.today_kwh)} kWh</strong>
     </span>

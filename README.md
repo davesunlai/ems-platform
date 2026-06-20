@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.15 — Souhrn lokality: výrazná aktuální SPOTŘEBA (dopočet z bilance FVE + síť − baterie), přejmenováno „součet" -> „FVE". aggregate_now vrací load_w/grid_w/battery_w.
+
 ## v0.31.14 — Řízení (fáze C, krok 1): zápisová vrstva adaptéru Solis — write_holding s ověřením zpětným čtením, set_force(0/1/2 + výkon), set_work_mode; read_holding pro stav. Nový write-probe (ems.adapters.solis.wprobe) pro BEZPEČNÉ ověření řídicích registrů na reálném kuse (čte stav; zápis jen explicitně + potvrzení). ADR 0008. UI/API ovládání až po ověření registrů.
 
 ## v0.31.13 — UI: ikony u veličin (teploměr u teploty atd.) v editaci i na dashboardu, veličiny seskupené (FVE / Síť / Měnič / Baterie 1/2) v editaci i dashboardu, nová sekce „Ovládání a konfigurace" se zatržítky (zápisová vrstva = příprava, fáze C; ukládá se do control_enabled). Sdílené definice web/src/metrics.js + komponenta Icon.jsx. control_enabled odfiltrován z konstruktoru adaptéru.

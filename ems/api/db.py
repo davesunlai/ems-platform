@@ -144,7 +144,7 @@ async def latest_states(device_id: str) -> dict:
 async def aggregate_now(device_ids: list[str]) -> dict:
     """Aktuální souhrn lokality: součet výkonu FVE (W), průměrný SoC (%), dnešní výroba (kWh)."""
     if not device_ids:
-        return {"pv_w": 0.0, "soc": None, "today_kwh": 0.0}
+        return {"pv_w": 0.0, "soc": None, "today_kwh": 0.0, "load_w": 0.0, "grid_w": 0.0, "battery_w": 0.0}
     pool = await get_pool()
     async with pool.acquire() as conn:
         pv = await conn.fetchval(
@@ -156,6 +156,17 @@ async def aggregate_now(device_ids: list[str]) -> dict:
             "SELECT AVG(v) FROM ("
             "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
             "  WHERE device_id = ANY($1::text[]) AND metric='battery_soc' AND time > now() - interval '5 minutes'"
+            "  ORDER BY device_id, time DESC) t", device_ids)
+        # poslední hodnoty sítě a baterie (pro dopočet spotřeby)
+        grid = await conn.fetchval(
+            "SELECT COALESCE(SUM(v),0) FROM ("
+            "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
+            "  WHERE device_id = ANY($1::text[]) AND metric='grid_power' AND time > now() - interval '5 minutes'"
+            "  ORDER BY device_id, time DESC) t", device_ids)
+        bat = await conn.fetchval(
+            "SELECT COALESCE(SUM(v),0) FROM ("
+            "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
+            "  WHERE device_id = ANY($1::text[]) AND metric='battery_power' AND time > now() - interval '5 minutes'"
             "  ORDER BY device_id, time DESC) t", device_ids)
         # Dnešní výroba: PŘEDNOST má energy_today (měnič si ho počítá sám -> odolné
         # proti výpadkům kolektoru). Fallback = max-min kumulativního energy_pv_total
@@ -175,7 +186,13 @@ async def aggregate_now(device_ids: list[str]) -> dict:
             "FROM (SELECT unnest($1::text[]) AS device_id) ids "
             "LEFT JOIN et  ON et.device_id  = ids.device_id "
             "LEFT JOIN tot ON tot.device_id = ids.device_id", device_ids)
-    return {"pv_w": float(pv or 0), "soc": float(soc) if soc is not None else None, "today_kwh": float(kwh or 0)}
+    pv_w, grid_w, bat_w = float(pv or 0), float(grid or 0), float(bat or 0)
+    # Spotřeba (zátěž) z energetické bilance uzlu: load = FVE + síť − baterie
+    # (znaménka EMS: síť + import/− export, baterie + nabíjení/− vybíjení).
+    load_w = pv_w + grid_w - bat_w
+    return {"pv_w": pv_w, "soc": float(soc) if soc is not None else None,
+            "today_kwh": float(kwh or 0), "load_w": load_w,
+            "grid_w": grid_w, "battery_w": bat_w}
 
 
 async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 360,
