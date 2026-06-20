@@ -42,6 +42,9 @@ function SearchSelect({ value, options, onChange, placeholder = "— vyber —",
 const LABELS = {
   pv_power: "FVE výkon", load_power: "Spotřeba", battery_power: "Baterie",
   battery_soc: "Baterie SoC (Ø)", battery_soc_1: "Baterie 1 SoC", battery_soc_2: "Baterie 2 SoC",
+  battery_voltage_1: "Baterie 1 napětí", battery_voltage_2: "Baterie 2 napětí",
+  battery_current_1: "Baterie 1 proud", battery_current_2: "Baterie 2 proud",
+  battery_power_1: "Baterie 1 výkon", battery_power_2: "Baterie 2 výkon",
   grid_power: "Síť", active_power: "Činný výkon",
   reactive_power: "Jalový výkon", frequency: "Frekvence", temperature: "Teplota",
   energy_pv_total: "FVE celkem", energy_import: "Import celkem", energy_export: "Export celkem",
@@ -49,7 +52,10 @@ const LABELS = {
 };
 const ACCENT = { pv_power: "green", battery_power: "blue", battery_soc: "blue", battery_soc_1: "blue", battery_soc_2: "blue", grid_power: "amber", load_power: "" };
 const CHART_COLOR = { pv_power: "#3fb950", load_power: "#8b949e", battery_power: "#58a6ff", battery_soc: "#58a6ff", battery_soc_1: "#58a6ff", battery_soc_2: "#7ee787", grid_power: "#d29922", active_power: "#3fb950" };
-const ORDER = ["pv_power","load_power","battery_power","battery_soc","battery_soc_1","battery_soc_2","grid_power","active_power",
+const ORDER = ["pv_power","load_power","battery_power","battery_soc",
+               "battery_soc_1","battery_voltage_1","battery_current_1","battery_power_1",
+               "battery_soc_2","battery_voltage_2","battery_current_2","battery_power_2",
+               "grid_power","active_power",
                "frequency","temperature","energy_pv_total","energy_import","energy_export"];
 const WIN = [
   { min: 360, label: "6 h" }, { min: 720, label: "12 h" }, { min: 1440, label: "24 h" },
@@ -80,7 +86,7 @@ function fmt(metric, m) {
   return { value: typeof v === "number" ? v.toFixed(1) : v, unit: u };
 }
 
-function DevicePanel({ id, locality, lastSeen }) {
+function DevicePanel({ id, locality, lastSeen, hidden = [] }) {
   const [latest, setLatest] = useState(null);
   const [hist, setHist] = useState([]);
   const [chartMetric, setChartMetric] = useState("pv_power");
@@ -128,7 +134,8 @@ function DevicePanel({ id, locality, lastSeen }) {
   const mode = latest.states?.operation_mode;
   const auto = latest.states?.automation;
   const forcing = (mode && !["GENERAL", "SELF_USE"].includes(mode)) || !!auto;
-  const keys = ORDER.filter((k) => k in metrics).concat(Object.keys(metrics).filter((k) => !ORDER.includes(k)));
+  const keys = ORDER.filter((k) => k in metrics).concat(Object.keys(metrics).filter((k) => !ORDER.includes(k)))
+                    .filter((k) => !hidden.includes(k));
 
   return (
     <section className="device">
@@ -392,7 +399,7 @@ export default function Dashboard() {
         </h2>
         <LocalityChart deviceIds={ids} />
         {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}
-        {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} />)}
+        {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} />)}
       </section>
     </main>
   );

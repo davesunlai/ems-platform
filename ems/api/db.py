@@ -1,6 +1,7 @@
 """Databázové dotazy pro API (TimescaleDB / PostgreSQL přes asyncpg)."""
 from __future__ import annotations
 
+import json
 import os
 from datetime import timedelta
 
@@ -48,6 +49,7 @@ async def list_devices() -> list[dict]:
             SELECT s.device_id,
                    max(l.name)  AS locality,
                    max(m.locality_id) AS locality_id,
+                   max(m.params->>'hidden_metrics') AS hidden_metrics,
                    max(s.time)  AS last_seen,
                    (max(s.time) > now() - interval '5 minutes') AS active
             FROM samples s
@@ -63,6 +65,7 @@ async def list_devices() -> list[dict]:
         "device_id": r["device_id"],
         "locality": r["locality"],
         "locality_id": r["locality_id"],
+        "hidden_metrics": json.loads(r["hidden_metrics"]) if r["hidden_metrics"] else [],
         "last_seen": r["last_seen"].isoformat() if r["last_seen"] else None,
         "active": bool(r["active"]),
     } for r in rows]

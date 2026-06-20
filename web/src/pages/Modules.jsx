@@ -15,9 +15,20 @@ const KINDS = [
 const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point"];
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
+const METRIC_LABEL = {
+  pv_power: "FVE výkon", load_power: "Spotřeba", grid_power: "Síť",
+  battery_power: "Baterie výkon (Σ)", battery_soc: "Baterie SoC (Ø)",
+  battery_soc_1: "Baterie 1 SoC", battery_soc_2: "Baterie 2 SoC",
+  battery_voltage_1: "Baterie 1 napětí", battery_voltage_2: "Baterie 2 napětí",
+  battery_current_1: "Baterie 1 proud", battery_current_2: "Baterie 2 proud",
+  battery_power_1: "Baterie 1 výkon", battery_power_2: "Baterie 2 výkon",
+  active_power: "Činný výkon", voltage: "Napětí", current: "Proud",
+  energy_pv_total: "FVE celkem", frequency: "Frekvence", temperature: "Teplota",
+};
+
 function emptyForm() {
   return { id: "", name: "", adapter: "goodwe", device_type: "storage", kind: "source_read",
-           host: "", port: 8899, device_id: 1, battery_pack: 1, battery_packs: "auto", pv_peak_w: 16000, battery_capacity_kwh: 52 };
+           host: "", port: 8899, device_id: 1, battery_pack: 1, battery_packs: "auto", hidden: [], pv_peak_w: 16000, battery_capacity_kwh: 52 };
 }
 
 export default function Modules() {
@@ -25,35 +36,42 @@ export default function Modules() {
   const [err, setErr] = useState("");
   const [f, setF] = useState(emptyForm());
   const [editing, setEditing] = useState(null);   // id editovaného modulu, nebo null
+  const [avail, setAvail] = useState([]);          // metriky, které modul reálně posílá
 
   const load = () => api.listModules().then(setMods).catch((e) => setErr(e.message));
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
 
   const buildParams = () => {
-    if (f.adapter === "goodwe") return { host: f.host, port: Number(f.port) };
-    if (f.adapter === "solis") {
-      const p = { host: f.host, port: Number(f.port), device_id: Number(f.device_id) };
+    let p = {};
+    if (f.adapter === "goodwe") p = { host: f.host, port: Number(f.port) };
+    else if (f.adapter === "solis") {
+      p = { host: f.host, port: Number(f.port), device_id: Number(f.device_id) };
       if (f.device_type === "hybrid") p.battery_packs = f.battery_packs;
       else if (f.device_type === "storage") p.battery_pack = Number(f.battery_pack);
-      return p;
     }
-    if (f.adapter === "mock") return { pv_peak_w: Number(f.pv_peak_w), battery_capacity_kwh: Number(f.battery_capacity_kwh) };
-    return {};
+    else if (f.adapter === "mock") p = { pv_peak_w: Number(f.pv_peak_w), battery_capacity_kwh: Number(f.battery_capacity_kwh) };
+    if (f.hidden && f.hidden.length) p.hidden_metrics = f.hidden;
+    return p;
   };
+
+  const toggleMetric = (k) => setF((s) => ({ ...s, hidden: s.hidden.includes(k) ? s.hidden.filter((x) => x !== k) : [...s.hidden, k] }));
 
   const startEdit = (m) => {
     const p = m.params || {};
     setEditing(m.id);
     setErr("");
+    setAvail([]);
+    api.latest(m.id).then((l) => setAvail(Object.keys(l.metrics || {}))).catch(() => setAvail([]));
     setF({
       id: m.id, name: m.name || "", adapter: m.adapter, device_type: m.device_type, kind: m.kind,
       host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : 8899),
       device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1, battery_packs: p.battery_packs ?? "auto",
+      hidden: p.hidden_metrics ?? [],
       pv_peak_w: p.pv_peak_w ?? 16000, battery_capacity_kwh: p.battery_capacity_kwh ?? 52,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const cancelEdit = () => { setEditing(null); setF(emptyForm()); setErr(""); };
+  const cancelEdit = () => { setEditing(null); setAvail([]); setF(emptyForm()); setErr(""); };
   const save = async () => {
     setErr("");
     try {
@@ -166,6 +184,25 @@ export default function Modules() {
               <input value={f.battery_capacity_kwh} onChange={(e) => setF({ ...f, battery_capacity_kwh: e.target.value })} />
             </div>
           </>)}
+          {editing && (
+            <div className="field" style={{ marginBottom: 8 }}>
+              <label>Co zobrazovat (monitorovat)</label>
+              {avail.length === 0 ? (
+                <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+                  Načítám měřené veličiny — modul je musí nejdřív aspoň jednou změřit (~10 s).
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 4 }}>
+                  {avail.map((k) => (
+                    <label key={k} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400, cursor: "pointer" }}>
+                      <input type="checkbox" checked={!f.hidden.includes(k)} onChange={() => toggleMetric(k)} />
+                      {METRIC_LABEL[k] || k}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {editing ? (<>
             <button className="btn primary" onClick={save}>Uložit změny</button>
             <button className="btn" onClick={cancelEdit} style={{ marginLeft: 8 }}>Zrušit</button>

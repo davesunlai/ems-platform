@@ -176,33 +176,33 @@ class SolisAdapter:
             # Vše v jednom modulu: FVE + síť + energie + baterie.
             # Per-pack SOC (battery_soc_1/2) + agregát (průměr SOC, součet výkonu).
             add_system()
-            soc_metric = {1: Metric.BATTERY_SOC_1, 2: Metric.BATTERY_SOC_2}
+            soc_m = {1: Metric.BATTERY_SOC_1, 2: Metric.BATTERY_SOC_2}
+            volt_m = {1: Metric.BATTERY_VOLTAGE_1, 2: Metric.BATTERY_VOLTAGE_2}
+            curr_m = {1: Metric.BATTERY_CURRENT_1, 2: Metric.BATTERY_CURRENT_2}
+            pow_m = {1: Metric.BATTERY_POWER_1, 2: Metric.BATTERY_POWER_2}
             explicit = str(self.battery_packs).isdigit()
             candidates = ([p for p in range(1, int(self.battery_packs) + 1) if p in BATTERY_PACKS]
                           if explicit else list(BATTERY_PACKS))   # "auto" -> zkus všechny
-            socs, volts, currs, powers = [], [], [], []
+            socs, powers = [], []
             for pid in candidates:
                 soc, volt, curr = self._read_pack(pid)
                 # auto: zahrň pack jen když reálně vrací platný SOC (jinak fyzicky není)
                 if soc is None or (not explicit and not (0 < soc <= 100)):
                     continue
-                if pid in soc_metric:
-                    add(soc_metric[pid], soc)          # battery_soc_1 / battery_soc_2
+                add(soc_m[pid], soc)                       # battery_soc_1 / _2
                 socs.append(soc)
                 if volt is not None:
-                    volts.append(volt)
+                    add(volt_m[pid], volt)                 # battery_voltage_1 / _2
                 if curr is not None:
-                    currs.append(curr)
+                    add(curr_m[pid], curr)                 # battery_current_1 / _2 (+nabíjení/−vybíjení)
                 if volt is not None and curr is not None:
-                    powers.append(volt * curr)
+                    p = volt * curr
+                    add(pow_m[pid], p)                     # battery_power_1 / _2
+                    powers.append(p)
             if socs:
                 add(Metric.BATTERY_SOC, sum(socs) / len(socs))   # průměr přes packy (pro souhrn)
-            if volts:
-                add(Metric.VOLTAGE, sum(volts) / len(volts))
-            if currs:
-                add(Metric.CURRENT, sum(currs))
             if powers:
-                add(Metric.BATTERY_POWER, sum(powers))
+                add(Metric.BATTERY_POWER, sum(powers))           # součet (pro graf/souhrn lokality)
             # LOAD_POWER (domácí zátěž) a BACKUP: registry pro 3f model zatím
             # nepotvrzené (brief §9) -> doplníme po živém dočtení proti střídači.
 

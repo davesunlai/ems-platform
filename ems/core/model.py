@@ -39,6 +39,12 @@ class Metric(str, Enum):
     BATTERY_SOC = "battery_soc"
     BATTERY_SOC_1 = "battery_soc_1"
     BATTERY_SOC_2 = "battery_soc_2"
+    BATTERY_VOLTAGE_1 = "battery_voltage_1"
+    BATTERY_VOLTAGE_2 = "battery_voltage_2"
+    BATTERY_CURRENT_1 = "battery_current_1"
+    BATTERY_CURRENT_2 = "battery_current_2"
+    BATTERY_POWER_1 = "battery_power_1"
+    BATTERY_POWER_2 = "battery_power_2"
     GRID_POWER = "grid_power"
     LOAD_POWER = "load_power"
     ENERGY_PV_TOTAL = "energy_pv_total"
@@ -58,6 +64,12 @@ UNIT_OF: dict[Metric, str] = {
     Metric.BATTERY_SOC: "%",
     Metric.BATTERY_SOC_1: "%",
     Metric.BATTERY_SOC_2: "%",
+    Metric.BATTERY_VOLTAGE_1: "V",
+    Metric.BATTERY_VOLTAGE_2: "V",
+    Metric.BATTERY_CURRENT_1: "A",
+    Metric.BATTERY_CURRENT_2: "A",
+    Metric.BATTERY_POWER_1: "W",
+    Metric.BATTERY_POWER_2: "W",
     Metric.GRID_POWER: "W",
     Metric.LOAD_POWER: "W",
     Metric.ENERGY_PV_TOTAL: "kWh",
