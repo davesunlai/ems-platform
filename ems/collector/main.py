@@ -43,6 +43,12 @@ def _module_to_device(m) -> Device:
                   region=m.region, params=m.params)
 
 
+def _module_sig(m) -> str:
+    """Podpis modulu pro detekci změny (adaptér + parametry, např. host/port)."""
+    import json
+    return json.dumps({"adapter": m.adapter, "params": m.params}, sort_keys=True, default=str)
+
+
 async def poll_device(adapter, sink) -> None:
     try:
         reading = await adapter.read()
@@ -53,8 +59,20 @@ async def poll_device(adapter, sink) -> None:
         logger.warning("Čtení '%s' selhalo: %s", getattr(adapter, "device_id", "?"), exc)
 
 
+async def _connect_module(m):
+    adapter = build_adapter(_module_to_device(m))
+    await adapter.connect()
+    return adapter
+
+
 async def reconcile(active: dict, sink) -> None:
-    """Srovná běžící adaptéry s aktivními moduly v DB."""
+    """Srovná běžící adaptéry s aktivními moduly v DB.
+
+    active: {mid: {"adapter": <adaptér>, "sig": <podpis>}}
+    Nové připojí, odebrané/vypnuté zavře a u existujících detekuje změnu
+    parametrů (host/port/adaptér) -> zavře staré spojení a připojí znovu,
+    takže změna IP v UI se projeví do jednoho cyklu (~POLL_INTERVAL).
+    """
     try:
         wanted = await modules_db.list_enabled_reads()
     except Exception as exc:
@@ -62,22 +80,34 @@ async def reconcile(active: dict, sink) -> None:
         return
     wanted_by_id = {m.id: m for m in wanted}
 
-    # připoj nové
+    # připoj nové + reconnectuj změněné
     for mid, m in wanted_by_id.items():
-        if mid not in active:
+        sig = _module_sig(m)
+        cur = active.get(mid)
+        if cur is None:
             try:
-                adapter = build_adapter(_module_to_device(m))
-                await adapter.connect()
-                active[mid] = adapter
+                active[mid] = {"adapter": await _connect_module(m), "sig": sig}
                 logger.info("Modul připojen: %s (adaptér=%s)", mid, m.adapter)
             except Exception as exc:
                 logger.warning("Připojení modulu '%s' selhalo (zkusím příště): %s", mid, exc)
+        elif cur["sig"] != sig:
+            # parametry/adaptér se změnily -> zavři staré a připoj znovu
+            try:
+                await cur["adapter"].close()
+            except Exception:
+                pass
+            try:
+                active[mid] = {"adapter": await _connect_module(m), "sig": sig}
+                logger.info("Modul přenastaven za běhu: %s (nové parametry)", mid)
+            except Exception as exc:
+                del active[mid]  # spadlo -> příští cyklus zkusí jako nový
+                logger.warning("Reconnect modulu '%s' selhal (zkusím příště): %s", mid, exc)
 
     # odpoj odebrané/vypnuté
     for mid in list(active):
         if mid not in wanted_by_id:
             try:
-                await active[mid].close()
+                await active[mid]["adapter"].close()
             except Exception:
                 pass
             del active[mid]
@@ -117,16 +147,16 @@ async def run() -> None:
         while not stop.is_set():
             await reconcile(active, sink)
             if active:
-                await asyncio.gather(*(poll_device(a, sink) for a in active.values()))
+                await asyncio.gather(*(poll_device(e["adapter"], sink) for e in active.values()))
             await tick_market_and_automation(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
             except asyncio.TimeoutError:
                 pass
     finally:
-        for a in active.values():
+        for e in active.values():
             try:
-                await a.close()
+                await e["adapter"].close()
             except Exception:
                 pass
         await sink.close()

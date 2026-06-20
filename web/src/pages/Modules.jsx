@@ -24,6 +24,7 @@ export default function Modules() {
   const [mods, setMods] = useState([]);
   const [err, setErr] = useState("");
   const [f, setF] = useState(emptyForm());
+  const [editing, setEditing] = useState(null);   // id editovaného modulu, nebo null
 
   const load = () => api.listModules().then(setMods).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
@@ -33,6 +34,30 @@ export default function Modules() {
     if (f.adapter === "solis") return { host: f.host, port: Number(f.port), device_id: Number(f.device_id), battery_pack: Number(f.battery_pack) };
     if (f.adapter === "mock") return { pv_peak_w: Number(f.pv_peak_w), battery_capacity_kwh: Number(f.battery_capacity_kwh) };
     return {};
+  };
+
+  const startEdit = (m) => {
+    const p = m.params || {};
+    setEditing(m.id);
+    setErr("");
+    setF({
+      id: m.id, name: m.name || "", adapter: m.adapter, device_type: m.device_type, kind: m.kind,
+      host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : 8899),
+      device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1,
+      pv_peak_w: p.pv_peak_w ?? 16000, battery_capacity_kwh: p.battery_capacity_kwh ?? 52,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const cancelEdit = () => { setEditing(null); setF(emptyForm()); setErr(""); };
+  const save = async () => {
+    setErr("");
+    try {
+      await api.updateModule(editing, {
+        name: f.name, adapter: f.adapter, device_type: f.device_type,
+        kind: f.kind, params: buildParams(),
+      });
+      setEditing(null); setF(emptyForm()); load();
+    } catch (e) { setErr(e.message); }
   };
 
   const create = async () => {
@@ -51,11 +76,12 @@ export default function Modules() {
   return (
     <main>
       <div className="panel" style={{ marginBottom: 22 }}>
-        <h3>Nový modul</h3>
+        <h3>{editing ? `Upravit modul „${editing}"` : "Nový modul"}</h3>
         <div className="row">
           <div className="field" style={{ marginBottom: 0 }}>
             <label>ID</label>
-            <input value={f.id} placeholder="home-fve-hybrid" onChange={(e) => setF({ ...f, id: e.target.value })} />
+            <input value={f.id} placeholder="home-fve-hybrid" disabled={!!editing}
+                   onChange={(e) => setF({ ...f, id: e.target.value })} />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Název</label>
@@ -123,7 +149,12 @@ export default function Modules() {
               <input value={f.battery_capacity_kwh} onChange={(e) => setF({ ...f, battery_capacity_kwh: e.target.value })} />
             </div>
           </>)}
-          <button className="btn primary" onClick={create} disabled={!f.id.trim()}>Přidat modul</button>
+          {editing ? (<>
+            <button className="btn primary" onClick={save}>Uložit změny</button>
+            <button className="btn" onClick={cancelEdit} style={{ marginLeft: 8 }}>Zrušit</button>
+          </>) : (
+            <button className="btn primary" onClick={create} disabled={!f.id.trim()}>Přidat modul</button>
+          )}
         </div>
         <p className="error">{err}</p>
       </div>
@@ -145,6 +176,7 @@ export default function Modules() {
                 </td>
                 <td><span className={m.enabled ? "badge-on" : "badge-off"}>{m.enabled ? "zapnutý" : "vypnutý"}</span></td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button className="btn" onClick={() => startEdit(m)} style={{ marginRight: 8 }}>Upravit</button>
                   <button className="btn" onClick={() => toggle(m)} style={{ marginRight: 8 }}>{m.enabled ? "Vypnout" : "Zapnout"}</button>
                   <button className="btn danger" onClick={() => remove(m.id)}>Smazat</button>
                 </td>

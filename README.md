@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.31.1 — Editace modulu v UI („Upravit": změna IP/portu/názvu přes PATCH) + kolektor reconnectuje modul při změně parametrů za běhu (~10 s, bez restartu). Obsahuje i v0.31.0 (solis adaptér).
+
 ## v0.31.0 — Nový čtecí adaptér „solis" (Solis S6-EH3P50K-H, Modbus TCP přes pymodbus): stejná kanonická pole i znaménka jako goodwe (grid otočen, battery_power=U*I), 2 battery packy, registrace ve factory + UI dropdown s popisnými labely. Read-only.
 
 ## v0.30.8 — docs/INFRA-FRANTA.md bod 7: po tar -xzf nutný RESTART Caddy (ne reload) kvůli inode; deploy.sh to dělá sám.
