@@ -23,6 +23,9 @@ class LocalityUpdate(BaseModel):
     addr_zip: str | None = None
     addr_city: str | None = None
     addr_street: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    pv_kwp_total: float | None = None
 
 
 class AssignUser(BaseModel):
