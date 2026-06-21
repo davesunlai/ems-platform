@@ -46,7 +46,10 @@ async def get_forecast(locality_id: int, _: dict = Depends(read)):
         "locality_id": locality_id,
         "lat": loc.get("lat"), "lon": loc.get("lon"),
         "pv_kwp_total": loc.get("pv_kwp_total"),
-        "pv": pv,                       # {source: [{ts, pv_w}]}, vč. 'avg'
+        "pricing_mode": loc.get("pricing_mode") or "spot",
+        "pv": pv,                                  # {source: [{ts, pv_w, pv_w_lo, pv_w_hi}]}
+        "load": await fdb.latest_load(locality_id),  # [{ts, load_w}]
+        "spot": await fdb.spot_window_hourly(48),    # [{ts, czk_mwh}]
     }
 
 

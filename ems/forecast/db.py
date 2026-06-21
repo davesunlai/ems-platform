@@ -43,6 +43,17 @@ async def ensure_schema() -> None:
         )
         await conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS load_forecast (
+                locality_id INTEGER NOT NULL,
+                ts          TIMESTAMPTZ NOT NULL,
+                load_w      DOUBLE PRECISION NOT NULL,
+                fetched_at  TIMESTAMPTZ NOT NULL,
+                PRIMARY KEY (locality_id, ts)
+            )
+            """
+        )
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS pv_block (
                 id          SERIAL PRIMARY KEY,
                 locality_id INTEGER NOT NULL,
@@ -144,6 +155,38 @@ async def latest_fetched_at(locality_id: int, source: str):
         return await conn.fetchval(
             "SELECT max(fetched_at) FROM pv_forecast WHERE locality_id=$1 AND source=$2",
             locality_id, source)
+
+
+# --- predikce zátěže ---------------------------------------------------------
+async def write_load(locality_id: int, rows: list[dict], fetched_at: datetime) -> None:
+    if not rows:
+        return
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM load_forecast WHERE locality_id=$1", locality_id)
+        await conn.executemany(
+            "INSERT INTO load_forecast (locality_id, ts, load_w, fetched_at) VALUES ($1,$2,$3,$4)",
+            [(locality_id, r["ts"], float(r["load_w"]), fetched_at) for r in rows])
+
+
+async def latest_load(locality_id: int) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT ts, load_w FROM load_forecast WHERE locality_id=$1 ORDER BY ts", locality_id)
+    return [{"ts": r["ts"].isoformat(), "load_w": r["load_w"]} for r in rows]
+
+
+# --- spot pro okno predikce (hodinově, CZK/MWh) ------------------------------
+async def spot_window_hourly(hours: int = 48) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT time_bucket('1 hour', slot) AS h, avg(price) AS czk_mwh "
+            "FROM spot_history "
+            "WHERE slot >= date_trunc('hour', now()) AND slot < now() + ($1 || ' hours')::interval "
+            "GROUP BY h ORDER BY h", str(hours))
+    return [{"ts": r["h"].isoformat(), "czk_mwh": float(r["czk_mwh"])} for r in rows if r["czk_mwh"] is not None]
 
 
 async def latest_pv_all_sources(locality_id: int) -> dict[str, list[dict]]:

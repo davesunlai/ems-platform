@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from ems.localities import db as loc_db
 from . import calibrate, db as fdb
+from . import load as load_fc
 from . import model as pv_model
 from .providers import OpenMeteoProvider, ForecastSolarProvider
 
@@ -119,8 +120,17 @@ async def refresh_locality(locality_id: int) -> dict:
     if weather_repr:
         await fdb.write_weather(locality_id, "open_meteo", weather_repr, fetched_at)
 
+    # predikce zátěže (medián hodina-v-týdnu z bilance) na stejný grid
+    devs = []
     try:
         devs = [d["id"] for d in await loc_db.devices_for_locality(locality_id)]
+        profile = await load_fc.build_profile(devs)
+        load_rows = load_fc.project_profile(profile, [r["ts"] for r in avg])
+        await fdb.write_load(locality_id, load_rows, fetched_at)
+    except Exception as exc:
+        logger.debug("Load forecast lokalita %s: %s", locality_id, exc)
+
+    try:
         await calibrate.calibrate(locality_id, devs)
     except Exception as exc:
         logger.debug("Kalibrace PR lokalita %s: %s", locality_id, exc)

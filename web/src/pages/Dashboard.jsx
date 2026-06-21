@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
 import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
+import ForecastChart from "../components/ForecastChart";
 import Icon from "../components/Icon";
 import { METRIC_LABEL as LABELS, iconFor, groupMetrics } from "../metrics";
 
@@ -498,6 +499,12 @@ export default function Dashboard() {
           <LocalityNow deviceIds={ids} localityId={devs[0].locality_id} />
         </h2>
         <LocalityChart deviceIds={ids} />
+        {devs[0].locality_id && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>Predikce 24–48 h</h3>
+            <ForecastChart localityId={devs[0].locality_id} />
+          </div>
+        )}
         {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}
         {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} adapter={d.adapter} control={d.control_enabled || []} />)}
       </section>
