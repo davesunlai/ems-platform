@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.32.2 — Forecast refresh: konkrétní hláška co schází (kWp vs bloky vs vypnuté) + log kWp/poctu bloku, ať jde příčina rozlišit.
+
 ## v0.32.1 — OPRAVA: uložení lat/lon/pv_kwp_total z UI nefungovalo — pole chyběla v Pydantic modelu LocalityUpdate, takže je FastAPI z requestu zahodil ("chybí lat/lon"). Doplněna.
 
 ## v0.32.0 — NOVÁ FEATURE: predikce výroby z počasí (čtecí základ). Modul ems/forecast: Open-Meteo provider (global_tilted_irradiance, azimut 0=J/−90=V/+90=Z), PV model P_ac=kWp×GTI/1000×PR×temp_factor se samokalibrací PR proti reálné výrobě, cache tabulky weather_forecast/pv_forecast, konfigurace PV bloků (pv_block: typ normal/bifacial, podíl, směr, sklon). Lokalita: lat/lon/pv_kwp_total + admin v Lokalitách (město fulltextem → geokódování, bloky panelů). API /api/forecast/*. Kolektor přepočítává à 3 h. ZATÍM BEZ ŘÍZENÍ (dispatch/graf/2. zdroj v dalších commitech dle §14). ADR 0033.

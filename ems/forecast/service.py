@@ -22,9 +22,15 @@ async def refresh_locality(locality_id: int) -> dict:
     total_kwp = float(loc.get("pv_kwp_total") or 0)
     if lat is None or lon is None:
         return {"ok": False, "reason": "chybí lat/lon lokality"}
-    blocks = [b for b in await fdb.list_blocks(locality_id) if b["enabled"]]
-    if not blocks or total_kwp <= 0:
-        return {"ok": False, "reason": "chybí PV bloky / kWp"}
+    all_blocks = await fdb.list_blocks(locality_id)
+    blocks = [b for b in all_blocks if b["enabled"]]
+    logger.info("Forecast lokalita %s: kWp=%s, bloků=%d (povolených %d)",
+                locality_id, total_kwp, len(all_blocks), len(blocks))
+    if total_kwp <= 0:
+        return {"ok": False, "reason": "chybí celkové kWp lokality (pole 'FVE kWp celkem')"}
+    if not blocks:
+        reason = "PV bloky nejsou uložené" if not all_blocks else "PV bloky jsou všechny vypnuté"
+        return {"ok": False, "reason": reason}
 
     provider = OpenMeteoProvider()
     fetched_at = datetime.now(timezone.utc)
