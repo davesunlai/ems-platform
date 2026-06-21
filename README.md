@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.33.0 — Forecast krok 1: druhý zdroj Forecast.Solar (stejná azimut konvence jako Open-Meteo, žádný přepočet) + průměrování až výsledných řad do source='avg' + PÁSMO NEJISTOTY (pv_w_lo/pv_w_hi = rozptyl zdrojů). Bloky stejné orientace se slučují (1 dotaz/orientaci). Forecast.Solar throttle ~2.5 h (limit 12/hod), při výpadku/limitu fallback na cache nebo jen Open-Meteo. Pojistka v editaci: prázdné "FVE kWp celkem" červeně + Uložit zašedne.
+
 ## v0.32.2 — Forecast refresh: konkrétní hláška co schází (kWp vs bloky vs vypnuté) + log kWp/poctu bloku, ať jde příčina rozlišit.
 
 ## v0.32.1 — OPRAVA: uložení lat/lon/pv_kwp_total z UI nefungovalo — pole chyběla v Pydantic modelu LocalityUpdate, takže je FastAPI z requestu zahodil ("chybí lat/lon"). Doplněna.

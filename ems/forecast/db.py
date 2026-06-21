@@ -57,6 +57,9 @@ async def ensure_schema() -> None:
             """
         )
         await conn.execute("CREATE INDEX IF NOT EXISTS pv_block_loc ON pv_block(locality_id)")
+        # pásmo nejistoty (rozptyl zdrojů) — vyplněné jen u source='avg'
+        for col in ("pv_w_lo", "pv_w_hi"):
+            await conn.execute(f"ALTER TABLE pv_forecast ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION")
 
 
 # --- konfigurace bloků -------------------------------------------------------
@@ -114,11 +117,13 @@ async def write_pv(locality_id: int, source: str, rows: list[dict], fetched_at: 
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.executemany(
-            "INSERT INTO pv_forecast (locality_id, ts, source, pv_w, fetched_at, model_version) "
-            "VALUES ($1,$2,$3,$4,$5,$6) "
+            "INSERT INTO pv_forecast (locality_id, ts, source, pv_w, fetched_at, model_version, pv_w_lo, pv_w_hi) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) "
             "ON CONFLICT (locality_id, source, ts) DO UPDATE SET "
-            "pv_w=EXCLUDED.pv_w, fetched_at=EXCLUDED.fetched_at, model_version=EXCLUDED.model_version",
-            [(locality_id, r["ts"], source, float(r["pv_w"]), fetched_at, model_version) for r in rows])
+            "pv_w=EXCLUDED.pv_w, fetched_at=EXCLUDED.fetched_at, model_version=EXCLUDED.model_version, "
+            "pv_w_lo=EXCLUDED.pv_w_lo, pv_w_hi=EXCLUDED.pv_w_hi",
+            [(locality_id, r["ts"], source, float(r["pv_w"]), fetched_at, model_version,
+              r.get("pv_w_lo"), r.get("pv_w_hi")) for r in rows])
 
 
 # --- cache čtení (poslední řada) --------------------------------------------
@@ -126,10 +131,19 @@ async def latest_pv(locality_id: int, source: str = "avg") -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT ts, pv_w FROM pv_forecast WHERE locality_id=$1 AND source=$2 "
+            "SELECT ts, pv_w, pv_w_lo, pv_w_hi FROM pv_forecast WHERE locality_id=$1 AND source=$2 "
             "AND fetched_at=(SELECT max(fetched_at) FROM pv_forecast WHERE locality_id=$1 AND source=$2) "
             "ORDER BY ts", locality_id, source)
-    return [{"ts": r["ts"].isoformat(), "pv_w": r["pv_w"]} for r in rows]
+    return [{"ts": r["ts"].isoformat(), "pv_w": r["pv_w"],
+             "pv_w_lo": r["pv_w_lo"], "pv_w_hi": r["pv_w_hi"]} for r in rows]
+
+
+async def latest_fetched_at(locality_id: int, source: str):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT max(fetched_at) FROM pv_forecast WHERE locality_id=$1 AND source=$2",
+            locality_id, source)
 
 
 async def latest_pv_all_sources(locality_id: int) -> dict[str, list[dict]]:

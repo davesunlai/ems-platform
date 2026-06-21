@@ -102,6 +102,7 @@ function ForecastSection({ loc, onChange }) {
   const addBlk = () => setBlocks([...blocks, { name: `Blok ${blocks.length + 1}`, share_pct: 0, panel_type: "normal", tilt: 30, azimuth: 0, pr: 0.8, enabled: true }]);
   const delBlk = (i) => setBlocks(blocks.filter((_, j) => j !== i));
   const shareSum = blocks.reduce((s, b) => s + Number(b.share_pct || 0), 0);
+  const kwpMissing = kwp === "" || isNaN(Number(kwp)) || Number(kwp) <= 0;
 
   const save = async () => {
     setBusy(true); setMsg("");
@@ -148,7 +149,7 @@ function ForecastSection({ loc, onChange }) {
         </div>
         <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>Lat</label><input style={inp} value={lat} onChange={(e) => setLat(e.target.value)} /></div>
         <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>Lon</label><input style={inp} value={lon} onChange={(e) => setLon(e.target.value)} /></div>
-        <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>FVE kWp celkem</label><input style={inp} value={kwp} onChange={(e) => setKwp(e.target.value)} /></div>
+        <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>FVE kWp celkem</label><input style={{ ...inp, borderColor: kwpMissing ? "#e5534b" : "var(--border)" }} value={kwp} onChange={(e) => setKwp(e.target.value)} placeholder="např. 23" /></div>
       </div>
 
       <div style={{ fontSize: 12, fontWeight: 600, margin: "6px 0 2px" }}>
@@ -184,8 +185,9 @@ function ForecastSection({ loc, onChange }) {
       </p>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button onClick={addBlk} disabled={busy}>+ blok</button>
-        <button onClick={save} disabled={busy} style={{ fontWeight: 600 }}>Uložit</button>
+        <button onClick={save} disabled={busy || kwpMissing} style={{ fontWeight: 600 }}>Uložit</button>
         <button onClick={recompute} disabled={busy}>Přepočítat predikci</button>
+        {kwpMissing && <span style={{ fontSize: 12, color: "#e5534b" }}>Vyplň „FVE kWp celkem".</span>}
         {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
       </div>
     </div>

@@ -12,6 +12,7 @@ logger = logging.getLogger("ems.forecast")
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+FORECAST_SOLAR_URL = "https://api.forecast.solar/estimate"
 
 
 class WeatherProvider:
@@ -53,6 +54,51 @@ class OpenMeteoProvider(WeatherProvider):
                 "temp_c": _at(temp, i), "cloud_pct": _at(cloud, i),
             })
         return out
+
+
+class ForecastSolarProvider:
+    """Přímý odhad výroby (W) z lat/lon/sklon/azimut/kWp.
+
+    Azimut Forecast.Solar je SHODNÝ s Open-Meteo (0=jih, −90=východ, +90=západ),
+    takže náš uložený azimut se předává beze změny. Free: 12 dotazů/hod/IP.
+    """
+    name = "forecast_solar"
+
+    async def fetch(self, lat: float, lon: float, tilt: float, azimuth: float,
+                    kwp: float) -> list[dict]:
+        import httpx
+        url = f"{FORECAST_SOLAR_URL}/{lat:.4f}/{lon:.4f}/{round(tilt)}/{round(azimuth)}/{kwp:.2f}"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            data = r.json()
+        watts = (data.get("result") or {}).get("watts") or {}
+        tz = _offset_from(data)
+        out = []
+        for k, w in watts.items():
+            try:
+                dt = datetime.fromisoformat(k)
+            except ValueError:
+                continue
+            if dt.minute != 0:          # jen celé hodiny (vynech sunrise/sunset body)
+                continue
+            if dt.tzinfo is None and tz is not None:
+                dt = dt.replace(tzinfo=tz)
+            out.append({"ts": dt, "pv_w": float(w or 0)})
+        out.sort(key=lambda r: r["ts"])
+        return out
+
+
+def _offset_from(data: dict):
+    """tzinfo z message.info.time (např. ...+02:00)."""
+    from datetime import timezone
+    t = ((data.get("message") or {}).get("info") or {}).get("time")
+    if not t:
+        return timezone.utc
+    try:
+        return datetime.fromisoformat(t).tzinfo or timezone.utc
+    except ValueError:
+        return timezone.utc
 
 
 async def geocode(query: str, count: int = 5, language: str = "cs") -> list[dict]:
