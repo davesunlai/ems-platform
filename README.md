@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.32.0 — NOVÁ FEATURE: predikce výroby z počasí (čtecí základ). Modul ems/forecast: Open-Meteo provider (global_tilted_irradiance, azimut 0=J/−90=V/+90=Z), PV model P_ac=kWp×GTI/1000×PR×temp_factor se samokalibrací PR proti reálné výrobě, cache tabulky weather_forecast/pv_forecast, konfigurace PV bloků (pv_block: typ normal/bifacial, podíl, směr, sklon). Lokalita: lat/lon/pv_kwp_total + admin v Lokalitách (město fulltextem → geokódování, bloky panelů). API /api/forecast/*. Kolektor přepočítává à 3 h. ZATÍM BEZ ŘÍZENÍ (dispatch/graf/2. zdroj v dalších commitech dle §14). ADR 0033.
+
 ## v0.31.22 — OPRAVY: (1) Kč v souhrnu se počítaly za špatný den (server UTC vs pražská půlnoc) -> dnešní spotová cena teď přes stejné pražské okno jako kWh (po půlnoci tedy 0). (2) Výroba v billingu z vlastního denního počítadla měniče (energy_today, max za pražský den), odolné proti výpadkům; fallback integrace pv_power u goodwe.
 
 ## v0.31.21 — Billing: Spotřeba se už nepočítá z load_power (Solis ho nedává -> bylo 0), ale z bilance FVE+import−export−Δbaterie (fallback na load_power u goodwe). Vše integrací telemetrie = konzistentní.

@@ -76,6 +76,122 @@ function OutageSection({ loc, onChange }) {
   );
 }
 
+function ForecastSection({ loc, onChange }) {
+  const [lat, setLat] = useState(loc.lat ?? "");
+  const [lon, setLon] = useState(loc.lon ?? "");
+  const [kwp, setKwp] = useState(loc.pv_kwp_total ?? "");
+  const [blocks, setBlocks] = useState([]);
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    api.forecastBlocks(loc.id).then((r) => setBlocks(r.blocks.length ? r.blocks
+      : [{ name: "Blok 1", share_pct: 100, panel_type: "normal", tilt: 30, azimuth: 0, pr: 0.8, enabled: true }]))
+      .catch(() => {});
+  }, [loc.id]);
+
+  const search = async () => {
+    if (q.length < 2) return;
+    try { setHits((await api.geocode(q)).results); } catch { setHits([]); }
+  };
+  const pick = (h) => { setLat(h.lat); setLon(h.lon); setHits([]); setQ(h.label); };
+
+  const setBlk = (i, k, v) => setBlocks(blocks.map((b, j) => j === i ? { ...b, [k]: v } : b));
+  const addBlk = () => setBlocks([...blocks, { name: `Blok ${blocks.length + 1}`, share_pct: 0, panel_type: "normal", tilt: 30, azimuth: 0, pr: 0.8, enabled: true }]);
+  const delBlk = (i) => setBlocks(blocks.filter((_, j) => j !== i));
+  const shareSum = blocks.reduce((s, b) => s + Number(b.share_pct || 0), 0);
+
+  const save = async () => {
+    setBusy(true); setMsg("");
+    try {
+      await api.updateLocality(loc.id, {
+        lat: lat === "" ? null : Number(lat), lon: lon === "" ? null : Number(lon),
+        pv_kwp_total: kwp === "" ? null : Number(kwp),
+      });
+      await api.setForecastBlocks(loc.id, blocks.map((b) => ({
+        name: b.name, share_pct: Number(b.share_pct || 0), panel_type: b.panel_type,
+        tilt: Number(b.tilt || 0), azimuth: Number(b.azimuth || 0), pr: Number(b.pr || 0.8), enabled: b.enabled !== false,
+      })));
+      onChange(); setMsg("Uloženo.");
+    } catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+  const recompute = async () => {
+    setBusy(true); setMsg("");
+    try { const r = await api.refreshForecast(loc.id); setMsg(`Přepočítáno: ${r.points} bodů.`); }
+    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+
+  const inp = { width: "100%", padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>☀️ Predikce výroby — umístění a panely</div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 6 }}>
+        <div style={{ flex: "2 1 220px", position: "relative" }}>
+          <label style={{ fontSize: 12 }}>Město (fulltext → poloha)</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input style={inp} value={q} onChange={(e) => setQ(e.target.value)}
+                   onKeyDown={(e) => e.key === "Enter" && search()} placeholder="např. Kopřivnice" />
+            <button onClick={search} disabled={busy}>Najít</button>
+          </div>
+          {hits.length > 0 && (
+            <div style={{ position: "absolute", zIndex: 5, background: "var(--card,#161b22)", border: "1px solid var(--border)", borderRadius: 6, marginTop: 2, width: "100%", maxHeight: 180, overflow: "auto" }}>
+              {hits.map((h, i) => (
+                <div key={i} onClick={() => pick(h)} style={{ padding: "6px 8px", cursor: "pointer", fontSize: 13 }}>
+                  {h.label} <span className="muted">({h.lat?.toFixed(3)}, {h.lon?.toFixed(3)})</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>Lat</label><input style={inp} value={lat} onChange={(e) => setLat(e.target.value)} /></div>
+        <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>Lon</label><input style={inp} value={lon} onChange={(e) => setLon(e.target.value)} /></div>
+        <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>FVE kWp celkem</label><input style={inp} value={kwp} onChange={(e) => setKwp(e.target.value)} /></div>
+      </div>
+
+      <div style={{ fontSize: 12, fontWeight: 600, margin: "6px 0 2px" }}>
+        Bloky panelů <span className="muted" style={{ fontWeight: 400 }}>(součet podílů {shareSum} %{shareSum !== 100 ? " — mělo by být 100" : ""})</span>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+          <thead><tr style={{ textAlign: "left", opacity: 0.7 }}>
+            <th>Název</th><th>Typ</th><th>Podíl %</th><th>Směr °</th><th>Sklon °</th><th>PR</th><th></th>
+          </tr></thead>
+          <tbody>
+            {blocks.map((b, i) => (
+              <tr key={i}>
+                <td><input style={inp} value={b.name} onChange={(e) => setBlk(i, "name", e.target.value)} /></td>
+                <td>
+                  <select value={b.panel_type} onChange={(e) => setBlk(i, "panel_type", e.target.value)}>
+                    <option value="normal">normální</option>
+                    <option value="bifacial">bifaciální</option>
+                  </select>
+                </td>
+                <td><input style={{ ...inp, width: 60 }} value={b.share_pct} onChange={(e) => setBlk(i, "share_pct", e.target.value)} /></td>
+                <td><input style={{ ...inp, width: 60 }} value={b.azimuth} onChange={(e) => setBlk(i, "azimuth", e.target.value)} /></td>
+                <td><input style={{ ...inp, width: 60 }} value={b.tilt} onChange={(e) => setBlk(i, "tilt", e.target.value)} /></td>
+                <td><input style={{ ...inp, width: 60 }} value={b.pr} onChange={(e) => setBlk(i, "pr", e.target.value)} /></td>
+                <td><button onClick={() => delBlk(i)} title="Odebrat">✕</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted" style={{ fontSize: 11, margin: "4px 0" }}>
+        Směr: 0 = jih, −90 = východ, +90 = západ, ±180 = sever. Sklon: 0 = naplocho, 90 = svisle (plot). PR se časem sám doladí proti reálné výrobě.
+      </p>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={addBlk} disabled={busy}>+ blok</button>
+        <button onClick={save} disabled={busy} style={{ fontWeight: 600 }}>Uložit</button>
+        <button onClick={recompute} disabled={busy}>Přepočítat predikci</button>
+        {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 function LocalityCard({ loc, allUsers, allModules, onChange }) {
   const [uSel, setUSel] = useState("");
   const [dSel, setDSel] = useState("");
@@ -149,6 +265,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
       </div>
 
       <OutageSection loc={loc} onChange={onChange} />
+      <ForecastSection loc={loc} onChange={onChange} />
     </div>
   );
 }

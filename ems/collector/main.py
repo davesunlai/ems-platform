@@ -24,6 +24,8 @@ from ems.market.spot import fetch_current_price_czk, fetch_day_slots
 from ems.automation import db as automation_db
 from ems.automation.engine import evaluate_all
 from ems.control import db as control_db
+from ems.forecast import db as forecast_db
+from ems.forecast import service as forecast_service
 from ems.outputs.engine import evaluate_outputs
 from ems.outages.service import refresh_all as refresh_outages_all
 from .config import build_adapter, build_sink
@@ -167,6 +169,7 @@ async def run() -> None:
         await market_db.ensure_history_schema()
         await automation_db.ensure_schema()
         await control_db.ensure_queue_schema()
+        await forecast_db.ensure_schema()
     except Exception as exc:
         logger.error("Inicializace registru modulů selhala: %s", exc)
 
@@ -195,6 +198,7 @@ async def run() -> None:
                 await asyncio.gather(*(poll_device(e["adapter"], sink) for e in active.values()))
                 await process_queue(active)
             await tick_market_and_automation(state)
+            await tick_forecast(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
             except asyncio.TimeoutError:
@@ -207,6 +211,19 @@ async def run() -> None:
                 pass
         await sink.close()
         logger.info("Kolektor zastaven.")
+
+
+async def tick_forecast(state: dict) -> None:
+    """Přepočet predikce výroby (čtecí) — MVP cadence à 3 h."""
+    import time as _t
+    now = _t.monotonic()
+    if now - state.get("last_forecast", -1e9) < 10800:   # 3 h
+        return
+    state["last_forecast"] = now
+    try:
+        await forecast_service.refresh_all()
+    except Exception as exc:
+        logger.warning("Forecast tick selhal: %s", exc)
 
 
 async def tick_market_and_automation(state: dict) -> None:

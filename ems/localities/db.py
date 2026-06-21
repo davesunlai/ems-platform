@@ -60,6 +60,10 @@ async def ensure_schema() -> None:
             ("pricing_mode", "TEXT NOT NULL DEFAULT 'spot'"),
             ("tariff_import_czk", "DOUBLE PRECISION"),
             ("tariff_export_czk", "DOUBLE PRECISION"),
+            # Forecast: poloha (Open-Meteo) + celkový instalovaný výkon FVE.
+            ("lat", "DOUBLE PRECISION"),
+            ("lon", "DOUBLE PRECISION"),
+            ("pv_kwp_total", "DOUBLE PRECISION"),
         ):
             await conn.execute(
                 f"ALTER TABLE localities ADD COLUMN IF NOT EXISTS {col} {ddl}"
@@ -136,7 +140,8 @@ async def create(name: str, address, region: str, note) -> dict:
 
 async def update(loc_id: int, patch: dict) -> dict | None:
     sets, args = [], []
-    for k in ("name", "address", "region", "note", "cez_ean", "cez_meter", "addr_zip", "addr_city", "addr_street"):
+    for k in ("name", "address", "region", "note", "cez_ean", "cez_meter", "addr_zip", "addr_city", "addr_street",
+              "lat", "lon", "pv_kwp_total"):
         if k in patch and patch[k] is not None:
             args.append(patch[k]); sets.append(f"{k} = ${len(args)}")
     if not sets:
