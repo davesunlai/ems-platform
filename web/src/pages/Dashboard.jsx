@@ -73,34 +73,46 @@ function fmt(metric, m) {
   return { value: typeof v === "number" ? v.toFixed(1) : v, unit: u };
 }
 
-function ControlPanel({ id }) {
-  const [active, setActive] = useState(null);
+const CONTROL_ACT = {
+  force_charge: { label: "Vynucené nabíjení", color: "#3fb950", icon: "⚡" },
+  force_discharge: { label: "Vybíjení do sítě", color: "#d29922", icon: "🔻" },
+  spiral: { label: "Spirála (vybíjení odběrem)", color: "#58a6ff", icon: "🌀" },
+  set_work_mode: { label: "Změna režimu", color: "#58a6ff", icon: "⚙" },
+};
+
+function ControlBanners({ deviceIds }) {
+  const [states, setStates] = useState({});
+  const key = deviceIds.join(",");
   useEffect(() => {
+    if (!deviceIds.length) return;
     let alive = true;
-    const load = () => api.controlStates(id).then((r) => alive && setActive((r.states || {})[id] || null)).catch(() => {});
+    const load = () => api.controlStates(key).then((r) => alive && setStates(r.states || {})).catch(() => {});
     load();
     const t = setInterval(load, 5000);
     return () => { alive = false; clearInterval(t); };
-  }, [id]);
+  }, [key]);
 
-  const ACT = {
-    force_charge: { label: "Vynucené nabíjení", color: "#3fb950", icon: "⚡" },
-    force_discharge: { label: "Vybíjení do sítě", color: "#d29922", icon: "🔻" },
-    spiral: { label: "Spirála (vybíjení odběrem)", color: "#58a6ff", icon: "🌀" },
-    set_work_mode: { label: "Změna režimu", color: "#58a6ff", icon: "⚙" },
-  };
-  const act = active && active.action && active.action !== "idle" ? (ACT[active.action] || { label: active.action, color: "#58a6ff", icon: "⚡" }) : null;
-  if (!act) return null;
-  const since = active?.since ? new Date(active.since) : null;
-  const sinceTxt = since ? since.toLocaleString("cs-CZ", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
-  const actPower = active?.params?.power;
+  const items = deviceIds.map((id) => ({ id, st: states[id] }))
+    .filter(({ st }) => st && st.action && st.action !== "idle");
+  if (!items.length) return null;
+
   return (
-    <div className="ems-active-bar" style={{ color: act.color, background: `color-mix(in srgb, ${act.color} 14%, transparent)`, margin: "8px 0" }}>
-      <span className="ems-pulse" style={{ fontSize: 16 }}>{act.icon}</span>
-      <span>{act.label}{actPower != null ? ` (výkon ${actPower})` : ""}</span>
-      <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: "auto" }}>
-        od {sinceTxt}{active?.source && active.source !== "manual" ? ` · ${active.source}` : ""}
-      </span>
+    <div style={{ margin: "0 0 12px" }}>
+      {items.map(({ id, st }) => {
+        const act = CONTROL_ACT[st.action] || { label: st.action, color: "#58a6ff", icon: "⚡" };
+        const since = st.since ? new Date(st.since) : null;
+        const sinceTxt = since ? since.toLocaleString("cs-CZ", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
+        const actPower = st.params?.power;
+        return (
+          <div key={id} className="ems-active-bar" style={{ color: act.color, background: `color-mix(in srgb, ${act.color} 14%, transparent)`, marginBottom: 6 }}>
+            <span className="ems-pulse" style={{ fontSize: 16 }}>{act.icon}</span>
+            <span>{act.label}{actPower != null ? ` (výkon ${actPower})` : ""}</span>
+            <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: "auto" }}>
+              {id} · od {sinceTxt}{st.source && st.source !== "manual" ? ` · ${st.source}` : ""}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -211,7 +223,6 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
           </div>
         </div>
       ))}
-      {adapter === "solis" && control.length > 0 && <ControlPanel id={id} />}
       {active && (
       <div className="chart-wrap">
         <div className="chart-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -441,6 +452,7 @@ export default function Dashboard() {
           {current === "—" ? "Bez lokality" : `📍 ${current}`}
           <LocalityNow deviceIds={ids} localityId={devs[0].locality_id} />
         </h2>
+        <ControlBanners deviceIds={ids} />
         <LocalityChart deviceIds={ids} />
         {devs[0].locality_id && (
           <div className="card" style={{ marginTop: 14 }}>

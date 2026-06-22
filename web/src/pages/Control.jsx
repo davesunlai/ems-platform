@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 
 // Mezipaměť načtených řídicích registrů per modul (v rámci session SPA),
@@ -334,6 +335,78 @@ const ACT_LABEL = {
   charge_pv: "nabíjení z FVE", charge_grid: "nabíjení ze sítě", discharge_load: "vybíjení do domu",
   discharge_grid: "vybíjení do sítě", export: "přetok do sítě", import: "odběr ze sítě", idle: "klid",
 };
+const ACTIVE_LABEL = {
+  force_charge: "vynucené nabíjení", force_discharge: "vybíjení do sítě",
+  spiral: "spirála", set_work_mode: "změna režimu", idle: "klid",
+};
+
+function Pill({ on, children }) {
+  return <span className={on ? "badge-on" : "badge-off"} style={{ fontSize: 11 }}>{children}</span>;
+}
+
+function LocalitySummary({ locId, mods }) {
+  const modIds = mods.map((m) => m.id);
+  const modKey = modIds.join(",");
+  const [plan, setPlan] = useState(null);
+  const [rules, setRules] = useState([]);
+  const [outs, setOuts] = useState([]);
+  const [controlled, setControlled] = useState([]);
+  const [states, setStates] = useState({});
+
+  useEffect(() => {
+    if (!locId) return;
+    let alive = true;
+    const load = () => {
+      api.getPlanner(locId).then((r) => alive && setPlan(r)).catch(() => {});
+      api.listRules().then((all) => alive && setRules(all.filter((r) => modIds.includes(r.params?.target_module)))).catch(() => {});
+      api.listOutputs().then((all) => alive && setOuts(all.filter((o) => o.locality_id === locId))).catch(() => {});
+      api.plannerControlled().then((r) => alive && setControlled(r.devices || [])).catch(() => {});
+      if (modIds.length) api.controlStates(modKey).then((r) => alive && setStates(r.states || {})).catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 10000);
+    return () => { alive = false; clearInterval(t); };
+  }, [locId, modKey]);
+
+  const cfg = plan?.config; const cur = plan?.current;
+  const forced = modIds.map((id) => ({ id, st: states[id] })).filter(({ st }) => st && st.action && st.action !== "idle");
+
+  return (
+    <div className="panel" style={{ marginBottom: 14, background: "color-mix(in srgb, #58a6ff 6%, transparent)", borderColor: "color-mix(in srgb, #58a6ff 30%, var(--border))" }}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>🧭 Co ovlivňuje tuto lokalitu</div>
+      <div style={{ display: "grid", gap: 7, fontSize: 13, lineHeight: 1.5 }}>
+        <div>
+          🧠 <b>Plánovač:</b>{" "}
+          {cfg?.enabled ? <Pill on>zapnutý — řídí měnič</Pill> : <Pill>vypnutý (jen poradní plán)</Pill>}
+          {cur && <span className="muted"> · teď {ACT_LABEL[cur.action] || cur.action}, SoC plán {Math.round(cur.soc_pct)} %</span>}
+        </div>
+        {forced.length > 0 && (
+          <div>⚡ <b>Aktivní zásah:</b>{" "}
+            {forced.map(({ id, st }) => `${id}: ${ACTIVE_LABEL[st.action] || st.action}${st.source && st.source !== "manual" ? ` (${st.source})` : ""}`).join(", ")}
+          </div>
+        )}
+        <div>
+          📈 <b>Spotová pravidla:</b>{" "}
+          {rules.length === 0 ? <span className="muted">žádné</span> : rules.map((r) => (
+            <span key={r.id} style={{ marginRight: 10, whiteSpace: "nowrap" }}>
+              {r.type === "spot_charge" ? "nabíjení" : "vybíjení"} „{r.id}" <Pill on={r.enabled}>{r.enabled ? "zap" : "vyp"}</Pill>
+              {controlled.includes(r.params?.target_module) && <span style={{ marginLeft: 4, color: "var(--amber)", fontWeight: 700 }}>⚠ přebírá plánovač</span>}
+            </span>
+          ))}
+          <Link to="/automation" className="muted" style={{ marginLeft: 6, fontSize: 12 }}>upravit →</Link>
+        </div>
+        <div>
+          🔌 <b>Spínané spotřebiče:</b>{" "}
+          {outs.length === 0 ? <span className="muted">žádné</span> : outs.map((o) => (
+            <span key={o.id} style={{ marginRight: 10, whiteSpace: "nowrap" }}>
+              {o.name} <Pill on={o.is_on}>{o.is_on ? "sepnuto" : "rozepnuto"}</Pill>{!o.enabled && <span className="muted"> (vypnuto)</span>}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function PlannerPanel({ locId }) {
   const [data, setData] = useState(null);
@@ -406,6 +479,7 @@ function LocalitySection({ locId, locName, mods }) {
   return (
     <section style={{ marginBottom: 24 }}>
       <h2 style={{ fontSize: 17, margin: "0 0 8px" }}>📍 {locName || "Bez lokality"}</h2>
+      {locId && <LocalitySummary locId={locId} mods={mods} />}
       {locId && <PlannerPanel locId={locId} />}
       {mods.map((m) => m.adapter === "solis"
         ? <SolisControl key={m.id} mod={m} />
