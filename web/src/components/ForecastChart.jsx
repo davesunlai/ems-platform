@@ -5,12 +5,16 @@ const PV = "#3fb950", BAND = "rgba(63,185,80,0.16)", LOAD = "#e3b341", SPOT = "#
 
 export default function ForecastChart({ localityId }) {
   const [data, setData] = useState(null);
+  const [plan, setPlan] = useState(null);
   const [hov, setHov] = useState(null);
 
   useEffect(() => {
     if (!localityId) return;
     let alive = true;
-    const load = () => api.forecastData(localityId).then((r) => alive && setData(r)).catch(() => {});
+    const load = () => {
+      api.forecastData(localityId).then((r) => alive && setData(r)).catch(() => {});
+      api.getPlanner(localityId).then((r) => alive && setPlan(r.schedule || [])).catch(() => {});
+    };
     load();
     const t = setInterval(load, 300000);
     return () => { alive = false; clearInterval(t); };
@@ -78,6 +82,7 @@ export default function ForecastChart({ localityId }) {
         <span className="muted">▨ pásmo nejistoty</span>
         <span style={{ color: LOAD }}>▬ spotřeba</span>
         <span style={{ color: SPOT }}>▬ cena nákup {fixed ? "(pevná)" : ""}</span>
+        {plan && plan.length > 0 && <span style={{ color: "#a371f7" }}>┄ SoC plán</span>}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}
            onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
@@ -104,6 +109,12 @@ export default function ForecastChart({ localityId }) {
 
         {/* teď */}
         {showNow && <line x1={nowX} y1={padT} x2={nowX} y2={padT + plotH} stroke="#fff" strokeWidth="1" strokeDasharray="3 3" opacity="0.5" />}
+
+        {/* SoC trajektorie plánu (0–100 % mapováno na výšku) */}
+        {plan && plan.length >= 2 && (
+          <path d={plan.map((p, i) => `${i ? "L" : "M"}${X(new Date(p.ts).getTime()).toFixed(1)},${(padT + plotH * (1 - (p.soc_pct || 0) / 100)).toFixed(1)}`).join(" ")}
+                fill="none" stroke="#a371f7" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.9" />
+        )}
 
         {/* x ticky */}
         {ticks.map((t, i) => (

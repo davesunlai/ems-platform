@@ -45,14 +45,16 @@ export default function Automation() {
   const [editing, setEditing] = useState(null);
   const [err, setErr] = useState("");
   const [spot, setSpot] = useState(null);
+  const [controlled, setControlled] = useState([]);
 
   const load = () => api.listRules().then(setRules).catch((e) => setErr(e.message));
   const loadSpot = () => api.spot().then(setSpot).catch(() => {});
+  const loadCtrl = () => api.plannerControlled().then((r) => setControlled(r.devices || [])).catch(() => {});
   useEffect(() => {
     load();
     api.controlModules().then((m) => { setMods(m); setF((x) => ({ ...x, target_module: m[0]?.id || "" })); }).catch(() => {});
-    loadSpot();
-    const t = setInterval(() => { load(); loadSpot(); }, 8000);
+    loadSpot(); loadCtrl();
+    const t = setInterval(() => { load(); loadSpot(); loadCtrl(); }, 8000);
     return () => clearInterval(t);
   }, []);
 
@@ -162,7 +164,14 @@ export default function Automation() {
               <tr key={r.id}>
                 <td>{r.id}</td>
                 <td>{r.type === "spot_charge" ? "🔋 nabíjení" : "⚡ vybíjení"}</td>
-                <td className="role">{r.params.target_module}</td>
+                <td className="role">
+                  {r.params.target_module}
+                  {controlled.includes(r.params.target_module) && (
+                    <span style={{ marginLeft: 6, background: "var(--amber, #d29922)", color: "#1a1a1a", padding: "1px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      ⚠ přebírá plánovač
+                    </span>
+                  )}
+                </td>
                 <td className="muted">{r.type === "spot_charge" ? "< " : "> "}{r.params.price_threshold} Kč</td>
                 <td className="muted">
                   {r.type === "spot_charge"

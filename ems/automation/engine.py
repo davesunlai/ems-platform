@@ -62,17 +62,17 @@ async def _actual_mode(device_id: str):
         )
 
 
-async def evaluate_all(price) -> None:
+async def evaluate_all(price, skip_devices=None) -> None:
     """Vyhodnotí všechna pravidla, agregovaně podle cílového zařízení.
 
-    Pro jedno zařízení může být víc pravidel (nabíjení i vybíjení). Spočítáme
-    jeden výsledný záměr a pošleme nejvýš jeden povel — pravidla si tak
-    nepřebíjejí navzájem režim.
+    `skip_devices` — moduly řízené plánovačem; reaktivní pravidla je přeskočí,
+    aby si dva regulátory nelezly do zelí (plánovač má přednost).
     """
+    skip = set(skip_devices or [])
     by_target: dict[str, list] = {}
     for r in await auto_db.list_enabled():
         t = r.params.get("target_module")
-        if t:
+        if t and t not in skip:
             by_target.setdefault(t, []).append(r)
     for target, rules in by_target.items():
         try:

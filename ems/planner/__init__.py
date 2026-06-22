@@ -1,0 +1,1 @@
+"""Prediktivní plánovač (greedy MVP)."""

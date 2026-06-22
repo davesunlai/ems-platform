@@ -28,6 +28,8 @@ from ems.forecast import db as forecast_db
 from ems.forecast import service as forecast_service
 from ems.pricing import db as pricing_db
 from ems.pricing import fx as pricing_fx
+from ems.planner import db as planner_db
+from ems.planner import service as planner_service
 from ems.outputs.engine import evaluate_outputs
 from ems.outages.service import refresh_all as refresh_outages_all
 from .config import build_adapter, build_sink
@@ -193,6 +195,7 @@ async def run() -> None:
         await control_db.ensure_state_schema()
         await forecast_db.ensure_schema()
         await pricing_db.ensure_schema()
+        await planner_db.ensure_schema()
     except Exception as exc:
         logger.error("Inicializace registru modulů selhala: %s", exc)
 
@@ -222,6 +225,7 @@ async def run() -> None:
                 await process_queue(active)
             await tick_market_and_automation(state)
             await tick_forecast(state)
+            await tick_planner(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
             except asyncio.TimeoutError:
@@ -253,6 +257,44 @@ async def tick_forecast(state: dict) -> None:
         logger.warning("Forecast tick selhal: %s", exc)
 
 
+async def tick_planner(state: dict) -> None:
+    """Přepočet plánu (à 30 min) + výkon: enqueue aktuální akce při změně
+    pro lokality se zapnutým plánovačem. Force jede BEZ syrového výkonu —
+    nabíjení/vybíjení probíhá na nastavených limitech proudu (obejde 43136)."""
+    import time as _t
+    now = _t.monotonic()
+    if now - state.get("last_planner", -1e9) >= 1800:
+        state["last_planner"] = now
+        try:
+            await planner_service.run_all()
+        except Exception as exc:
+            logger.warning("Planner přepočet selhal: %s", exc)
+    try:
+        controlled = await planner_service.controlled_devices()
+        if not controlled:
+            return
+        all_devs = [d for ds in controlled.values() for d in ds]
+        states = await control_db.get_states(all_devs)
+        for lid, devs in controlled.items():
+            ca = await planner_db.current_action(lid)
+            if not ca:
+                continue
+            act = ca["action"]
+            if act == "charge_grid":
+                desired, cmd = "force_charge", "force_charge"
+            elif act == "discharge_grid":
+                desired, cmd = "force_discharge", "force_discharge"
+            else:
+                desired, cmd = "idle", "stop"
+            for dev in devs:
+                cur = (states.get(dev) or {}).get("action", "idle")
+                if cur != desired:
+                    await control_db.enqueue(dev, cmd, {"source": "planner"}, username="planner")
+                    logger.info("Planner lok %s modul %s: %s -> %s (%s)", lid, dev, cur, desired, ca.get("reason"))
+    except Exception as exc:
+        logger.debug("Planner výkon: %s", exc)
+
+
 async def tick_market_and_automation(state: dict) -> None:
     import time as _t
     # obnova spotové ceny (živý feed, pokud není ruční override)
@@ -271,10 +313,12 @@ async def tick_market_and_automation(state: dict) -> None:
                 await market_db.upsert_slots(slots)
         except Exception as exc:
             logger.warning("Obnova trhu selhala: %s", exc)
-    # vyhodnocení automatizace s aktuální cenou
+    # vyhodnocení automatizace s aktuální cenou (kromě modulů řízených plánovačem)
     try:
         st = await market_db.get_state()
-        await evaluate_all(st.get("price"))
+        controlled = await planner_service.controlled_devices()
+        skip = [d for devs in controlled.values() for d in devs]
+        await evaluate_all(st.get("price"), skip_devices=skip)
     except Exception as exc:
         logger.warning("Automatizace selhala: %s", exc)
     # spínání kontaktu dle SOC (hystereze)

@@ -156,16 +156,83 @@ function GoodweControl({ mod }) {
   );
 }
 
-function LocalitySection({ locName, mods }) {
+const ACT_LABEL = {
+  charge_pv: "nabíjení z FVE", charge_grid: "nabíjení ze sítě", discharge_load: "vybíjení do domu",
+  discharge_grid: "vybíjení do sítě", export: "přetok do sítě", import: "odběr ze sítě", idle: "klid",
+};
+
+function PlannerPanel({ locId }) {
+  const [data, setData] = useState(null);
+  const [cfg, setCfg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const reload = () => api.getPlanner(locId).then((r) => { setData(r); setCfg({ ...r.config }); }).catch(() => {});
+  useEffect(() => { if (locId) reload(); }, [locId]);
+  if (!locId || !cfg) return null;
+
+  const set = (k, v) => setCfg({ ...cfg, [k]: v });
+  const NUM = ["capacity_kwh", "soc_min_pct", "outage_reserve_pct", "max_charge_kw", "max_discharge_kw", "horizon_h"];
+  const save = async () => {
+    setBusy(true); setMsg("");
+    const payload = { ...cfg };
+    for (const k of NUM) payload[k] = cfg[k] === "" || cfg[k] == null ? null : Number(cfg[k]);
+    try { await api.setPlannerConfig(locId, payload); setMsg("Uloženo a přepočítáno."); reload(); }
+    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+
+  const cur = data?.current;
+  const sched = data?.schedule || [];
+  const fld = { width: 90, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+  const planImp = sched.reduce((s, r) => s + (r.import_kwh || 0), 0);
+  const planExp = sched.reduce((s, r) => s + (r.export_kwh || 0), 0);
+
+  return (
+    <div className="panel" style={{ marginBottom: 14, borderColor: cfg.enabled ? "var(--green)" : "var(--border)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 700, fontSize: 14 }}>🧠 Plánovač lokality</span>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 600, color: cfg.enabled ? "var(--green)" : "var(--muted)" }}>
+          <input type="checkbox" checked={!!cfg.enabled} onChange={(e) => set("enabled", e.target.checked)} />
+          {cfg.enabled ? "ZAPNUTÝ — řídí měnič" : "vypnutý (jen plán)"}
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
+          <input type="checkbox" checked={!!cfg.allow_grid_discharge} onChange={(e) => set("allow_grid_discharge", e.target.checked)} />
+          povolit vybíjení do sítě
+        </label>
+      </div>
+      {cfg.enabled && (
+        <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0", color: "var(--amber)" }}>
+          ⚠ Zapnutý plánovač <b>reálně řídí měnič</b> (přes frontu, na nastavených limitech proudu) a přebírá řízení místo reaktivních spot pravidel této lokality.
+          {cfg.allow_grid_discharge ? " Vybíjení do sítě je povolené — 43136 neověřen, sleduj výkon." : ""}
+        </p>
+      )}
+
+      <div className="row" style={{ gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+        <div><label style={{ fontSize: 12, display: "block" }}>Kapacita (kWh)</label><input style={fld} value={cfg.capacity_kwh ?? ""} onChange={(e) => set("capacity_kwh", e.target.value)} /></div>
+        <div><label style={{ fontSize: 12, display: "block" }}>SoC min (%)</label><input style={fld} value={cfg.soc_min_pct ?? ""} onChange={(e) => set("soc_min_pct", e.target.value)} /></div>
+        <div><label style={{ fontSize: 12, display: "block" }}>Rezerva výpadek (%)</label><input style={fld} value={cfg.outage_reserve_pct ?? ""} onChange={(e) => set("outage_reserve_pct", e.target.value)} /></div>
+        <div><label style={{ fontSize: 12, display: "block" }}>Max nabíjení (kW)</label><input style={fld} value={cfg.max_charge_kw ?? ""} onChange={(e) => set("max_charge_kw", e.target.value)} /></div>
+        <div><label style={{ fontSize: 12, display: "block" }}>Max vybíjení (kW)</label><input style={fld} value={cfg.max_discharge_kw ?? ""} onChange={(e) => set("max_discharge_kw", e.target.value)} /></div>
+        <div><label style={{ fontSize: 12, display: "block" }}>Horizont (h)</label><input style={fld} value={cfg.horizon_h ?? ""} onChange={(e) => set("horizon_h", e.target.value)} /></div>
+        <button className="btn primary" style={{ alignSelf: "flex-end", padding: "8px 16px" }} disabled={busy} onClick={save}>Uložit a přepočítat</button>
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 13 }}>
+        {cur
+          ? <span>Teď: <b>{ACT_LABEL[cur.action] || cur.action}</b> · SoC plán {Math.round(cur.soc_pct)} % <span className="muted">— {cur.reason}</span></span>
+          : <span className="muted">Zatím bez plánu — potřebuje predikci výroby (zadej polohu/panely a dej Přepočítat predikci).</span>}
+        {sched.length > 0 && <span className="muted"> · plán {sched.length} h, odběr {planImp.toFixed(1)} kWh, přetok {planExp.toFixed(1)} kWh</span>}
+      </div>
+      {msg && <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>{msg}</p>}
+    </div>
+  );
+}
+
+function LocalitySection({ locId, locName, mods }) {
   return (
     <section style={{ marginBottom: 24 }}>
-      <h2 style={{ fontSize: 17, margin: "0 0 4px" }}>📍 {locName || "Bez lokality"}</h2>
-      <div className="panel" style={{ marginBottom: 14, borderColor: "var(--border)", background: "color-mix(in srgb, var(--accent, #58a6ff) 5%, transparent)" }}>
-        <div style={{ fontWeight: 600, fontSize: 13 }}>Plánovač lokality</div>
-        <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
-          Prediktivní řízení (nabíjení v nejlevnějším spotu, vybíjení ve špičce, rezerva pro výpadek) — připravujeme v dalším kroku.
-        </p>
-      </div>
+      <h2 style={{ fontSize: 17, margin: "0 0 8px" }}>📍 {locName || "Bez lokality"}</h2>
+      {locId && <PlannerPanel locId={locId} />}
       {mods.map((m) => m.adapter === "solis"
         ? <SolisControl key={m.id} mod={m} />
         : <GoodweControl key={m.id} mod={m} />)}
@@ -190,7 +257,7 @@ export default function Control() {
   const byLoc = {};
   for (const m of mods) {
     const key = m.locality_id ?? "none";
-    (byLoc[key] = byLoc[key] || { name: m.locality, mods: [] }).mods.push(m);
+    (byLoc[key] = byLoc[key] || { id: m.locality_id ?? null, name: m.locality, mods: [] }).mods.push(m);
   }
   const groups = Object.values(byLoc);
 
@@ -204,7 +271,7 @@ export default function Control() {
       </div>
 
       {mods.length === 0 && <p className="muted">Žádný řiditelný modul.</p>}
-      {groups.map((g, i) => <LocalitySection key={i} locName={g.name} mods={g.mods} />)}
+      {groups.map((g, i) => <LocalitySection key={i} locId={g.id} locName={g.name} mods={g.mods} />)}
 
       <div className="panel">
         <h3>Audit povelů</h3>
