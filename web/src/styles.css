@@ -199,3 +199,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
 body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Zvýraznění aktivního vynuceného stavu (force charge/discharge, spirála…) */
+@keyframes emsPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.ems-pulse { animation: emsPulse 1.2s ease-in-out infinite; }
+.ems-active-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px;
+  font-weight: 700; font-size: 14px; margin-bottom: 8px; border: 1px solid currentColor; }

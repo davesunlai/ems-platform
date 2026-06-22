@@ -101,6 +101,14 @@ async def process_queue(active: dict) -> None:
         try:
             res = await dispatch_command(adapter, c["action"], c["params"] or {})
             await control_db.complete(c["id"], True, res if isinstance(res, dict) else {"result": res})
+            # promítni do aktuálního stavu (force_charge/discharge -> aktivní, stop -> idle)
+            try:
+                act = "idle" if c["action"] == "stop" else c["action"]
+                await control_db.set_state(c["module_id"], act, c["params"] or {},
+                                           source=(c["params"] or {}).get("source", "manual"),
+                                           username=c.get("username"))
+            except Exception:
+                pass
             logger.info("Povel #%s '%s' (%s) OK: %s", c["id"], c["action"], c["module_id"], res)
         except Exception as exc:
             await control_db.complete(c["id"], False, {"error": str(exc)})
@@ -171,6 +179,7 @@ async def run() -> None:
         await market_db.ensure_history_schema()
         await automation_db.ensure_schema()
         await control_db.ensure_queue_schema()
+        await control_db.ensure_state_schema()
         await forecast_db.ensure_schema()
         await pricing_db.ensure_schema()
     except Exception as exc:

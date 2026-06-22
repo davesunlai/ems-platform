@@ -79,6 +79,7 @@ function ControlPanel({ id, control }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [active, setActive] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -86,7 +87,27 @@ function ControlPanel({ id, control }) {
     return () => { alive = false; };
   }, []);
 
-  if (!canControl) return null;
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.controlStates(id).then((r) => alive && setActive((r.states || {})[id] || null)).catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(t); };
+  }, [id]);
+
+  const ACT = {
+    force_charge: { label: "Vynucené nabíjení", color: "#3fb950", icon: "⚡" },
+    force_discharge: { label: "Vybíjení do sítě", color: "#d29922", icon: "🔻" },
+    spiral: { label: "Spirála (vybíjení odběrem)", color: "#58a6ff", icon: "🌀" },
+    set_work_mode: { label: "Změna režimu", color: "#58a6ff", icon: "⚙" },
+  };
+  const act = active && active.action && active.action !== "idle" ? (ACT[active.action] || { label: active.action, color: "#58a6ff", icon: "⚡" }) : null;
+  const since = active?.since ? new Date(active.since) : null;
+  const sinceTxt = since ? since.toLocaleString("cs-CZ", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
+  const actPower = active?.params?.power;
+
+  const isActive = !!act;
+  if (!canControl && !isActive) return null;
   const has = (k) => control.includes(k);
 
   const send = async (action, params, label) => {
@@ -113,6 +134,16 @@ function ControlPanel({ id, control }) {
 
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", margin: "8px 0", background: "color-mix(in srgb, var(--amber, #d29922) 6%, transparent)" }}>
+      {act && (
+        <div className="ems-active-bar" style={{ color: act.color, background: `color-mix(in srgb, ${act.color} 14%, transparent)` }}>
+          <span className="ems-pulse" style={{ fontSize: 16 }}>{act.icon}</span>
+          <span>{act.label}{actPower != null ? ` (výkon ${actPower})` : ""}</span>
+          <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: "auto" }}>
+            od {sinceTxt}{active?.source && active.source !== "manual" ? ` · ${active.source}` : ""}
+          </span>
+        </div>
+      )}
+      {canControl && (<>
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
         <Icon name="sliders" size={15} /> Ovládání
       </div>
@@ -158,6 +189,7 @@ function ControlPanel({ id, control }) {
           {status.text}
         </div>
       )}
+      </>)}
     </div>
   );
 }

@@ -62,6 +62,7 @@ export const api = {
   getMode: (id) => request(`/api/control/${encodeURIComponent(id)}/mode`),
   setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
   controlAudit: () => request("/api/control/audit"),
+  controlStates: (ids) => request(`/api/control/states?ids=${encodeURIComponent(ids)}`),
   contactList: () => request("/api/contact"),
   setContact: (id, s) => request(`/api/contact/${encodeURIComponent(id)}`, { method: "PUT", body: s }),
   contactSwitch: (id, on) => request(`/api/contact/${encodeURIComponent(id)}/switch?on=${on}`, { method: "POST" }),

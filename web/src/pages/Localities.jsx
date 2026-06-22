@@ -194,6 +194,22 @@ function ForecastSection({ loc, onChange }) {
   );
 }
 
+const TINP = { width: "100%", padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+
+// Číselné pole jako text (převod na číslo až při uložení) — definováno na úrovni
+// modulu, aby se při přepisování nepřemountovalo a input neztrácel fokus.
+function NumField({ label, suf, value, onChange }) {
+  return (
+    <div style={{ flex: "1 1 120px" }}>
+      <label style={{ fontSize: 12 }}>{label}{suf ? <span className="muted"> {suf}</span> : null}</label>
+      <input style={TINP} inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+const TARIFF_NUM_KEYS = ["monthly_fee", "spot_buy_surcharge", "spot_sell_fee", "dist_buy_vt",
+  "dist_buy_nt", "levies", "fix_buy_vt", "fix_buy_nt", "fix_sell"];
+
 function TariffSection({ loc }) {
   const blank = {
     mode: "spot", valid_from: new Date().toISOString().slice(0, 10), monthly_fee: 0,
@@ -216,18 +232,14 @@ function TariffSection({ loc }) {
   const set = (k, v) => setT({ ...t, [k]: v });
   const save = async () => {
     setBusy(true); setMsg("");
-    try { await api.addTariff(loc.id, t); setMsg("Uložena nová verze."); reload(); }
+    const payload = { ...t };
+    for (const k of TARIFF_NUM_KEYS) payload[k] = t[k] === "" || t[k] == null ? 0 : Number(t[k]);
+    try { await api.addTariff(loc.id, payload); setMsg("Uložena nová verze."); reload(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   };
   const del = async (vid) => { await api.deleteTariff(vid).catch(() => {}); reload(); };
 
-  const inp = { width: "100%", padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
-  const Num = ({ k, label, suf }) => (
-    <div style={{ flex: "1 1 120px" }}>
-      <label style={{ fontSize: 12 }}>{label}{suf ? <span className="muted"> {suf}</span> : null}</label>
-      <input style={inp} value={t[k] ?? 0} onChange={(e) => set(k, e.target.value === "" ? 0 : Number(e.target.value))} />
-    </div>
-  );
+  const inp = TINP;
 
   return (
     <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
@@ -243,7 +255,7 @@ function TariffSection({ loc }) {
             <option value="fixed">pevná cena (Kč/kWh)</option>
           </select>
         </div>
-        <Num k="monthly_fee" label="Měsíční paušál" suf="Kč" />
+        <NumField label="Měsíční paušál" suf="Kč" value={t.monthly_fee} onChange={(v) => set("monthly_fee", v)} />
         <div style={{ flex: "1 1 130px" }}>
           <label style={{ fontSize: 12 }}>Platí od</label>
           <input type="date" style={inp} value={t.valid_from} onChange={(e) => set("valid_from", e.target.value)} />
@@ -262,17 +274,17 @@ function TariffSection({ loc }) {
 
       {t.mode === "spot" ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-          <Num k="spot_buy_surcharge" label="Přirážka nákup" suf="Kč/MWh" />
-          <Num k="spot_sell_fee" label="Provize prodej" suf="Kč/MWh" />
-          <Num k="dist_buy_vt" label="Distribuce VT" suf="Kč/MWh" />
-          {t.two_tariff && <Num k="dist_buy_nt" label="Distribuce NT" suf="Kč/MWh" />}
-          <Num k="levies" label="Poplatky/daň" suf="Kč/MWh" />
+          <NumField label="Přirážka nákup" suf="Kč/MWh" value={t.spot_buy_surcharge} onChange={(v) => set("spot_buy_surcharge", v)} />
+          <NumField label="Provize prodej" suf="Kč/MWh" value={t.spot_sell_fee} onChange={(v) => set("spot_sell_fee", v)} />
+          <NumField label="Distribuce VT" suf="Kč/MWh" value={t.dist_buy_vt} onChange={(v) => set("dist_buy_vt", v)} />
+          {t.two_tariff && <NumField label="Distribuce NT" suf="Kč/MWh" value={t.dist_buy_nt} onChange={(v) => set("dist_buy_nt", v)} />}
+          <NumField label="Poplatky/daň" suf="Kč/MWh" value={t.levies} onChange={(v) => set("levies", v)} />
         </div>
       ) : (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-          <Num k="fix_buy_vt" label={t.two_tariff ? "Nákup VT" : "Nákup"} suf="Kč/kWh" />
-          {t.two_tariff && <Num k="fix_buy_nt" label="Nákup NT" suf="Kč/kWh" />}
-          <Num k="fix_sell" label="Výkup" suf="Kč/kWh" />
+          <NumField label={t.two_tariff ? "Nákup VT" : "Nákup"} suf="Kč/kWh" value={t.fix_buy_vt} onChange={(v) => set("fix_buy_vt", v)} />
+          {t.two_tariff && <NumField label="Nákup NT" suf="Kč/kWh" value={t.fix_buy_nt} onChange={(v) => set("fix_buy_nt", v)} />}
+          <NumField label="Výkup" suf="Kč/kWh" value={t.fix_sell} onChange={(v) => set("fix_sell", v)} />
         </div>
       )}
 

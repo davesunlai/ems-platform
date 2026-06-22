@@ -89,6 +89,13 @@ async def audit(_: dict = Depends(require_permission("control"))):
     return await db.list_recent()
 
 
+@router.get("/states")
+async def states(ids: str = "", _: dict = Depends(require_permission("read"))):
+    """Aktuální vynucený stav modulů (pro zvýraznění na dashboardu)."""
+    module_ids = [x for x in ids.split(",") if x]
+    return {"states": await db.get_states(module_ids)}
+
+
 # --- Solis (a další adaptéry s jediným spojením): povely jdou FRONTOU,
 #     kterou vyřizuje kolektor (drží jediné Modbus spojení na měnič). ---
 async def _get_solis(module_id: str):

@@ -96,7 +96,7 @@ async def fetch_pending(module_ids: list[str]) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, module_id, action, params FROM control_queue "
+            "SELECT id, module_id, action, params, username FROM control_queue "
             "WHERE status='pending' AND module_id = ANY($1::text[]) ORDER BY id",
             module_ids)
     out = []
@@ -132,3 +132,54 @@ async def get_command(cmd_id: int) -> dict | None:
         if d[k]:
             d[k] = d[k].isoformat()
     return d
+
+
+# --- aktuální vynucený stav modulu (co EMS reálně nařídil) -------------------
+async def ensure_state_schema() -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS control_state (
+                module_id  TEXT PRIMARY KEY,
+                action     TEXT NOT NULL DEFAULT 'idle',   -- idle|force_charge|force_discharge|set_work_mode|...
+                params     JSONB,
+                source     TEXT,                           -- 'manual' | 'planner' | 'rule'
+                username   TEXT,
+                since      TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+
+
+async def set_state(module_id: str, action: str, params: dict | None,
+                    source: str = "manual", username: str | None = None) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO control_state (module_id, action, params, source, username, since) "
+            "VALUES ($1,$2,$3::jsonb,$4,$5, now()) "
+            "ON CONFLICT (module_id) DO UPDATE SET "
+            "action=EXCLUDED.action, params=EXCLUDED.params, source=EXCLUDED.source, "
+            "username=EXCLUDED.username, "
+            # since přepiš jen když se akce změnila (jinak drž původní začátek)
+            "since = CASE WHEN control_state.action IS DISTINCT FROM EXCLUDED.action THEN now() ELSE control_state.since END",
+            module_id, action, json.dumps(params or {}), source, username)
+
+
+async def get_states(module_ids: list[str]) -> dict[str, dict]:
+    if not module_ids:
+        return {}
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT module_id, action, params, source, username, since "
+            "FROM control_state WHERE module_id = ANY($1::text[])", module_ids)
+    out = {}
+    for r in rows:
+        d = dict(r)
+        if isinstance(d["params"], str):
+            d["params"] = json.loads(d["params"])
+        d["since"] = d["since"].isoformat() if d["since"] else None
+        out[d["module_id"]] = d
+    return out

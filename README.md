@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.36.0 — (1) OPRAVA zadávání cen: NumField přesunut na úroveň modulu (input se přemountovával -> ztráta fokusu po každé cifře); hodnoty se drží jako text, převod na číslo až při uložení -> jde psát "200" v kuse. (2) Krok 2: sledování aktuálního VYNUCENÉHO STAVU modulu (control_state) — kolektor ho zapisuje po provedení povelu; nápadný PULZUJÍCÍ pruh na dashboardu (⚡ Vynucené nabíjení / 🔻 Vybíjení do sítě / 🌀 Spirála), viditelný i pro ne-ovládací uživatele, s výkonem a časem od. API GET /api/control/states.
+
 ## v0.35.0 — Cenový model: versionovaný locality_tariff (valid_from) — fix i spot, dvoutarif VT/NT (NT hodiny), provize z prodeje (~200 Kč/MWh), distribuce VT/NT, přirážka, poplatky, měsíční paušál. Editace cen v Lokalitách. Denní kurz EUR→CZK z ČNB (ems/pricing/fx, cache fx_rate) — pozn. spot je ze zdroje už v CZK, kurz tedy informativní. Graf predikce: pravá osa teď ukazuje REÁLNOU cenu nákupu (Kč/kWh) z tarifu místo syrového spotu. ems/pricing modul (db/fx/cost/routes). ZATÍM BEZ ŘÍZENÍ.
 
 ## v0.34.0 — Forecast kroky 4+5: load_forecast (medián hodina-v-týdnu z bilance FVE+síť−baterie, Solis nedává load_power) + NOVÝ GRAF "Predikce 24–48 h" na dashboardu — PV plocha + pásmo nejistoty (levá osa kW), spotřeba, spot (pravá osa Kč/kWh; u pevného tarifu čárkovaně). Graf jen čte cache. API /api/forecast/{id} vrací pv+pásmo, load, spot, pricing_mode. ZATÍM BEZ ŘÍZENÍ (SoC trajektorie/nabíjecí sloupce přijdou s plannerem).

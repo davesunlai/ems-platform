@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
         await modules_db.ensure_schema()
         await control_db.ensure_schema()
         await control_db.ensure_queue_schema()
+        await control_db.ensure_state_schema()
         await db.ensure_state_schema()
         await market_db.ensure_schema()
         await market_db.ensure_history_schema()
@@ -63,7 +64,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.35.0", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.36.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
