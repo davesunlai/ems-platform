@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.41.3 — Notifikace: (1) U lokality (editace) přibyl srozumitelný výpis NA CO chodí upozornění (vynucené nabíjení/vybíjení, spirála, sepnutí spotřebiče, výpadky, test) a KTERÝM kanálem (mail / prohlížeč i na jiné kartě / mobil-připravujeme). (2) E-mail u operací chodí HNED — po vynucené operaci se rozeslání spustí okamžitě (ne až za 5 min) a kontrolní tick zrychlen 5 min → 60 s. Pozn.: operační události mají TTL 60 min, takže staré události se po obnově SMTP zpětně nerozesílají.
+
 ## v0.41.2 — Oprava odesílání e-mailů ("Connection lost"): u implicitního TLS (port 465) se teď explicitně vypíná start_tls (aiosmtplib jinak zkoušel STARTTLS přes už šifrované spojení → server spojení položil). Přidán timeout a fallback na druhý režim/port (465/ssl ↔ 587/starttls) + auto-odvození režimu z portu. Navíc tlačítko „🔔 Poslat testovací notifikaci" v zvonečku (okamžitá událost + hned rozešle e-mail) a zrychlení obnovy zvonečku 180 s → 30 s, aby browser notifikace přišly rychle.
 
 ## v0.41.1 — Notifikace o důležitých OPERACÍCH: nový modul operačních událostí (ems/alerts/db.py, tabulka operational_events). Zaznamenává se vynucené nabíjení/vybíjení/spirála (kolektor) a sepnutí/rozepnutí spínaného spotřebiče (outputs engine). Události se na ~1 h zařadí mezi výstrahy → projeví se v zvonečku ⚠, browser notifikaci i e-mailu (stejný dispatcher + dedup). alerts.collect_for_user/locality teď zahrnují i eventy. Bez změny frontendu (vše jede stávající cestou výstrah).

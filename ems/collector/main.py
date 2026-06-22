@@ -139,6 +139,7 @@ async def process_queue(active: dict) -> None:
                         detail = (f"{pw/100:.1f} kW/pack" if pw is not None else "") + \
                                  (f" · {p.get('source')}" if p.get("source") and p.get("source") != "manual" else " · ručně")
                         await alerts_db.record_event(loc_id, c["action"], f"{label} – {c['module_id']}", detail)
+                        await notify_dispatch.notify_new_alerts()  # rozešli hned, nečekej na tick
                     except Exception:
                         pass
             logger.info("Povel #%s '%s' (%s) OK: %s", c["id"], c["action"], c["module_id"], res)
@@ -352,7 +353,7 @@ async def tick_notify(state: dict) -> None:
     """Rozeslání notifikací o nových výstrahách (e-mail) à 5 min."""
     import time as _t
     now = _t.monotonic()
-    if now - state.get("last_notify", -1e9) < 300:
+    if now - state.get("last_notify", -1e9) < 60:
         return
     state["last_notify"] = now
     try:

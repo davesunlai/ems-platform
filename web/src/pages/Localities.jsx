@@ -384,9 +384,15 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
             </select>
             <button className="btn" onClick={addU} disabled={!uSel}>Přidat</button>
           </div>
-          <p className="muted" style={{ fontSize: 11.5, marginTop: 6 }}>
-            🔔 Komu chodí upozornění na důležité operace lokality (vynucené nabíjení/vybíjení, sepnutí spotřebiče, výpadky…). Každý uživatel může dostávat notifikace jen z lokalit, kde to má zaškrtnuté.
-          </p>
+          <div className="muted" style={{ fontSize: 11.5, marginTop: 8, lineHeight: 1.55 }}>
+            <div><b>🔔 Komu:</b> jen uživatelé se zaškrtnutou „notifikací" u této lokality.</div>
+            <div style={{ marginTop: 4 }}><b>Na co chodí upozornění:</b></div>
+            <div>⚡ vynucené nabíjení · 🔻 vybíjení do sítě · 🌀 spirála</div>
+            <div>🔌 sepnutí / rozepnutí spínaného spotřebiče</div>
+            <div>🚧 plánované výpadky (ČEZ) · 🔔 testovací notifikace</div>
+            <div style={{ marginTop: 6 }}><b>Kterým kanálem</b> (volí si každý uživatel sám v zvonečku ⚠ vpravo nahoře):</div>
+            <div>✉️ e-mailem · 🖥️ v prohlížeči (i na jiné kartě, když je appka otevřená) · 📱 na mobilu (připravujeme)</div>
+          </div>
         </div>
       </div>
 
