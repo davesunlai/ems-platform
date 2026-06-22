@@ -78,7 +78,6 @@ export default function Layout() {
           {has("control") && <NavLink to="/control">Řízení</NavLink>}
           {has("admin") && <NavLink to="/automation">Automatizace</NavLink>}
           {has("admin") && <NavLink to="/ewelink">eWeLink</NavLink>}
-          {has("admin") && <NavLink to="/billing">Zúčtování</NavLink>}
           {has("admin") && <NavLink to="/localities">Lokality</NavLink>}
           {has("admin") && <NavLink to="/modules">Moduly</NavLink>}
           {has("admin") && <NavLink to="/users">Uživatelé</NavLink>}

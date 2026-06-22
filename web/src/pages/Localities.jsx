@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import BillingTable from "../components/BillingTable";
+import BillingSettings from "../components/BillingSettings";
 
 const emptyLoc = { name: "", address: "", region: "CZ", note: "" };
 
@@ -390,11 +390,10 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
         </div>
       </div>
 
-      <BillingTable localityId={loc.id} />
-
       <OutageSection loc={loc} onChange={onChange} />
       <ForecastSection loc={loc} onChange={onChange} />
       <TariffSection loc={loc} />
+      <BillingSettings loc={loc} onSaved={onChange} />
     </div>
   );
 }

@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.39.1 — Oprava přesunu zúčtování: tabulka „Zúčtovací období" VRÁCENA na konec dashboardu (pod karty zařízení). Do administrace Lokality přesunuto NASTAVENÍ zúčtovacího období (začátek, délka, limit přetoků, baseline, cenění, e-mail upozornění) jako sekce BillingSettings v editaci lokality. Samostatná stránka /billing zrušena (redirect → /localities), položka v menu odebrána, průvodce upraven.
+
 ## v0.39.0 — (1) „Zúčtovací období" přesunuto z dashboardu do administrace Lokality (BillingTable jako sdílená komponenta, per lokalita v editaci). (2) Notifikace vázané na uživatele+lokalitu: do user_localities přidán sloupec `notify`; v editaci lokality má každý přiřazený uživatel zaškrtávátko 🔔 notifikace (uživatel dostává jen z lokalit, kde to má zapnuté). API PUT /admin/localities/{id}/users/{uid}/notify; db.notify_users_for_locality (kdo má dostávat). Doručování (web push do mobilu/prohlížeče) je další krok.
 
 ## v0.38.3 — (1) Dashboard: stavové pruhy (např. „Vybíjení do sítě (výkon 1000)") přesunuty z karty zařízení úplně nahoru pod název lokality (ControlBanners pro celou lokalitu, ukáže i modul + zdroj). (2) Řízení: centrální souhrn „🧭 Co ovlivňuje tuto lokalitu" na začátku každé lokality — stav plánovače + aktuální akce, aktivní vynucené zásahy, spotová pravidla (s indikací „přebírá plánovač" + odkaz na Automatizaci) a spínané spotřebiče. Read-only přehled, detailní editace v panelech pod ním.

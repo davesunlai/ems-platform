@@ -13,7 +13,6 @@ import Control from "./pages/Control";
 import Contact from "./pages/Contact";
 import Automation from "./pages/Automation";
 import Ewelink from "./pages/Ewelink";
-import Billing from "./pages/Billing";
 import Localities from "./pages/Localities";
 import Vzhled from "./pages/Vzhled";
 
@@ -46,9 +45,7 @@ export default function App() {
             <Route path="/ewelink" element={
               <ProtectedRoute permission="admin"><Ewelink /></ProtectedRoute>
             } />
-            <Route path="/billing" element={
-              <ProtectedRoute permission="admin"><Billing /></ProtectedRoute>
-            } />
+            <Route path="/billing" element={<Navigate to="/localities" replace />} />
             <Route path="/localities" element={
               <ProtectedRoute permission="admin"><Localities /></ProtectedRoute>
             } />
