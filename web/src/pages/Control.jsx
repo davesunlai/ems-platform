@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 
+// Mezipaměť načtených řídicích registrů per modul (v rámci session SPA),
+// ať se při každém otevření Řízení nečte znovu ze střídače.
+const ctrlCache = {};
+
 // Zařadí povel do fronty a počká na provedení kolektorem.
 async function runCommand(moduleId, action, params, setStatus, label) {
   setStatus({ state: "pending", text: `Odesílám: ${label}…` });
@@ -47,21 +51,36 @@ function SolisControl({ mod }) {
     if (!ask(`Opravdu nastavit ${label} na měniči ${mod.id}?`)) return;
     setBusy(true); await runCommand(mod.id, action, params, setStatus, label); setBusy(false);
   };
+  const applyControls = (c) => {
+    if (c["43012"] != null) setChA(c["43012"] / 10);
+    if (c["43013"] != null) setDisA(c["43013"] / 10);
+    if (c["43024"] != null) setSocBackup(c["43024"]);
+    if (c["43030"] != null) setSocForce(c["43030"]);
+  };
   const readNow = async () => {
     setBusy(true);
     const res = await runCommand(mod.id, "read_controls", {}, setStatus, "Načtení stavu");
     setBusy(false);
     const c = res?.controls;
     if (c) {
-      if (c["43012"] != null) setChA(c["43012"] / 10);
-      if (c["43013"] != null) setDisA(c["43013"] / 10);
-      if (c["43024"] != null) setSocBackup(c["43024"]);
-      if (c["43030"] != null) setSocForce(c["43030"]);
+      applyControls(c);
+      const at = new Date();
+      ctrlCache[mod.id] = { c, at };
+      setStatus({ state: "done", text: `✓ Načtení stavu provedeno ${at.toLocaleString("cs-CZ")}` });
     }
   };
 
-  // Po otevření načti aktuální hodnoty přímo z měniče.
-  useEffect(() => { readNow(); /* eslint-disable-line */ }, [mod.id]);
+  // Po otevření: použij mezipaměť (do 15 min), jinak čti z měniče. Ať se nečte při každém otevření.
+  useEffect(() => {
+    const hit = ctrlCache[mod.id];
+    if (hit && Date.now() - hit.at.getTime() < 15 * 60 * 1000) {
+      applyControls(hit.c);
+      setStatus({ state: "done", text: `Z mezipaměti (z měniče načteno ${hit.at.toLocaleString("cs-CZ")})` });
+    } else {
+      readNow();
+    }
+    /* eslint-disable-line */
+  }, [mod.id]);
 
   const fld = { width: 110, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
 
@@ -240,6 +259,32 @@ function LocalitySection({ locId, locName, mods }) {
   );
 }
 
+function HelpPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <button className="btn" style={{ padding: "8px 16px", fontWeight: 600 }} onClick={() => setOpen(!open)}>
+        {open ? "▲ Skrýt nápovědu" : "❓ Nápověda — co umí Řízení"}
+      </button>
+      {open && (
+        <div className="panel" style={{ marginTop: 8, lineHeight: 1.55 }}>
+          <p style={{ marginTop: 0 }}><b>Co je Řízení?</b> Tady se rozhoduje, jak se má baterie a měnič chovat. Dashboard jen ukazuje stav; tady do něj zasahuješ. Vše je seskupené <b>podle lokality</b> a u každé lokality jsou její <b>moduly (měniče)</b>.</p>
+          <p><b>🧠 Plánovač lokality</b> — „mozek", který se sám rozhodne, kdy nabíjet a kdy vybíjet, aby ušetřil. Dívá se na předpověď výroby z FVE, na spotřebu domu a na ceny elektřiny, a podle toho:</p>
+          <ul style={{ marginTop: 0 }}>
+            <li>nabije baterii, když je elektřina <b>nejlevnější</b> (a počítá s tím, kolik dodá FVE),</li>
+            <li>schová energii na <b>večerní špičku</b> (případně ji prodá do sítě, pokud to povolíš),</li>
+            <li>vždy nechá <b>rezervu</b> pro případ výpadku sítě.</li>
+          </ul>
+          <p style={{ marginTop: 0 }}>Dokud je <b>vypnutý</b>, jen ukazuje plán (fialová křivka SoC v grafu na dashboardu) a nic nedělá. Když ho <b>zapneš</b>, začne měnič reálně řídit a <b>přebere řízení</b> místo jednotlivých spotových pravidel.</p>
+          <p><b>🔌 Ruční řízení</b> — okamžitý zásah: „Nabíjet teď / Vybíjet teď / Stop". Hodí se na vyzkoušení nebo když chceš mít kontrolu sám. Plánovač i automatika tím jdou stranou, dokud nedáš Stop.</p>
+          <p><b>⚙️ Limity a režim</b> — bezpečnostní mantinely měniče: maximální nabíjecí/vybíjecí proud a hranice nabití (SoC), pod kterou se baterie nevybíjí. „Načíst aktuální z měniče" ukáže, co měnič právě má nastaveno.</p>
+          <p style={{ marginBottom: 0 }}><b>Bezpečnost:</b> každý povel se reálně zapíše do měniče, ověří zpětným čtením a zapíše do <b>auditu</b> dole. Když si nejsi jistý, začni nízkými hodnotami.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Control() {
   const [mods, setMods] = useState(null);
   const [audit, setAudit] = useState([]);
@@ -263,6 +308,7 @@ export default function Control() {
 
   return (
     <main>
+      <HelpPanel />
       <div className="panel" style={{ marginBottom: 18, borderColor: "var(--amber)" }}>
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>
           ⚠ Akce zde <b>reálně zapisují do měniče</b> (přes frontu, ověřeno čtením, zaznamenáno do auditu).

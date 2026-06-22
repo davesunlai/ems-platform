@@ -6,6 +6,7 @@ import { useState } from "react";
 
 export default function MultiChart({ series, height = 240 }) {
   const [hovT, setHovT] = useState(null);
+  const [hovY, setHovY] = useState(0.15);
   const [hidden, setHidden] = useState(() => new Set());
   const valid = (series || []).filter((s) => s.points && s.points.length >= 2);
   if (!valid.length)
@@ -62,6 +63,7 @@ export default function MultiChart({ series, height = 240 }) {
     const vbX = ((e.clientX - rect.left) / rect.width) * W;
     if (vbX < padL || vbX > W - padR) { setHovT(null); return; }
     setHovT(t0 + ((vbX - padL) / plotW) * tspan);
+    setHovY((e.clientY - rect.top) / rect.height);     // 0..1 svislá poloha kurzoru
   };
 
   const hx = hovT != null ? X(hovT) : 0;
@@ -104,7 +106,7 @@ export default function MultiChart({ series, height = 240 }) {
 
         {hovT != null && shown.length > 0 && (
           <div style={{
-            position: "absolute", top: 4, left: `${(hx / W) * 100}%`, transform: "translateX(-50%)",
+            position: "absolute", top: `${Math.max(2, Math.min(58, hovY * 100 - 10))}%`, left: `${(hx / W) * 100}%`, transform: "translateX(-50%)",
             background: "var(--panel, #161b22)", border: "1px solid var(--border, #30363d)", borderRadius: 7,
             padding: "6px 10px", fontSize: 12, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 5,
             boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
