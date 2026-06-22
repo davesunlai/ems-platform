@@ -17,8 +17,3 @@ plakatovaciplocha.cz {
 	encode gzip
 	reverse_proxy plakatovaciplocha_app:80
 }
-
-playcup.online {
-        encode gzip
-        reverse_proxy playcup_app:3000
-}

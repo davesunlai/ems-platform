@@ -37,6 +37,9 @@ async def ensure_schema() -> None:
             "ALTER TABLE modules ADD COLUMN IF NOT EXISTS locality_id INTEGER "
             "REFERENCES localities(id) ON DELETE SET NULL"
         )
+        await conn.execute(
+            "ALTER TABLE user_localities ADD COLUMN IF NOT EXISTS notify BOOLEAN NOT NULL DEFAULT FALSE"
+        )
         # Zúčtovací období (dle ČEZ) + limit přetoků a upozornění
         for col, ddl in (
             ("billing_start", "DATE"),
@@ -184,10 +187,30 @@ async def users_for_locality(loc_id: int) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT u.id, u.username, u.full_name FROM users u "
+            "SELECT u.id, u.username, u.full_name, ul.notify FROM users u "
             "JOIN user_localities ul ON ul.user_id = u.id WHERE ul.locality_id = $1 ORDER BY u.username",
             loc_id,
         )
+    return [dict(r) for r in rows]
+
+
+async def set_user_notify(loc_id: int, user_id: int, notify: bool) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE user_localities SET notify = $3 WHERE locality_id = $1 AND user_id = $2",
+            loc_id, user_id, bool(notify))
+
+
+async def notify_users_for_locality(loc_id: int) -> list[dict]:
+    """Uživatelé lokality s zapnutými notifikacemi (aktivní)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT u.id, u.username, u.full_name, u.email FROM users u "
+            "JOIN user_localities ul ON ul.user_id = u.id "
+            "WHERE ul.locality_id = $1 AND ul.notify = true AND u.active = true ORDER BY u.username",
+            loc_id)
     return [dict(r) for r in rows]
 
 

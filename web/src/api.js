@@ -100,6 +100,7 @@ export const api = {
   deleteLocality: (id) => request(`/api/admin/localities/${id}`, { method: "DELETE" }),
   assignUser: (id, user_id) => request(`/api/admin/localities/${id}/users`, { method: "POST", body: { user_id } }),
   unassignUser: (id, user_id) => request(`/api/admin/localities/${id}/users/${user_id}`, { method: "DELETE" }),
+  setUserNotify: (id, user_id, notify) => request(`/api/admin/localities/${id}/users/${user_id}/notify`, { method: "PUT", body: { notify } }),
   assignDevice: (id, module_id) => request(`/api/admin/localities/${id}/devices`, { method: "POST", body: { module_id } }),
   unassignDevice: (id, module_id) => request(`/api/admin/localities/${id}/devices/${encodeURIComponent(module_id)}`, { method: "DELETE" }),
 };

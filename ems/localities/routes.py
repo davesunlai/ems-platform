@@ -60,6 +60,12 @@ async def remove_user(loc_id: int, user_id: int, _: dict = Depends(require_permi
     return await _enrich(await db.get(loc_id))
 
 
+@router.put("/{loc_id}/users/{user_id}/notify")
+async def set_user_notify(loc_id: int, user_id: int, body: dict, _: dict = Depends(require_permission("admin"))):
+    await db.set_user_notify(loc_id, user_id, bool(body.get("notify")))
+    return await _enrich(await db.get(loc_id))
+
+
 @router.post("/{loc_id}/devices")
 async def add_device(loc_id: int, body: AssignDevice, _: dict = Depends(require_permission("admin"))):
     if not await db.get(loc_id):

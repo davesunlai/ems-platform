@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import BillingTable from "../components/BillingTable";
 
 const emptyLoc = { name: "", address: "", region: "CZ", note: "" };
 
@@ -319,6 +320,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
 
   const addU = async () => { if (uSel) { await api.assignUser(loc.id, Number(uSel)); setUSel(""); onChange(); } };
   const rmU = async (uid) => { await api.unassignUser(loc.id, uid); onChange(); };
+  const notifU = async (uid, on) => { await api.setUserNotify(loc.id, uid, on); onChange(); };
   const addD = async () => { if (dSel) { await api.assignDevice(loc.id, dSel); setDSel(""); onChange(); } };
   const rmD = async (mid) => { await api.unassignDevice(loc.id, mid); onChange(); };
   const rename = async () => {
@@ -362,12 +364,17 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
 
         <div style={{ flex: 1 }}>
           <label className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>Uživatelé</label>
-          <div style={{ margin: "6px 0" }}>
+          <div style={{ margin: "6px 0", display: "grid", gap: 4 }}>
             {loc.users.length === 0 && <span className="muted">žádní</span>}
             {loc.users.map((u) => (
-              <span key={u.id} className="role" style={{ marginRight: 6, marginBottom: 6, display: "inline-block" }}>
-                {u.full_name || u.username} <button className="linkx" onClick={() => rmU(u.id)}>×</button>
-              </span>
+              <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+                <span style={{ minWidth: 130 }}>{u.full_name || u.username}</span>
+                <label style={{ display: "flex", alignItems: "center", gap: 5, color: u.notify ? "var(--green)" : "var(--muted)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={!!u.notify} onChange={(e) => notifU(u.id, e.target.checked)} />
+                  🔔 notifikace
+                </label>
+                <button className="linkx" onClick={() => rmU(u.id)} style={{ marginLeft: "auto" }}>odebrat ×</button>
+              </div>
             ))}
           </div>
           <div className="row" style={{ gap: 6 }}>
@@ -377,8 +384,13 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
             </select>
             <button className="btn" onClick={addU} disabled={!uSel}>Přidat</button>
           </div>
+          <p className="muted" style={{ fontSize: 11.5, marginTop: 6 }}>
+            🔔 Komu chodí upozornění na důležité operace lokality (vynucené nabíjení/vybíjení, sepnutí spotřebiče, výpadky…). Každý uživatel může dostávat notifikace jen z lokalit, kde to má zaškrtnuté.
+          </p>
         </div>
       </div>
+
+      <BillingTable localityId={loc.id} />
 
       <OutageSection loc={loc} onChange={onChange} />
       <ForecastSection loc={loc} onChange={onChange} />
