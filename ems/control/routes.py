@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from ems.auth.deps import require_permission
-from ems.api.db import get_pool
+from ems.api.db import get_pool, list_devices
 from ems.modules import db as modules_db
 from . import db
 from .goodwe_control import read_battery_mode, set_battery_mode
@@ -29,11 +29,20 @@ async def _has_battery(device_id: str, days: int = 7) -> bool:
 
 @router.get("/modules")
 async def controllable_modules(_: dict = Depends(require_permission("control"))):
-    mods = await modules_db.list_all()
+    """Řiditelné moduly s lokalitou — Solis (control_enabled) i goodwe (s baterií)."""
+    devs = await list_devices()
     out = []
-    for m in mods:
-        if m.adapter == "goodwe" and m.enabled and await _has_battery(m.id):
-            out.append({"id": m.id, "name": m.name})
+    for d in devs:
+        adapter = d.get("adapter")
+        ce = d.get("control_enabled") or []
+        if adapter == "solis" and ce:
+            out.append({"id": d["device_id"], "name": d["device_id"], "adapter": "solis",
+                        "locality_id": d.get("locality_id"), "locality": d.get("locality"),
+                        "control_enabled": ce})
+        elif adapter == "goodwe" and await _has_battery(d["device_id"]):
+            out.append({"id": d["device_id"], "name": d["device_id"], "adapter": "goodwe",
+                        "locality_id": d.get("locality_id"), "locality": d.get("locality"),
+                        "control_enabled": ["force_charge", "force_discharge", "stop"]})
     return out
 
 
@@ -119,6 +128,14 @@ def _validate_command(action: str, params: dict) -> None:
             raise HTTPException(status_code=400, detail="power musí být celé číslo 0–65535 (syrová hodnota registru)")
     if action == "set_work_mode" and not isinstance(params.get("word"), int):
         raise HTTPException(status_code=400, detail="set_work_mode vyžaduje celé číslo 'word'")
+    if action in ("set_charge_current", "set_discharge_current"):
+        a = params.get("amps")
+        if not isinstance(a, (int, float)) or not (0 <= a <= 200):
+            raise HTTPException(status_code=400, detail="amps musí být 0–200 A")
+    if action in ("set_soc_backup", "set_soc_force"):
+        pct = params.get("pct")
+        if not isinstance(pct, (int, float)) or not (0 <= pct <= 100):
+            raise HTTPException(status_code=400, detail="pct musí být 0–100 %")
     if action == "write_holding":
         if not isinstance(params.get("addr"), int) or not isinstance(params.get("value"), int):
             raise HTTPException(status_code=400, detail="write_holding vyžaduje celé 'addr' a 'value'")

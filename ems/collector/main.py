@@ -75,6 +75,16 @@ async def dispatch_command(adapter, action: str, params: dict) -> dict:
         return await adapter.set_force(0)
     if action == "set_work_mode":
         return await adapter.set_work_mode(int(p["word"]))
+    if action == "set_charge_current":
+        return await adapter.set_charge_current(float(p["amps"]))
+    if action == "set_discharge_current":
+        return await adapter.set_discharge_current(float(p["amps"]))
+    if action == "set_soc_backup":
+        return await adapter.set_soc_backup(float(p["pct"]))
+    if action == "set_soc_force":
+        return await adapter.set_soc_force(float(p["pct"]))
+    if action == "read_controls":
+        return {"controls": await adapter.read_controls()}
     if action == "write_holding":
         return await adapter.write_holding(int(p["addr"]), int(p["value"]))
     if action == "read_holding":
@@ -101,14 +111,15 @@ async def process_queue(active: dict) -> None:
         try:
             res = await dispatch_command(adapter, c["action"], c["params"] or {})
             await control_db.complete(c["id"], True, res if isinstance(res, dict) else {"result": res})
-            # promítni do aktuálního stavu (force_charge/discharge -> aktivní, stop -> idle)
-            try:
-                act = "idle" if c["action"] == "stop" else c["action"]
-                await control_db.set_state(c["module_id"], act, c["params"] or {},
-                                           source=(c["params"] or {}).get("source", "manual"),
-                                           username=c.get("username"))
-            except Exception:
-                pass
+            # aktuální stav zapisuj jen pro provozní režimy (ne limity/čtení)
+            if c["action"] in ("force_charge", "force_discharge", "stop", "spiral"):
+                try:
+                    act = "idle" if c["action"] == "stop" else c["action"]
+                    await control_db.set_state(c["module_id"], act, c["params"] or {},
+                                               source=(c["params"] or {}).get("source", "manual"),
+                                               username=c.get("username"))
+                except Exception:
+                    pass
             logger.info("Povel #%s '%s' (%s) OK: %s", c["id"], c["action"], c["module_id"], res)
         except Exception as exc:
             await control_db.complete(c["id"], False, {"error": str(exc)})

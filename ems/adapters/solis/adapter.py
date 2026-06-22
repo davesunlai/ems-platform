@@ -23,6 +23,8 @@ from ems.core.model import DeviceType, Measurement, Metric, Reading, UNIT_OF, ut
 from .mapping import (
     BATTERY_PACKS, BLOCK_BAT1, BLOCK_BAT2, BLOCK_GRID, BLOCK_SYS1, BLOCK_SYS2,
     CTRL_FORCE, CTRL_FORCE_POWER, CTRL_WORK_MODE,
+    CTRL_CHARGE_CURRENT_LIMIT, CTRL_DISCHARGE_CURRENT_LIMIT,
+    CTRL_SOC_BACKUP, CTRL_SOC_FORCE,
     REG_ENERGY_TODAY, REG_ENERGY_TOTAL, REG_GRID_METER,
     REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_INV_TEMP, REG_PV_POWER,
 )
@@ -196,6 +198,22 @@ class SolisAdapter:
     async def set_work_mode(self, word: int) -> dict:
         """Nastaví pracovní režim (CTRL_WORK_MODE, bitfield; 0x21 = Self-Use)."""
         return await self.write_holding(CTRL_WORK_MODE, int(word))
+
+    async def set_charge_current(self, amps: float) -> dict:
+        """Limit nabíjecího proudu (A) — registr je v 0.1 A."""
+        return await self.write_holding(CTRL_CHARGE_CURRENT_LIMIT, int(round(float(amps) * 10)))
+
+    async def set_discharge_current(self, amps: float) -> dict:
+        """Limit vybíjecího proudu (A) — registr je v 0.1 A."""
+        return await self.write_holding(CTRL_DISCHARGE_CURRENT_LIMIT, int(round(float(amps) * 10)))
+
+    async def set_soc_backup(self, pct: float) -> dict:
+        """Záložní SoC práh (%) — pod ním měnič nevybíjí."""
+        return await self.write_holding(CTRL_SOC_BACKUP, int(round(float(pct))))
+
+    async def set_soc_force(self, pct: float) -> dict:
+        """Force SoC práh (%)."""
+        return await self.write_holding(CTRL_SOC_FORCE, int(round(float(pct))))
 
     async def read_controls(self) -> dict:
         """Načte aktuální stav všech řídicích registrů (pro UI / ověření)."""
