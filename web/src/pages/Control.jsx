@@ -507,7 +507,7 @@ function HelpPanel() {
             <li>vždy nechá <b>rezervu</b> pro případ výpadku sítě.</li>
           </ul>
           <p style={{ marginTop: 0 }}>Dokud je <b>vypnutý</b>, jen ukazuje plán (fialová křivka SoC v grafu na dashboardu) a nic nedělá. Když ho <b>zapneš</b>, začne měnič reálně řídit a <b>přebere řízení</b> místo jednotlivých spotových pravidel.</p>
-          <p><b>🔌 Ruční řízení</b> — okamžitý zásah: „Nabíjet teď / Vybíjet teď / Stop". Hodí se na vyzkoušení nebo když chceš mít kontrolu sám. Plánovač i automatika tím jdou stranou, dokud nedáš Stop.</p>
+          <p><b>🔌 Ruční řízení</b> — okamžitý zásah: „Nabíjet teď / Vybíjet teď / Stop". Po ručním povelu (i Stop) jde plánovač u tohoto modulu na <b>30 minut stranou</b>, ať tě hned nepřebije; pak se zase ujme (nebo ho nech vypnutý). Stop tedy vždy zabere.</p>
           <p><b>⚙️ Limity a režim</b> — bezpečnostní mantinely měniče: maximální nabíjecí/vybíjecí proud a hranice nabití (SoC), pod kterou se baterie nevybíjí. „Načíst aktuální z měniče" ukáže, co měnič právě má nastaveno.</p>
           <p><b>🔌 Spínané spotřebiče</b> — spínače/relé (eWeLink nebo kontakt střídače), které samy zapnou spotřebič (bojler, topnou spirálu…) podle SoC baterie nebo přebytku z FVE. Třeba „když je baterie plná a přetéká do sítě, zapni ohřev vody".</p>
           <p style={{ marginBottom: 0 }}><b>Bezpečnost:</b> každý povel se reálně zapíše do měniče, ověří zpětným čtením a zapíše do <b>auditu</b> dole. Když si nejsi jistý, začni nízkými hodnotami.</p>

@@ -43,6 +43,8 @@ logging.basicConfig(
 logger = logging.getLogger("ems.collector")
 
 POLL_INTERVAL = float(os.getenv("EMS_POLL_INTERVAL", "10"))
+# Po ručním povelu (Stop / Nabíjet / Vybíjet) nech plánovač modul takto dlouho na pokoji:
+MANUAL_OVERRIDE_SEC = float(os.getenv("EMS_MANUAL_OVERRIDE_SEC", "1800"))
 DEVICES_PATH = os.getenv("EMS_DEVICES", "devices.yaml")
 MARKET_REFRESH = float(os.getenv("EMS_MARKET_REFRESH", "300"))  # s
 
@@ -114,6 +116,15 @@ async def process_queue(active: dict) -> None:
         adapter = (active.get(c["module_id"]) or {}).get("adapter")
         if adapter is None:
             continue
+        # Zatoulaný keepalive „poke" (z doby před Stopem) nesmí znovu nahodit force.
+        if c["action"] == "force_poke":
+            try:
+                stt = (await control_db.get_states([c["module_id"]])).get(c["module_id"]) or {}
+                if stt.get("action") not in ("force_charge", "force_discharge"):
+                    await control_db.complete(c["id"], True, {"skipped": "modul neforcuje"})
+                    continue
+            except Exception:
+                pass
         try:
             res = await dispatch_command(adapter, c["action"], c["params"] or {})
             await control_db.complete(c["id"], True, res if isinstance(res, dict) else {"result": res})
@@ -312,7 +323,18 @@ async def tick_planner(state: dict) -> None:
             else:
                 desired, cmd, params = "idle", "stop", {"source": "planner"}
             for dev in devs:
-                cur = (states.get(dev) or {}).get("action", "idle")
+                st = states.get(dev) or {}
+                # Ruční přebití: po manuálním povelu nech plánovač modul 30 min na pokoji
+                # (jinak by planner okamžitě přebil tvůj Stop / ruční zásah).
+                since = st.get("since")
+                if st.get("source") == "manual" and since is not None:
+                    try:
+                        from datetime import datetime, timezone
+                        if (datetime.now(timezone.utc) - since).total_seconds() < MANUAL_OVERRIDE_SEC:
+                            continue
+                    except Exception:
+                        pass
+                cur = st.get("action", "idle")
                 if cur != desired:
                     await control_db.enqueue(dev, cmd, params, username="planner")
                     logger.info("Planner lok %s modul %s: %s -> %s (%s)", lid, dev, cur, desired, ca.get("reason"))
