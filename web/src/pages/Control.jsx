@@ -5,6 +5,161 @@ import { api } from "../api";
 // ať se při každém otevření Řízení nečte znovu ze střídače.
 const ctrlCache = {};
 
+const norm = (s) => (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+function SearchSelect({ value, options, onChange, placeholder = "— vyber —" }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const sel = options.find((o) => String(o.id) === String(value));
+  const filtered = q ? options.filter((o) => norm(o.label).includes(norm(q))) : options;
+  const item = { padding: "6px 10px", cursor: "pointer", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+  return (
+    <div style={{ position: "relative" }}>
+      <input value={open ? q : (sel ? sel.label : "")} placeholder={placeholder}
+        onFocus={() => { setOpen(true); setQ(""); }} onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)} style={{ minWidth: 180 }} />
+      {open && (
+        <div style={{ position: "absolute", zIndex: 30, top: "100%", left: 0, right: 0, maxHeight: 240, overflowY: "auto",
+          background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 2, boxShadow: "0 8px 22px rgba(0,0,0,.45)" }}>
+          {filtered.map((o) => (
+            <div key={o.id} onMouseDown={() => { onChange(String(o.id)); setOpen(false); }}
+              style={{ ...item, background: String(o.id) === String(value) ? "var(--panel-2)" : "transparent" }}>{o.label}</div>
+          ))}
+          {!filtered.length && <div style={{ ...item, color: "var(--muted)" }}>nic nenalezeno</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const emptyOut = {
+  name: "", enabled: true, output_kind: "ewelink", target: "", trigger: "surplus",
+  upper_soc: 100, lower_soc: 95, surplus_kw: 1.5, soc_min: 80, spot_max: "", min_on_min: 10,
+};
+
+function OutputsPanel({ locId }) {
+  const [list, setList] = useState([]);
+  const [gw, setGw] = useState([]);
+  const [ew, setEw] = useState([]);
+  const [f, setF] = useState(emptyOut);
+  const [editing, setEditing] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(0);
+  const [open, setOpen] = useState(false);
+
+  const load = () => api.listOutputs().then((all) => setList(all.filter((o) => o.locality_id === locId))).catch((e) => setErr(e.message));
+  useEffect(() => {
+    load();
+    api.controlModules().then(setGw).catch(() => {});
+    api.ewelinkDevices().then((r) => setEw(r.devices || [])).catch(() => {});
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [locId]);
+
+  const targets = f.output_kind === "ewelink"
+    ? ew.map((d) => ({ id: d.deviceid, label: d.name || d.deviceid }))
+    : gw.map((m) => ({ id: m.id, label: m.name || m.id }));
+
+  const buildParams = () => f.trigger === "soc"
+    ? { upper_soc: Number(f.upper_soc), lower_soc: Number(f.lower_soc) }
+    : { surplus_kw: Number(f.surplus_kw), soc_min: Number(f.soc_min), min_on_min: Number(f.min_on_min),
+        ...(f.spot_max !== "" && f.spot_max != null ? { spot_max: Number(f.spot_max) } : {}) };
+  const body = () => ({ name: f.name.trim(), enabled: f.enabled, output_kind: f.output_kind, target: f.target,
+    locality_id: locId, trigger: f.trigger, params: buildParams() });
+
+  const reset = () => { setEditing(null); setF(emptyOut); };
+  const save = async () => { setErr(""); try { if (editing) await api.updateOutput(editing, body()); else await api.createOutput(body()); reset(); setOpen(false); load(); } catch (e) { setErr(e.message); } };
+  const edit = (o) => { setEditing(o.id); setOpen(true); setF({ name: o.name, enabled: o.enabled, output_kind: o.output_kind, target: o.target, trigger: o.trigger,
+      upper_soc: o.params.upper_soc ?? 100, lower_soc: o.params.lower_soc ?? 95, surplus_kw: o.params.surplus_kw ?? 1.5,
+      soc_min: o.params.soc_min ?? 80, spot_max: o.params.spot_max ?? "", min_on_min: o.params.min_on_min ?? 10 }); };
+  const toggle = async (o) => { try { await api.updateOutput(o.id, { enabled: !o.enabled }); load(); } catch (e) { setErr(e.message); } };
+  const remove = async (o) => { if (!confirm(`Smazat spotřebič „${o.name}"?`)) return; try { await api.deleteOutput(o.id); if (editing === o.id) reset(); load(); } catch (e) { setErr(e.message); } };
+  const test = async (o, on) => { setBusy(o.id); setErr(""); try { await api.testOutput(o.id, on); setTimeout(load, 600); } catch (e) { setErr(e.message); } finally { setBusy(0); } };
+
+  const kindLabel = (k) => (k === "ewelink" ? "eWeLink" : "kontakt střídače");
+  const trigLabel = (t) => (t === "soc" ? "SoC hystereze" : "přebytek/spot");
+  const inp = { width: 120, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+
+  return (
+    <div className="panel" style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 700, fontSize: 14 }}>🔌 Spínané spotřebiče</span>
+        <span className="muted" style={{ fontSize: 12 }}>relé/spínače řízené podle SoC nebo přebytku FVE (bojler, spirála…)</span>
+        <button className="btn" style={{ marginLeft: "auto", padding: "5px 12px" }} onClick={() => { reset(); setOpen(!open); }}>
+          {open && !editing ? "Zavřít" : "+ Přidat spotřebič"}
+        </button>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+          <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+            <div><label style={{ fontSize: 12, display: "block" }}>Název</label><input value={f.name} placeholder="Ohřev vody" onChange={(e) => setF({ ...f, name: e.target.value })} style={inp} /></div>
+            <div><label style={{ fontSize: 12, display: "block" }}>Cíl</label>
+              <select value={f.output_kind} onChange={(e) => setF({ ...f, output_kind: e.target.value, target: "" })}>
+                <option value="ewelink">eWeLink spínač</option><option value="goodwe_contact">Kontakt střídače</option>
+              </select></div>
+            <div><label style={{ fontSize: 12, display: "block" }}>Zařízení</label>
+              <SearchSelect value={f.target} options={targets} onChange={(id) => setF({ ...f, target: id })} /></div>
+            <div><label style={{ fontSize: 12, display: "block" }}>Spouštěč</label>
+              <select value={f.trigger} onChange={(e) => setF({ ...f, trigger: e.target.value })}>
+                <option value="surplus">Přebytek FVE / levný spot</option><option value="soc">SoC hystereze</option>
+              </select></div>
+          </div>
+          <div className="row" style={{ flexWrap: "wrap", gap: 12, marginTop: 10 }}>
+            {f.trigger === "soc" ? (
+              <>
+                <div><label style={{ fontSize: 12, display: "block" }}>Sepnout při SoC ≥ (%)</label><input value={f.upper_soc} onChange={(e) => setF({ ...f, upper_soc: e.target.value })} style={inp} /></div>
+                <div><label style={{ fontSize: 12, display: "block" }}>Rozepnout při SoC ≤ (%)</label><input value={f.lower_soc} onChange={(e) => setF({ ...f, lower_soc: e.target.value })} style={inp} /></div>
+              </>
+            ) : (
+              <>
+                <div><label style={{ fontSize: 12, display: "block" }}>Přebytek ≥ (kW)</label><input value={f.surplus_kw} onChange={(e) => setF({ ...f, surplus_kw: e.target.value })} style={inp} /></div>
+                <div><label style={{ fontSize: 12, display: "block" }}>A SoC ≥ (%)</label><input value={f.soc_min} onChange={(e) => setF({ ...f, soc_min: e.target.value })} style={{ ...inp, width: 90 }} /></div>
+                <div><label style={{ fontSize: 12, display: "block" }}>Spot ≤ sepni i bez přebytku (Kč/MWh)</label><input value={f.spot_max} placeholder="např. 0" onChange={(e) => setF({ ...f, spot_max: e.target.value })} style={{ ...inp, width: 160 }} /></div>
+                <div><label style={{ fontSize: 12, display: "block" }}>Min. doba sepnutí (min)</label><input value={f.min_on_min} onChange={(e) => setF({ ...f, min_on_min: e.target.value })} style={inp} /></div>
+              </>
+            )}
+            <button className="btn primary" onClick={save} disabled={!f.name.trim() || !f.target}>{editing ? "Uložit změny" : "Přidat"}</button>
+            {editing && <button className="btn" onClick={() => { reset(); setOpen(false); }}>Zrušit</button>}
+          </div>
+          <p className="muted" style={{ fontSize: 11.5, marginTop: 8 }}>
+            {f.trigger === "surplus"
+              ? "Sepne při přebytku FVE do sítě nad práh a baterii nabité aspoň na daný SoC; volitelně i při levném/záporném spotu pod limitem. Hystereze a min. doba brání cvakání."
+              : "Sepne při horní mezi SoC, rozepne při dolní."}
+          </p>
+        </div>
+      )}
+
+      {list.length > 0 ? (
+        <table style={{ marginTop: 10 }}>
+          <thead><tr><th>Název</th><th>Cíl</th><th>Spouštěč</th><th>Stav</th><th>Aktivní</th><th>Test</th><th></th></tr></thead>
+          <tbody>
+            {list.map((o) => (
+              <tr key={o.id}>
+                <td>{o.name}</td>
+                <td><span className="role">{kindLabel(o.output_kind)}</span><div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)" }}>{o.target}</div></td>
+                <td className="muted">{trigLabel(o.trigger)}</td>
+                <td><span className={o.is_on ? "badge-on" : "badge-off"}>{o.is_on ? "sepnuto" : "rozepnuto"}</span></td>
+                <td><span className={o.enabled ? "badge-on" : "badge-off"}>{o.enabled ? "ano" : "ne"}</span></td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  <button className="btn" disabled={busy === o.id} onClick={() => test(o, true)} style={{ padding: "2px 8px", marginRight: 4 }}>zap</button>
+                  <button className="btn" disabled={busy === o.id} onClick={() => test(o, false)} style={{ padding: "2px 8px" }}>vyp</button>
+                </td>
+                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button className="btn" onClick={() => edit(o)} style={{ marginRight: 6 }}>Upravit</button>
+                  <button className="btn" onClick={() => toggle(o)} style={{ marginRight: 6 }}>{o.enabled ? "Vypnout" : "Zapnout"}</button>
+                  <button className="btn danger" onClick={() => remove(o)}>Smazat</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Zatím žádný spínaný spotřebič.</p>}
+      {err && <p className="error" style={{ marginTop: 8 }}>{err}</p>}
+    </div>
+  );
+}
+
 // Zařadí povel do fronty a počká na provedení kolektorem.
 async function runCommand(moduleId, action, params, setStatus, label) {
   setStatus({ state: "pending", text: `Odesílám: ${label}…` });
@@ -255,6 +410,7 @@ function LocalitySection({ locId, locName, mods }) {
       {mods.map((m) => m.adapter === "solis"
         ? <SolisControl key={m.id} mod={m} />
         : <GoodweControl key={m.id} mod={m} />)}
+      {locId && <OutputsPanel locId={locId} />}
     </section>
   );
 }
@@ -278,6 +434,7 @@ function HelpPanel() {
           <p style={{ marginTop: 0 }}>Dokud je <b>vypnutý</b>, jen ukazuje plán (fialová křivka SoC v grafu na dashboardu) a nic nedělá. Když ho <b>zapneš</b>, začne měnič reálně řídit a <b>přebere řízení</b> místo jednotlivých spotových pravidel.</p>
           <p><b>🔌 Ruční řízení</b> — okamžitý zásah: „Nabíjet teď / Vybíjet teď / Stop". Hodí se na vyzkoušení nebo když chceš mít kontrolu sám. Plánovač i automatika tím jdou stranou, dokud nedáš Stop.</p>
           <p><b>⚙️ Limity a režim</b> — bezpečnostní mantinely měniče: maximální nabíjecí/vybíjecí proud a hranice nabití (SoC), pod kterou se baterie nevybíjí. „Načíst aktuální z měniče" ukáže, co měnič právě má nastaveno.</p>
+          <p><b>🔌 Spínané spotřebiče</b> — spínače/relé (eWeLink nebo kontakt střídače), které samy zapnou spotřebič (bojler, topnou spirálu…) podle SoC baterie nebo přebytku z FVE. Třeba „když je baterie plná a přetéká do sítě, zapni ohřev vody".</p>
           <p style={{ marginBottom: 0 }}><b>Bezpečnost:</b> každý povel se reálně zapíše do měniče, ověří zpětným čtením a zapíše do <b>auditu</b> dole. Když si nejsi jistý, začni nízkými hodnotami.</p>
         </div>
       )}

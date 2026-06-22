@@ -76,7 +76,6 @@ export default function Layout() {
         <nav className={`nav ${menuOpen ? "open" : ""}`} onClick={close}>
           <NavLink to="/" end>Dashboard</NavLink>
           {has("control") && <NavLink to="/control">Řízení</NavLink>}
-          {has("control") && <NavLink to="/outputs">Spínací výstupy</NavLink>}
           {has("admin") && <NavLink to="/automation">Automatizace</NavLink>}
           {has("admin") && <NavLink to="/ewelink">eWeLink</NavLink>}
           {has("admin") && <NavLink to="/billing">Zúčtování</NavLink>}

@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.38.2 — Spínací výstupy přesunuty do ŘÍZENÍ jako "Spínané spotřebiče" (per lokalita): panel s formulářem (eWeLink/kontakt střídače, spouštěč SoC nebo přebytek/spot) + tabulka se stavem, testem zap/vyp, úpravou a mazáním; lokalita se bere z sekce (bez výběru). Samostatná stránka /outputs i /contact teď přesměrují do Řízení, položka v menu odebrána, průvodce (Tour) aktualizován. Nápověda v Řízení doplněna o spínané spotřebiče.
+
 ## v0.38.1 — UX Řízení a graf: (1) rozbalovací NÁPOVĚDA v Řízení polopaticky vysvětlí plánovač/ruční řízení/limity/bezpečnost; (2) načtení stavu z měniče se KEŠUJE per modul (15 min) — při dalším otevření Řízení se nečte znovu ze střídače; hláška "Načtení stavu provedeno" má teď datum a čas (+ "z mezipaměti"); (3) přehledový graf na dashboardu (MultiChart): plovoucí rámeček sleduje kurzor i SVISLE (nahoru/dolů), ne jen vodorovně, aby nezakrýval data.
 
 ## v0.38.0 — KROK 6: prediktivní PLÁNOVAČ (greedy MVP). ems/planner: core.plan (self-use + levné nabití + špičkové vybíjení do sítě, rezerva floor), dispatch_schedule, planner_config per lokalita. Panel plánovače v Řízení (zapnout=řídí měnič, povolit vybíjení do sítě, kapacita/SoC/rezerva/limity/horizont). Plán se počítá vždy poradně; řízení opt-in přes frontu (force BEZ syrového výkonu -> na limitech proudu, obejde 43136). Precedence: zapnutý plánovač přebírá řízení, reaktivní spot pravidla se přeskočí + Automatizace ukazuje "⚠ přebírá plánovač". SoC trajektorie v grafu na dashboardu. ADR 0034.
