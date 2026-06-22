@@ -27,7 +27,7 @@ function AlertsBell() {
       }
       seen.current = ids;
     }).catch(() => {});
-    load(); const t = setInterval(load, 180000); return () => clearInterval(t);
+    load(); const t = setInterval(load, 30000); return () => clearInterval(t);
   }, [pref.notify_browser]);
 
   const save = (email, browser) => {
@@ -83,6 +83,10 @@ function AlertsBell() {
               </button>
             )}
             {perm === "denied" && <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>Prohlížeč má upozornění zakázaná — povol je v nastavení webu.</div>}
+            <button className="btn" style={{ marginTop: 10, padding: "4px 10px", fontSize: 12 }}
+              onClick={async () => { try { await api.testNotification(); setTimeout(() => api.alerts().then(setData).catch(() => {}), 800); } catch { /* ignore */ } }}>
+              🔔 Poslat testovací notifikaci
+            </button>
           </div>
         </div>
       )}
