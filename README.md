@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.37.1 — Řízení (Solis) UX: limity/SoC se po otevření AUTOMATICKY načtou živě z měniče (read_controls), ne z DB; "Načíst aktuální z měniče" je teď velké výrazné tlačítko + indikace "čtu…"; u ručního výkonu doplněn popis (syrová hodnota registru); poznámka, že hodnoty jsou živé z měniče.
+
 ## v0.37.0 — Řízení přestavěno na strukturu LOKALITA → MODULY. Ruční ovládání (Nabíjet/Vybíjet/Stop) přesunuto z dashboardu jen do Řízení; na dashboardu zůstává jen zvýrazněný stavový pruh. Per modul (Solis) přidáno nastavení LIMITŮ přes frontu: nabíjecí/vybíjecí proud (43012/43013, scale 0.1A — ověřené), SoC backup/force (43024/43030), Self-Use režim (43110), + "Načíst aktuální" (read_controls). Goodwe ovládání zůstává. Per lokalita je místo pro plánovač (krok 6). Adaptér: set_charge/discharge_current, set_soc_backup/force; dispatch + validace rozšířeny. controllable_modules vrací i Solis + lokalitu. 43136 (force power 3f) stále neověřený — testovat opatrně.
 
 ## v0.36.0 — (1) OPRAVA zadávání cen: NumField přesunut na úroveň modulu (input se přemountovával -> ztráta fokusu po každé cifře); hodnoty se drží jako text, převod na číslo až při uložení -> jde psát "200" v kuse. (2) Krok 2: sledování aktuálního VYNUCENÉHO STAVU modulu (control_state) — kolektor ho zapisuje po provedení povelu; nápadný PULZUJÍCÍ pruh na dashboardu (⚡ Vynucené nabíjení / 🔻 Vybíjení do sítě / 🌀 Spirála), viditelný i pro ne-ovládací uživatele, s výkonem a časem od. API GET /api/control/states.

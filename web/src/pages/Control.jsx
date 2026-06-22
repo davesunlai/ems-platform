@@ -60,6 +60,9 @@ function SolisControl({ mod }) {
     }
   };
 
+  // Po otevření načti aktuální hodnoty přímo z měniče.
+  useEffect(() => { readNow(); /* eslint-disable-line */ }, [mod.id]);
+
   const fld = { width: 110, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
 
   return (
@@ -71,14 +74,19 @@ function SolisControl({ mod }) {
 
       <div style={{ fontWeight: 600, fontSize: 13, margin: "8px 0 4px" }}>Ruční řízení</div>
       <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ fontSize: 12 }}>výkon <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 90 }} /></label>
+        <label style={{ fontSize: 12 }}>výkon <span className="muted">(syrová hodnota registru)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 90 }} /></label>
         {has("force_charge") && <button className="btn" disabled={busy} onClick={() => force("force_charge", `Nabíjet teď (${power})`)}>⚡ Nabíjet teď</button>}
         {has("force_discharge") && <button className="btn" disabled={busy} onClick={() => force("force_discharge", `Vybíjet teď (${power})`)}>🔻 Vybíjet teď</button>}
         <button className="btn" disabled={busy} style={{ color: "#e06c75" }} onClick={stop}>⏹ Stop</button>
       </div>
 
-      <div style={{ fontWeight: 600, fontSize: 13, margin: "12px 0 4px" }}>
-        Limity a režim <button className="btn" style={{ padding: "2px 9px", marginLeft: 6 }} disabled={busy} onClick={readNow}>Načíst aktuální</button>
+      <div style={{ fontWeight: 600, fontSize: 13, margin: "14px 0 6px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span>Limity a režim</span>
+        <button className="btn primary" style={{ padding: "8px 18px", fontSize: 14, fontWeight: 700 }} disabled={busy} onClick={readNow}>
+          ⟳ Načíst aktuální z měniče
+        </button>
+        {busy && <span className="muted" style={{ fontSize: 12 }}>čtu z měniče…</span>}
+        <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>(hodnoty jsou živé z měniče, ne z databáze)</span>
       </div>
       <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
         <div>
