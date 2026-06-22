@@ -18,16 +18,20 @@ export default function ForecastChart({ localityId }) {
 
   const avg = data?.pv?.avg || [];
   const loadS = data?.load || [];
+  const priceS = data?.price || [];
   const spot = data?.spot || [];
-  const fixed = (data?.pricing_mode || "spot") === "tariff";
+  // pravá osa: reálná cena nákupu (Kč/kWh) z tarifu; fallback syrový spot
+  const rightS = priceS.length ? priceS.map((p) => ({ ts: p.ts, v: p.import_czk }))
+    : spot.map((p) => ({ ts: p.ts, v: p.czk_mwh / 1000 }));
+  const fixed = (data?.pricing_mode || "spot") === "tariff" || (data?.pricing_mode || "spot") === "fixed";
 
   const geom = useMemo(() => {
     if (avg.length < 2) return null;
     const ms = (s) => new Date(s).getTime();
-    const all = [...avg.map((p) => ms(p.ts)), ...loadS.map((p) => ms(p.ts)), ...spot.map((p) => ms(p.ts))];
+    const all = [...avg.map((p) => ms(p.ts)), ...loadS.map((p) => ms(p.ts)), ...rightS.map((p) => ms(p.ts))];
     const t0 = Math.min(...all), t1 = Math.max(...all), tspan = t1 - t0 || 1;
     const kwMax = Math.max(1, ...avg.map((p) => (p.pv_w_hi ?? p.pv_w) / 1000), ...loadS.map((p) => p.load_w / 1000)) * 1.1;
-    const spotVals = spot.map((p) => p.czk_mwh / 1000);
+    const spotVals = rightS.map((p) => p.v);
     const sLo = Math.min(0, ...(spotVals.length ? spotVals : [0]));
     const sHi = Math.max(1, ...(spotVals.length ? spotVals : [1]));
     const W = 760, H = 260, padL = 46, padR = 52, padT = 14, padB = 28;
@@ -36,7 +40,7 @@ export default function ForecastChart({ localityId }) {
     const Yk = (kw) => padT + plotH * (1 - kw / kwMax);
     const Ys = (cz) => padT + plotH * (1 - (cz - sLo) / ((sHi - sLo) || 1));
     return { ms, t0, t1, tspan, kwMax, sLo, sHi, W, H, padL, padR, padT, padB, plotW, plotH, X, Yk, Ys };
-  }, [avg, loadS, spot]);
+  }, [avg, loadS, rightS]);
 
   if (!localityId) return null;
   if (!data) return <div className="muted" style={{ fontSize: 12, padding: "16px 0" }}>Načítám predikci…</div>;
@@ -64,7 +68,7 @@ export default function ForecastChart({ localityId }) {
     const t = geom.t0 + ((x - padL) / geom.plotW) * geom.tspan;
     if (t < geom.t0 || t > geom.t1) { setHov(null); return; }
     const near = (arr) => arr.reduce((b, p) => Math.abs(ms(p.ts) - t) < Math.abs(ms(b.ts) - t) ? p : b, arr[0]);
-    setHov({ t, pv: avg.length ? near(avg) : null, load: loadS.length ? near(loadS) : null, spot: spot.length ? near(spot) : null });
+    setHov({ t, pv: avg.length ? near(avg) : null, load: loadS.length ? near(loadS) : null, price: rightS.length ? near(rightS) : null });
   };
 
   return (
@@ -73,7 +77,7 @@ export default function ForecastChart({ localityId }) {
         <span style={{ color: PV }}>▬ výroba (avg)</span>
         <span className="muted">▨ pásmo nejistoty</span>
         <span style={{ color: LOAD }}>▬ spotřeba</span>
-        <span style={{ color: SPOT }}>▬ spot {fixed ? "(jen orientačně)" : ""}</span>
+        <span style={{ color: SPOT }}>▬ cena nákup {fixed ? "(pevná)" : ""}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}
            onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
@@ -94,9 +98,9 @@ export default function ForecastChart({ localityId }) {
         <path d={line(avg, (p) => Yk(p.pv_w / 1000))} fill="none" stroke={PV} strokeWidth="1.8" />
         {/* spotřeba */}
         {loadS.length >= 2 && <path d={line(loadS, (p) => Yk(p.load_w / 1000))} fill="none" stroke={LOAD} strokeWidth="1.5" />}
-        {/* spot (pravá osa) */}
-        {spot.length >= 2 && <path d={line(spot, (p) => Ys(p.czk_mwh / 1000))} fill="none" stroke={SPOT}
-              strokeWidth="1.5" strokeDasharray={fixed ? "4 3" : "none"} opacity={fixed ? 0.6 : 1} />}
+        {/* cena nákup (pravá osa) */}
+        {rightS.length >= 2 && <path d={line(rightS, (p) => Ys(p.v))} fill="none" stroke={SPOT}
+              strokeWidth="1.5" strokeDasharray={fixed ? "4 3" : "none"} opacity={fixed ? 0.7 : 1} />}
 
         {/* teď */}
         {showNow && <line x1={nowX} y1={padT} x2={nowX} y2={padT + plotH} stroke="#fff" strokeWidth="1" strokeDasharray="3 3" opacity="0.5" />}
@@ -114,7 +118,7 @@ export default function ForecastChart({ localityId }) {
           <span>{new Date(hov.t).toLocaleString("cs-CZ", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>
           {hov.pv && <span style={{ color: PV }}>výroba {(hov.pv.pv_w / 1000).toFixed(1)} kW</span>}
           {hov.load && <span style={{ color: LOAD }}>spotřeba {(hov.load.load_w / 1000).toFixed(1)} kW</span>}
-          {hov.spot && <span style={{ color: SPOT }}>spot {(hov.spot.czk_mwh / 1000).toFixed(2)} Kč/kWh</span>}
+          {hov.price && <span style={{ color: SPOT }}>nákup {hov.price.v.toFixed(2)} Kč/kWh</span>}
         </div>
       )}
     </div>

@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.35.0 — Cenový model: versionovaný locality_tariff (valid_from) — fix i spot, dvoutarif VT/NT (NT hodiny), provize z prodeje (~200 Kč/MWh), distribuce VT/NT, přirážka, poplatky, měsíční paušál. Editace cen v Lokalitách. Denní kurz EUR→CZK z ČNB (ems/pricing/fx, cache fx_rate) — pozn. spot je ze zdroje už v CZK, kurz tedy informativní. Graf predikce: pravá osa teď ukazuje REÁLNOU cenu nákupu (Kč/kWh) z tarifu místo syrového spotu. ems/pricing modul (db/fx/cost/routes). ZATÍM BEZ ŘÍZENÍ.
+
 ## v0.34.0 — Forecast kroky 4+5: load_forecast (medián hodina-v-týdnu z bilance FVE+síť−baterie, Solis nedává load_power) + NOVÝ GRAF "Predikce 24–48 h" na dashboardu — PV plocha + pásmo nejistoty (levá osa kW), spotřeba, spot (pravá osa Kč/kWh; u pevného tarifu čárkovaně). Graf jen čte cache. API /api/forecast/{id} vrací pv+pásmo, load, spot, pricing_mode. ZATÍM BEZ ŘÍZENÍ (SoC trajektorie/nabíjecí sloupce přijdou s plannerem).
 
 ## v0.33.0 — Forecast krok 1: druhý zdroj Forecast.Solar (stejná azimut konvence jako Open-Meteo, žádný přepočet) + průměrování až výsledných řad do source='avg' + PÁSMO NEJISTOTY (pv_w_lo/pv_w_hi = rozptyl zdrojů). Bloky stejné orientace se slučují (1 dotaz/orientaci). Forecast.Solar throttle ~2.5 h (limit 12/hod), při výpadku/limitu fallback na cache nebo jen Open-Meteo. Pojistka v editaci: prázdné "FVE kWp celkem" červeně + Uložit zašedne.

@@ -26,6 +26,8 @@ from ems.automation.engine import evaluate_all
 from ems.control import db as control_db
 from ems.forecast import db as forecast_db
 from ems.forecast import service as forecast_service
+from ems.pricing import db as pricing_db
+from ems.pricing import fx as pricing_fx
 from ems.outputs.engine import evaluate_outputs
 from ems.outages.service import refresh_all as refresh_outages_all
 from .config import build_adapter, build_sink
@@ -170,6 +172,7 @@ async def run() -> None:
         await automation_db.ensure_schema()
         await control_db.ensure_queue_schema()
         await forecast_db.ensure_schema()
+        await pricing_db.ensure_schema()
     except Exception as exc:
         logger.error("Inicializace registru modulů selhala: %s", exc)
 
@@ -220,6 +223,10 @@ async def tick_forecast(state: dict) -> None:
     if now - state.get("last_forecast", -1e9) < 10800:   # 3 h
         return
     state["last_forecast"] = now
+    try:
+        await pricing_fx.update_daily()
+    except Exception as exc:
+        logger.debug("ČNB kurz tick: %s", exc)
     try:
         await forecast_service.refresh_all()
     except Exception as exc:

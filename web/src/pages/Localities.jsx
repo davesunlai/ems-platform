@@ -194,6 +194,108 @@ function ForecastSection({ loc, onChange }) {
   );
 }
 
+function TariffSection({ loc }) {
+  const blank = {
+    mode: "spot", valid_from: new Date().toISOString().slice(0, 10), monthly_fee: 0,
+    two_tariff: false, nt_hours: "", spot_buy_surcharge: 0, spot_sell_fee: 200,
+    dist_buy_vt: 0, dist_buy_nt: 0, levies: 0, fix_buy_vt: 0, fix_buy_nt: 0, fix_sell: 0,
+    fx_source: "cnb", fx_eur_czk: null,
+  };
+  const [t, setT] = useState(blank);
+  const [versions, setVersions] = useState([]);
+  const [fx, setFx] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const reload = () => api.getTariff(loc.id).then((r) => {
+    setVersions(r.versions || []); setFx(r.fx || null);
+    if (r.effective) setT({ ...blank, ...r.effective, valid_from: blank.valid_from });
+  }).catch(() => {});
+  useEffect(() => { reload(); }, [loc.id]);
+
+  const set = (k, v) => setT({ ...t, [k]: v });
+  const save = async () => {
+    setBusy(true); setMsg("");
+    try { await api.addTariff(loc.id, t); setMsg("Uložena nová verze."); reload(); }
+    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+  const del = async (vid) => { await api.deleteTariff(vid).catch(() => {}); reload(); };
+
+  const inp = { width: "100%", padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+  const Num = ({ k, label, suf }) => (
+    <div style={{ flex: "1 1 120px" }}>
+      <label style={{ fontSize: 12 }}>{label}{suf ? <span className="muted"> {suf}</span> : null}</label>
+      <input style={inp} value={t[k] ?? 0} onChange={(e) => set(k, e.target.value === "" ? 0 : Number(e.target.value))} />
+    </div>
+  );
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+        💰 Cena a tarif {fx && <span className="muted" style={{ fontWeight: 400 }}>· kurz ČNB {fx.eur_czk?.toFixed(3)} Kč/€ ({fx.day})</span>}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 6 }}>
+        <div style={{ flex: "1 1 130px" }}>
+          <label style={{ fontSize: 12 }}>Režim</label>
+          <select value={t.mode} onChange={(e) => set("mode", e.target.value)} style={{ width: "100%" }}>
+            <option value="spot">spot (dle OTE + složky)</option>
+            <option value="fixed">pevná cena (Kč/kWh)</option>
+          </select>
+        </div>
+        <Num k="monthly_fee" label="Měsíční paušál" suf="Kč" />
+        <div style={{ flex: "1 1 130px" }}>
+          <label style={{ fontSize: 12 }}>Platí od</label>
+          <input type="date" style={inp} value={t.valid_from} onChange={(e) => set("valid_from", e.target.value)} />
+        </div>
+        <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 5, flex: "1 1 120px" }}>
+          <input type="checkbox" checked={!!t.two_tariff} onChange={(e) => set("two_tariff", e.target.checked)} /> dvoutarif (VT/NT)
+        </label>
+      </div>
+
+      {t.two_tariff && (
+        <div style={{ marginBottom: 6 }}>
+          <label style={{ fontSize: 12 }}>Hodiny NT <span className="muted">(0–23, čárkou; pražský čas)</span></label>
+          <input style={inp} value={t.nt_hours || ""} onChange={(e) => set("nt_hours", e.target.value)} placeholder="např. 0,1,2,3,4,22,23" />
+        </div>
+      )}
+
+      {t.mode === "spot" ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+          <Num k="spot_buy_surcharge" label="Přirážka nákup" suf="Kč/MWh" />
+          <Num k="spot_sell_fee" label="Provize prodej" suf="Kč/MWh" />
+          <Num k="dist_buy_vt" label="Distribuce VT" suf="Kč/MWh" />
+          {t.two_tariff && <Num k="dist_buy_nt" label="Distribuce NT" suf="Kč/MWh" />}
+          <Num k="levies" label="Poplatky/daň" suf="Kč/MWh" />
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+          <Num k="fix_buy_vt" label={t.two_tariff ? "Nákup VT" : "Nákup"} suf="Kč/kWh" />
+          {t.two_tariff && <Num k="fix_buy_nt" label="Nákup NT" suf="Kč/kWh" />}
+          <Num k="fix_sell" label="Výkup" suf="Kč/kWh" />
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={save} disabled={busy} style={{ fontWeight: 600 }}>Uložit jako novou verzi</button>
+        {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+      </div>
+
+      {versions.length > 0 && (
+        <div style={{ marginTop: 6, fontSize: 12 }}>
+          <span className="muted">Verze: </span>
+          {versions.map((v) => (
+            <span key={v.id} style={{ marginRight: 8 }}>
+              {v.valid_from} ({v.mode}){" "}
+              <button onClick={() => del(v.id)} title="Smazat verzi" style={{ padding: "0 5px" }}>✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LocalityCard({ loc, allUsers, allModules, onChange }) {
   const [uSel, setUSel] = useState("");
   const [dSel, setDSel] = useState("");
@@ -268,6 +370,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
 
       <OutageSection loc={loc} onChange={onChange} />
       <ForecastSection loc={loc} onChange={onChange} />
+      <TariffSection loc={loc} />
     </div>
   );
 }

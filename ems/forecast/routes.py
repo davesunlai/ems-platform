@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 from ems.auth.deps import require_permission
 from ems.localities import db as loc_db
+from ems.pricing import db as pricing_db
+from ems.pricing import cost as pricing_cost
 from . import db as fdb
 from . import service
 from .providers import geocode as geocode_provider
@@ -42,14 +44,23 @@ async def get_forecast(locality_id: int, _: dict = Depends(read)):
     if not loc:
         raise HTTPException(status_code=404, detail="Lokalita nenalezena")
     pv = await fdb.latest_pv_all_sources(locality_id)
+    spot = await fdb.spot_window_hourly(48)
+    tariff = await pricing_db.get_effective(locality_id)
+    from datetime import datetime
+    price = []
+    for s in spot:
+        ts = datetime.fromisoformat(s["ts"])
+        c = pricing_cost.price_czk_kwh(tariff, ts, s["czk_mwh"])
+        price.append({"ts": s["ts"], "import_czk": round(c["import_czk"], 3), "export_czk": round(c["export_czk"], 3)})
     return {
         "locality_id": locality_id,
         "lat": loc.get("lat"), "lon": loc.get("lon"),
         "pv_kwp_total": loc.get("pv_kwp_total"),
-        "pricing_mode": loc.get("pricing_mode") or "spot",
+        "pricing_mode": (tariff or {}).get("mode") or loc.get("pricing_mode") or "spot",
         "pv": pv,                                  # {source: [{ts, pv_w, pv_w_lo, pv_w_hi}]}
         "load": await fdb.latest_load(locality_id),  # [{ts, load_w}]
-        "spot": await fdb.spot_window_hourly(48),    # [{ts, czk_mwh}]
+        "spot": spot,                                # [{ts, czk_mwh}]
+        "price": price,                              # [{ts, import_czk, export_czk}] reálná cena
     }
 
 
