@@ -31,6 +31,7 @@ from ems.pricing import db as pricing_db
 from ems.pricing import fx as pricing_fx
 from ems.planner import db as planner_db
 from ems.planner import service as planner_service
+from ems.notify import dispatch as notify_dispatch
 from ems.outputs.engine import evaluate_outputs
 from ems.outages.service import refresh_all as refresh_outages_all
 from .config import build_adapter, build_sink
@@ -230,6 +231,7 @@ async def run() -> None:
             await tick_forecast(state)
             await tick_planner(state)
             await tick_force_keepalive(state)
+            await tick_notify(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
             except asyncio.TimeoutError:
@@ -327,6 +329,19 @@ async def tick_force_keepalive(state: dict) -> None:
                 poked.pop(mod, None)
     except Exception as exc:
         logger.debug("force keepalive: %s", exc)
+
+
+async def tick_notify(state: dict) -> None:
+    """Rozeslání notifikací o nových výstrahách (e-mail) à 5 min."""
+    import time as _t
+    now = _t.monotonic()
+    if now - state.get("last_notify", -1e9) < 300:
+        return
+    state["last_notify"] = now
+    try:
+        await notify_dispatch.notify_new_alerts()
+    except Exception as exc:
+        logger.warning("Notify dispatch selhal: %s", exc)
 
 
 async def tick_market_and_automation(state: dict) -> None:

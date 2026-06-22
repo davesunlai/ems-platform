@@ -33,6 +33,12 @@ async def ensure_schema() -> None:
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme TEXT DEFAULT 'midnight'")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_custom JSONB")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_saved JSONB")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_email BOOLEAN NOT NULL DEFAULT TRUE")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_browser BOOLEAN NOT NULL DEFAULT TRUE")
+        await conn.execute(
+            "CREATE TABLE IF NOT EXISTS notification_log ("
+            " user_id INTEGER NOT NULL, alert_id TEXT NOT NULL, channel TEXT NOT NULL,"
+            " sent_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (user_id, alert_id, channel))")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS password_resets (
@@ -65,10 +71,34 @@ async def get_user(username: str) -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, username, password_hash, role, active, email, full_name, phone, note, theme, theme_custom, theme_saved FROM users WHERE username = $1",
+            "SELECT id, username, password_hash, role, active, email, full_name, phone, note, theme, theme_custom, theme_saved, notify_email, notify_browser FROM users WHERE username = $1",
             username,
         )
     return dict(row) if row else None
+
+
+async def set_notify_channels(user_id: int, email: bool, browser: bool) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET notify_email = $2, notify_browser = $3 WHERE id = $1",
+            user_id, bool(email), bool(browser))
+
+
+async def notification_already_sent(user_id: int, alert_id: str, channel: str) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return bool(await conn.fetchval(
+            "SELECT 1 FROM notification_log WHERE user_id=$1 AND alert_id=$2 AND channel=$3",
+            user_id, alert_id, channel))
+
+
+async def notification_mark_sent(user_id: int, alert_id: str, channel: str) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO notification_log (user_id, alert_id, channel) VALUES ($1,$2,$3) "
+            "ON CONFLICT DO NOTHING", user_id, alert_id, channel)
 
 
 async def list_users() -> list[dict]:

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api } from "../api";
@@ -7,12 +7,43 @@ import Tour, { tourSeen } from "./Tour";
 function AlertsBell() {
   const [data, setData] = useState({ count: 0, alerts: [] });
   const [open, setOpen] = useState(false);
+  const [pref, setPref] = useState({ notify_email: true, notify_browser: true });
+  const [perm, setPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
+  const seen = useRef(null);
+
   useEffect(() => {
-    const load = () => api.alerts().then(setData).catch(() => {});
+    api.me().then((m) => setPref({ notify_email: m.notify_email !== false, notify_browser: m.notify_browser !== false })).catch(() => {});
+    const load = () => api.alerts().then((d) => {
+      setData(d);
+      // Browser notifikace (jen když je appka otevřená): vypal nové výstrahy.
+      const ids = new Set((d.alerts || []).map((a) => a.id));
+      if (seen.current === null) { seen.current = ids; return; }   // první načtení neoznamuj
+      if (pref.notify_browser && typeof Notification !== "undefined" && Notification.permission === "granted") {
+        for (const a of d.alerts || []) {
+          if (!seen.current.has(a.id)) {
+            try { new Notification(`TERA EMS · ${a.title}`, { body: `${a.locality_name || ""}\n${a.detail || ""}` }); } catch { /* ignore */ }
+          }
+        }
+      }
+      seen.current = ids;
+    }).catch(() => {});
     load(); const t = setInterval(load, 180000); return () => clearInterval(t);
-  }, []);
+  }, [pref.notify_browser]);
+
+  const save = (email, browser) => {
+    setPref({ notify_email: email, notify_browser: browser });
+    api.setNotifyChannels(email, browser).catch(() => {});
+  };
+  const enableBrowser = async () => {
+    if (typeof Notification === "undefined") return;
+    const p = await Notification.requestPermission();
+    setPerm(p);
+    if (p === "granted") save(pref.notify_email, true);
+  };
+
   const count = data.count || 0;
   const triColor = count > 0 ? "var(--amber, #e0a000)" : "var(--text-muted, #6b6b76)";
+  const ck = { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, cursor: "pointer" };
   return (
     <div style={{ position: "relative" }}>
       <button className="btn" onClick={() => setOpen((o) => !o)} title="Výstrahy"
@@ -27,7 +58,7 @@ function AlertsBell() {
       {open && (
         <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 340, zIndex: 50,
           background: "var(--panel, #1c1c24)", border: "1px solid var(--border, #2a2a35)",
-          borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,.45)", maxHeight: 420, overflowY: "auto" }}>
+          borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,.45)", maxHeight: 460, overflowY: "auto" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border, #2a2a35)",
             fontWeight: 600, fontSize: 13 }}>Výstrahy {count > 0 && `(${count})`}</div>
           {count === 0 && <div className="muted" style={{ padding: "14px", fontSize: 13 }}>Žádné aktivní výstrahy.</div>}
@@ -41,6 +72,18 @@ function AlertsBell() {
               <div style={{ fontSize: 12, marginTop: 2 }}>{a.detail}</div>
             </div>
           ))}
+          <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border, #2a2a35)", background: "var(--panel-2, #16161c)" }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--muted)", marginBottom: 6 }}>Jak chci dostávat upozornění</div>
+            <label style={ck}><input type="checkbox" checked={pref.notify_email} onChange={(e) => save(e.target.checked, pref.notify_browser)} /> ✉️ e-mailem</label>
+            <label style={{ ...ck, marginTop: 4 }}><input type="checkbox" checked={pref.notify_browser} onChange={(e) => save(pref.notify_email, e.target.checked)} /> 🖥️ v prohlížeči (když je appka otevřená)</label>
+            <label style={{ ...ck, marginTop: 4, opacity: 0.5 }}><input type="checkbox" disabled /> 📱 na mobilu (push) — připravujeme</label>
+            {pref.notify_browser && perm !== "granted" && perm !== "unsupported" && (
+              <button className="btn" style={{ marginTop: 8, padding: "4px 10px", fontSize: 12 }} onClick={enableBrowser}>
+                Povolit upozornění v prohlížeči
+              </button>
+            )}
+            {perm === "denied" && <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>Prohlížeč má upozornění zakázaná — povol je v nastavení webu.</div>}
+          </div>
         </div>
       )}
     </div>

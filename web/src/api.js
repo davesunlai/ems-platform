@@ -85,6 +85,7 @@ export const api = {
   localityBilling: (id) => request(`/api/localities/${id}/billing`),
   localityOutages: (id) => request(`/api/localities/${id}/outages`),
   alerts: () => request("/api/alerts"),
+  setNotifyChannels: (email, browser) => request("/api/auth/me/notify", { method: "PUT", body: { email, browser } }),
   refreshOutages: (id) => request(`/api/admin/localities/${id}/outages/refresh`, { method: "POST" }),
   setBilling: (id, settings) => request(`/api/admin/localities/${id}/billing`, { method: "PUT", body: settings }),
   createLocality: (l) => request("/api/admin/localities", { method: "POST", body: l }),

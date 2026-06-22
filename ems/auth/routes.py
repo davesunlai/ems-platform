@@ -55,7 +55,18 @@ async def me(user: dict = Depends(get_current_user)):
         "theme": (full.get("theme") if full else None) or "midnight",
         "theme_custom": _parse_custom(full.get("theme_custom") if full else None),
         "theme_saved": _parse_custom(full.get("theme_saved") if full else None) or [],
+        "notify_email": bool(full.get("notify_email")) if full else True,
+        "notify_browser": bool(full.get("notify_browser")) if full else True,
     }
+
+
+@router.put("/auth/me/notify")
+async def set_my_notify(body: dict, user: dict = Depends(get_current_user)):
+    full = await db.get_user(user["username"])
+    if not full:
+        raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+    await db.set_notify_channels(full["id"], bool(body.get("email", True)), bool(body.get("browser", True)))
+    return {"notify_email": bool(body.get("email", True)), "notify_browser": bool(body.get("browser", True))}
 
 
 def _parse_custom(v):

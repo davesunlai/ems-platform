@@ -13,6 +13,7 @@ const P = {
   home: <><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /></>,
   sliders: <><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></>,
   power: <><path d="M12 2v8" /><path d="M5.6 6.6a8 8 0 1 0 12.8 0" /></>,
+  tower: <><path d="M7 22 12 3l5 19M5 22h14" /><path d="M8.7 9h6.6M7.6 14.5h8.8" /></>,
   dot: <circle cx="12" cy="12" r="3" />,
 };
 

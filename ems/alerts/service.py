@@ -50,6 +50,13 @@ async def _outage_alerts(localities: list[dict]) -> list[dict]:
     return alerts
 
 
+async def collect_for_locality(loc: dict) -> list[dict]:
+    """Výstrahy pro jednu lokalitu (pro server-side rozesílání notifikací)."""
+    alerts = await _outage_alerts([loc])
+    alerts.sort(key=lambda a: a.get("start") or "")
+    return alerts
+
+
 async def collect_for_user(user: dict) -> list[dict]:
     localities = await _visible_localities(user)
     alerts: list[dict] = []
