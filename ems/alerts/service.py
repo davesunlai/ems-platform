@@ -11,6 +11,31 @@ import datetime as dt
 from ems.auth import db as auth_db
 from ems.localities import db as loc_db
 from ems.outages import db as outage_db
+from . import db as alerts_db
+
+_EVENT_ICON = {
+    "force_charge": "⚡", "force_discharge": "🔻", "spiral": "🌀",
+    "output_on": "🔌", "output_off": "🔌",
+}
+
+
+async def _event_alerts(localities: list[dict]) -> list[dict]:
+    if not localities:
+        return []
+    names = {l["id"]: l.get("name") for l in localities}
+    rows = await alerts_db.recent_events([l["id"] for l in localities])
+    out = []
+    for e in rows:
+        ts = e["created_at"].isoformat()
+        out.append({
+            "id": f"event:{e['id']}",
+            "type": "event", "severity": "info",
+            "locality_id": e["locality_id"], "locality_name": names.get(e["locality_id"]),
+            "title": f"{_EVENT_ICON.get(e['kind'], '•')} {e['title']}",
+            "detail": e.get("detail") or "",
+            "start": ts, "end": ts,
+        })
+    return out
 
 
 async def _visible_localities(user: dict) -> list[dict]:
@@ -53,6 +78,7 @@ async def _outage_alerts(localities: list[dict]) -> list[dict]:
 async def collect_for_locality(loc: dict) -> list[dict]:
     """Výstrahy pro jednu lokalitu (pro server-side rozesílání notifikací)."""
     alerts = await _outage_alerts([loc])
+    alerts += await _event_alerts([loc])
     alerts.sort(key=lambda a: a.get("start") or "")
     return alerts
 
@@ -61,6 +87,7 @@ async def collect_for_user(user: dict) -> list[dict]:
     localities = await _visible_localities(user)
     alerts: list[dict] = []
     alerts += await _outage_alerts(localities)
+    alerts += await _event_alerts(localities)
     # budoucí zdroje výstrah přidat sem
     alerts.sort(key=lambda a: a.get("start") or "")
     return alerts

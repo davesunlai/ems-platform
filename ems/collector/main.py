@@ -126,6 +126,21 @@ async def process_queue(active: dict) -> None:
                                                username=c.get("username"))
                 except Exception:
                     pass
+                # notifikace operace (jen spuštění režimu, ne stop)
+                if c["action"] in ("force_charge", "force_discharge", "spiral"):
+                    try:
+                        from ems.alerts import db as alerts_db
+                        loc_id = next((d.get("locality_id") for d in await list_devices()
+                                       if d["device_id"] == c["module_id"]), None)
+                        p = c["params"] or {}
+                        pw = p.get("power")
+                        label = {"force_charge": "Vynucené nabíjení", "force_discharge": "Vybíjení do sítě",
+                                 "spiral": "Spirála"}[c["action"]]
+                        detail = (f"{pw/100:.1f} kW/pack" if pw is not None else "") + \
+                                 (f" · {p.get('source')}" if p.get("source") and p.get("source") != "manual" else " · ručně")
+                        await alerts_db.record_event(loc_id, c["action"], f"{label} – {c['module_id']}", detail)
+                    except Exception:
+                        pass
             logger.info("Povel #%s '%s' (%s) OK: %s", c["id"], c["action"], c["module_id"], res)
         except Exception as exc:
             await control_db.complete(c["id"], False, {"error": str(exc)})
@@ -200,6 +215,8 @@ async def run() -> None:
         await forecast_db.ensure_schema()
         await pricing_db.ensure_schema()
         await planner_db.ensure_schema()
+        from ems.alerts import db as alerts_db
+        await alerts_db.ensure_schema()
     except Exception as exc:
         logger.error("Inicializace registru modulů selhala: %s", exc)
 

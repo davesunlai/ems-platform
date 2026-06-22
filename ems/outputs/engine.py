@@ -147,6 +147,13 @@ async def evaluate_outputs() -> None:
             await out_db.set_state(o["id"], desired, f"{reason} → {'sepnuto' if desired else 'rozepnuto'}")
             await control_db.record("output:auto", o["target"], "switch",
                                     {"on": desired, "trigger": o["trigger"]}, True, res)
+            try:
+                from ems.alerts import db as alerts_db
+                await alerts_db.record_event(
+                    o.get("locality_id"), "output_on" if desired else "output_off",
+                    f"Spotřebič {o['name']} {'sepnut' if desired else 'rozepnut'}", reason)
+            except Exception:
+                pass
             logger.info("Výstup [%s] → %s (%s)", o["name"], "ON" if desired else "OFF", reason)
         except Exception as exc:
             await control_db.record("output:auto", o["target"], "switch",
