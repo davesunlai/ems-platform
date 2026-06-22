@@ -1,0 +1,2 @@
+# Sem patří fragmenty Caddyfile pro projekty MIMO EMS repo (např. playcup.caddy).
+# deploy.sh / tar je NEpřepisuje (jsou vyloučené z balíčku). Caddy je auto-importuje.

@@ -55,7 +55,8 @@ BLOCK_BAT2 = (34275, 16)   # 34275..34290: baterie 2
 # reálném kuse a testovat na malém výkonu. Některé zápisy jdou do flash.
 CTRL_WORK_MODE = 43110               # pracovní režim (bitfield; 0x21 = Self-Use)
 CTRL_FORCE = 43135                   # 0 = off, 1 = nucené nabíjení, 2 = nucené vybíjení
-CTRL_FORCE_POWER = 43136             # výkon nuceného režimu (scale ověřit)
+CTRL_FORCE_POWER = 43136             # výkon nuceného NABÍJENÍ (jednotka 10 W; kW×100)
+CTRL_FORCE_DISCHARGE_POWER = 43129   # výkon nuceného VYBÍJENÍ (jednotka 10 W; kW×100)
 CTRL_CHARGE_CURRENT_LIMIT = 43012    # limit nabíjecího proudu (0.1 A)
 CTRL_DISCHARGE_CURRENT_LIMIT = 43013 # limit vybíjecího proudu (0.1 A)
 CTRL_SOC_BACKUP = 43024              # SOC práh backup

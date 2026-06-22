@@ -24,6 +24,7 @@ from ems.market.spot import fetch_current_price_czk, fetch_day_slots
 from ems.automation import db as automation_db
 from ems.automation.engine import evaluate_all
 from ems.control import db as control_db
+from ems.api.db import list_devices
 from ems.forecast import db as forecast_db
 from ems.forecast import service as forecast_service
 from ems.pricing import db as pricing_db
@@ -75,6 +76,8 @@ async def dispatch_command(adapter, action: str, params: dict) -> dict:
         return await adapter.set_force(2, p.get("power"))
     if action == "stop":
         return await adapter.set_force(0)
+    if action == "force_poke":
+        return await adapter.poke_force(int(p["mode"]))
     if action == "set_work_mode":
         return await adapter.set_work_mode(int(p["word"]))
     if action == "set_charge_current":
@@ -226,6 +229,7 @@ async def run() -> None:
             await tick_market_and_automation(state)
             await tick_forecast(state)
             await tick_planner(state)
+            await tick_force_keepalive(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
             except asyncio.TimeoutError:
@@ -280,19 +284,49 @@ async def tick_planner(state: dict) -> None:
             if not ca:
                 continue
             act = ca["action"]
+            power_reg = int(round(abs(ca.get("battery_kw") or 0) * 100))   # kW -> registr (10 W/jedn.)
             if act == "charge_grid":
-                desired, cmd = "force_charge", "force_charge"
+                desired, cmd, params = "force_charge", "force_charge", {"power": power_reg, "source": "planner"}
             elif act == "discharge_grid":
-                desired, cmd = "force_discharge", "force_discharge"
+                desired, cmd, params = "force_discharge", "force_discharge", {"power": power_reg, "source": "planner"}
             else:
-                desired, cmd = "idle", "stop"
+                desired, cmd, params = "idle", "stop", {"source": "planner"}
             for dev in devs:
                 cur = (states.get(dev) or {}).get("action", "idle")
                 if cur != desired:
-                    await control_db.enqueue(dev, cmd, {"source": "planner"}, username="planner")
+                    await control_db.enqueue(dev, cmd, params, username="planner")
                     logger.info("Planner lok %s modul %s: %s -> %s (%s)", lid, dev, cur, desired, ca.get("reason"))
     except Exception as exc:
         logger.debug("Planner výkon: %s", exc)
+
+
+async def tick_force_keepalive(state: dict) -> None:
+    """Deadman: 43135 se po ~5 min nuluje → každé 4 min přiťukni aktivní force,
+    aby vynucené nabíjení/vybíjení nespadlo (a dashboard nelhal)."""
+    import time as _t
+    now = _t.monotonic()
+    if now - state.get("last_keepalive_check", 0.0) < 60:
+        return
+    state["last_keepalive_check"] = now
+    try:
+        solis = [d["device_id"] for d in await list_devices() if d.get("adapter") == "solis"]
+        if not solis:
+            return
+        states = await control_db.get_states(solis)
+        poked = state.setdefault("force_poked", {})
+        import time as _w
+        wall = _w.time()
+        for mod, st in states.items():
+            act = st.get("action")
+            if act in ("force_charge", "force_discharge"):
+                mode = 1 if act == "force_charge" else 2
+                if wall - poked.get(mod, 0.0) > 240:
+                    await control_db.enqueue(mod, "force_poke", {"mode": mode}, username="keepalive")
+                    poked[mod] = wall
+            else:
+                poked.pop(mod, None)
+    except Exception as exc:
+        logger.debug("force keepalive: %s", exc)
 
 
 async def tick_market_and_automation(state: dict) -> None:

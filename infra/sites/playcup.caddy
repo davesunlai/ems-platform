@@ -1,0 +1,4 @@
+playcup.online {
+        encode gzip
+        reverse_proxy playcup_app:3000
+}

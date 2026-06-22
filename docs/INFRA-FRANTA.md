@@ -53,3 +53,12 @@ _(vše přes `edge`, kromě teraems přes `infra_default`)_
 | tipomat.net            | tipomat_app:8000          |
 | narozeniny.eu          | narozeniny-eu:4321        |
 | plakatovaciplocha.cz   | plakatovaciplocha_app:80  |
+
+## Externí projekty v Caddy (mimo EMS repo) — fragmenty
+Hlavní `infra/Caddyfile` (teraems/tipomat/narozeniny/plakatovaci) je v repu a deploy ho
+přepisuje. Projekty MIMO repo (např. `playcup.online`) proto NESMÍ být přímo v něm —
+zmizely by po updatu. Místo toho jdou do `/opt/ems/infra/sites/*.caddy`:
+- hlavní Caddyfile je `import /etc/caddy/sites/*.caddy` auto-natáhne,
+- compose mountuje `./sites:/etc/caddy/sites:ro`,
+- deploy/tar tyto fragmenty NIKDY nepřepisuje (jsou vyloučené z balíčku).
+Po přidání/změně fragmentu: `docker restart infra-caddy-1`.

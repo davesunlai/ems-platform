@@ -22,7 +22,7 @@ import logging
 from ems.core.model import DeviceType, Measurement, Metric, Reading, UNIT_OF, utcnow
 from .mapping import (
     BATTERY_PACKS, BLOCK_BAT1, BLOCK_BAT2, BLOCK_GRID, BLOCK_SYS1, BLOCK_SYS2,
-    CTRL_FORCE, CTRL_FORCE_POWER, CTRL_WORK_MODE,
+    CTRL_FORCE, CTRL_FORCE_POWER, CTRL_FORCE_DISCHARGE_POWER, CTRL_WORK_MODE,
     CTRL_CHARGE_CURRENT_LIMIT, CTRL_DISCHARGE_CURRENT_LIMIT,
     CTRL_SOC_BACKUP, CTRL_SOC_FORCE,
     REG_ENERGY_TODAY, REG_ENERGY_TOTAL, REG_GRID_METER,
@@ -184,16 +184,21 @@ class SolisAdapter:
     async def set_force(self, mode: int, power: int | None = None) -> dict:
         """Hlavní řídicí páka: 0 = off, 1 = nucené nabíjení, 2 = nucené vybíjení.
 
-        `power` (pokud zadáno) se zapíše do CTRL_FORCE_POWER PŘED přepnutím módu.
-        Hodnoty jsou syrové (int) — scale u 3f modelu je nutné mít ověřený.
+        Výkon (10 W/jednotka) jde do SPRÁVNÉHO registru podle směru:
+        nabíjení → 43136, vybíjení → 43129. Zapisuje se PŘED přepnutím módu.
         """
         if int(mode) not in (0, 1, 2):
             raise ValueError("force mode musí být 0 (off), 1 (charge) nebo 2 (discharge)")
         res = {}
-        if power is not None:
-            res["power"] = await self.write_holding(CTRL_FORCE_POWER, int(power))
+        if power is not None and int(mode) in (1, 2):
+            reg = CTRL_FORCE_POWER if int(mode) == 1 else CTRL_FORCE_DISCHARGE_POWER
+            res["power"] = await self.write_holding(reg, int(power))
         res["force"] = await self.write_holding(CTRL_FORCE, int(mode))
         return res
+
+    async def poke_force(self, mode: int) -> dict:
+        """Deadman keepalive — jen přepíše 43135 (po ~5 min se sám nuluje)."""
+        return await self.write_holding(CTRL_FORCE, int(mode), verify=False)
 
     async def set_work_mode(self, word: int) -> dict:
         """Nastaví pracovní režim (CTRL_WORK_MODE, bitfield; 0x21 = Self-Use)."""

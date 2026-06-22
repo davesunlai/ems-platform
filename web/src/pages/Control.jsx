@@ -185,7 +185,7 @@ function StatusLine({ status }) {
 
 function SolisControl({ mod }) {
   const has = (k) => (mod.control_enabled || []).includes(k);
-  const [power, setPower] = useState(1000);
+  const [power, setPower] = useState(5);
   const [chA, setChA] = useState("");
   const [disA, setDisA] = useState("");
   const [socBackup, setSocBackup] = useState("");
@@ -197,7 +197,7 @@ function SolisControl({ mod }) {
 
   const force = async (action, label) => {
     if (!ask(`Opravdu poslat do měniče ${mod.id}: ${label}?`)) return;
-    setBusy(true); await runCommand(mod.id, action, { power: Number(power) }, setStatus, label); setBusy(false);
+    setBusy(true); await runCommand(mod.id, action, { power: Math.round(Number(power) * 100) }, setStatus, label); setBusy(false);
   };
   const stop = async () => {
     if (!ask(`Vrátit měnič ${mod.id} do normálu (Self-Use)?`)) return;
@@ -244,14 +244,14 @@ function SolisControl({ mod }) {
     <div className="panel" style={{ marginBottom: 14 }}>
       <h3 style={{ marginBottom: 2 }}>{mod.id} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· Solis</span></h3>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
-        ⚠️ Reálně zapisuje do měniče. Force výkon je <b>syrová hodnota registru</b> (scale u 3f neověřen) — začni nízko.
+        ⚠️ Reálně zapisuje do měniče. Výkon je v <b>kW</b> (nabíjení reg. 43136, vybíjení reg. 43129; jednotka 10 W). Vybíjení jde do sítě jen nad rámec spotřeby domu.
       </p>
 
       <div style={{ fontWeight: 600, fontSize: 13, margin: "8px 0 4px" }}>Ruční řízení</div>
       <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ fontSize: 12 }}>výkon <span className="muted">(syrová hodnota registru)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 90 }} /></label>
-        {has("force_charge") && <button className="btn" disabled={busy} onClick={() => force("force_charge", `Nabíjet teď (${power})`)}>⚡ Nabíjet teď</button>}
-        {has("force_discharge") && <button className="btn" disabled={busy} onClick={() => force("force_discharge", `Vybíjet teď (${power})`)}>🔻 Vybíjet teď</button>}
+        <label style={{ fontSize: 12 }}>výkon <span className="muted">(kW)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 80 }} /></label>
+        {has("force_charge") && <button className="btn" disabled={busy} onClick={() => force("force_charge", `Nabíjet teď (${power} kW)`)}>⚡ Nabíjet teď</button>}
+        {has("force_discharge") && <button className="btn" disabled={busy} onClick={() => force("force_discharge", `Vybíjet teď (${power} kW)`)}>🔻 Vybíjet teď</button>}
         <button className="btn" disabled={busy} style={{ color: "#e06c75" }} onClick={stop}>⏹ Stop</button>
       </div>
 
@@ -450,7 +450,7 @@ function PlannerPanel({ locId }) {
       {cfg.enabled && (
         <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0", color: "var(--amber)" }}>
           ⚠ Zapnutý plánovač <b>reálně řídí měnič</b> (přes frontu, na nastavených limitech proudu) a přebírá řízení místo reaktivních spot pravidel této lokality.
-          {cfg.allow_grid_discharge ? " Vybíjení do sítě je povolené — 43136 neověřen, sleduj výkon." : ""}
+          {cfg.allow_grid_discharge ? " Vybíjení do sítě je povolené — sleduj výkon baterie/sítě." : ""}
         </p>
       )}
 

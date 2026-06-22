@@ -18,6 +18,7 @@ plakatovaciplocha.cz {
 	reverse_proxy plakatovaciplocha_app:80
 }
 
-# Externí projekty mimo EMS repo (playcup.online apod.) – fragmenty, které
-# deploy NIKDY nepřepisuje. Přidávej je do /opt/ems/infra/sites/*.caddy na serveru.
-import /etc/caddy/sites/*.caddy
+playcup.online {
+        encode gzip
+        reverse_proxy playcup_app:3000
+}

@@ -107,7 +107,7 @@ function ControlBanners({ deviceIds }) {
         return (
           <div key={id} className="ems-active-bar" style={{ color: act.color, background: `color-mix(in srgb, ${act.color} 14%, transparent)`, marginBottom: 6 }}>
             <span className="ems-pulse" style={{ fontSize: 16 }}>{act.icon}</span>
-            <span>{act.label}{actPower != null ? ` (výkon ${actPower})` : ""}</span>
+            <span>{act.label}{actPower != null ? ` (${(actPower / 100).toFixed(1)} kW)` : ""}</span>
             <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: "auto" }}>
               {id} · od {sinceTxt}{st.source && st.source !== "manual" ? ` · ${st.source}` : ""}
             </span>
