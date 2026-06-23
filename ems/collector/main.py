@@ -471,6 +471,113 @@ async def evaluate_spot_discharge(price, skip_devices=None) -> None:
                 await control_db.set_spot_rule_active(dev, True)
 
 
+async def evaluate_spot_precharge(skip_devices=None) -> None:
+    """Předchystání baterie na spotové vybíjení: nabij ZE SÍTĚ v nejlevnějších slotech
+    v pásmu L h před vysokým oknem, na energii odpovídající prodeji, s ekonomickou pojistkou.
+    Respektuje plánovač (skip), ruční override; vybíjení ve svém okně má přednost."""
+    from datetime import datetime, timezone, timedelta
+    from zoneinfo import ZoneInfo
+    import math
+    pr = ZoneInfo("Europe/Prague")
+    skip = set(skip_devices or [])
+    rules = [r for r in await control_db.list_spot_rules_enabled() if r.get("precharge_enabled")]
+    if not rules:
+        return
+    slots = await market_db.future_slots(24)
+    if len(slots) < 2:
+        return
+    now = datetime.now(timezone.utc)
+    devs_meta = await list_devices()
+    states = await control_db.get_states([r["module_id"] for r in rules])
+    EFF = 0.9
+    for r in rules:
+        dev = r["module_id"]
+        if dev in skip:
+            continue
+        st = states.get(dev) or {}
+        if st.get("action") == "force_discharge":      # vybíjení běží → předchystání nech být
+            await control_db.set_precharge_active(dev, False)
+            continue
+        since = st.get("since")                          # ruční override
+        if st.get("source") == "manual" and since:
+            try:
+                s = since if hasattr(since, "tzinfo") else datetime.fromisoformat(since)
+                if (now - s).total_seconds() < MANUAL_OVERRIDE_SEC:
+                    continue
+            except Exception:
+                pass
+        loc_id = next((d.get("locality_id") for d in devs_meta if d["device_id"] == dev), None)
+        try:
+            cap = float((await planner_db.get_config(loc_id))["capacity_kwh"]) if loc_id else 52.8
+        except Exception:
+            cap = 52.8
+        price_on = float(r["price_on"]); floor = float(r["soc_floor"])
+        L = float(r.get("precharge_hours") or 3); pwr = float(r.get("precharge_power_kw") or 10)
+        min_spread = float(r.get("precharge_min_spread") or 0); max_buy = float(r.get("precharge_max_buy") or 0)
+        dis_pwr = float(r["power_kw"])
+
+        async def _stop_precharge(reason):
+            if r.get("precharge_active") and st.get("action") == "force_charge" and st.get("source") in (None, "spot"):
+                prm = {"source": "spot", "name": "Předchystání baterie", "reason": reason}
+                cid = await control_db.enqueue(dev, "stop", prm, username="spot")
+                await control_db.record("spot", dev, "stop", prm, True, {"queued": cid})
+            await control_db.set_precharge_active(dev, False)
+
+        # 1) nejbližší BUDOUCÍ vysoké okno (souvislé sloty ≥ price_on)
+        win = []
+        for s in slots:
+            if s["slot"] <= now:
+                continue
+            if s["price"] >= price_on:
+                if not win or (s["slot"] - win[-1]["slot"]).total_seconds() <= 16 * 60:
+                    win.append(s)
+                else:
+                    break
+            elif win:
+                break
+        if not win:
+            await _stop_precharge("předchystání: žádné drahé okno v dohledu")
+            continue
+        t_high = win[0]["slot"]
+        sell_price = sum(s["price"] for s in win) / len(win)
+        win_hours = len(win) * 0.25
+
+        # 2) energie k prodeji → cílový SoC
+        usable = max(0.0, (100.0 - floor) / 100.0 * cap)
+        e_sell = min(dis_pwr * win_hours, usable)
+        target = min(100.0, floor + (e_sell / EFF) / cap * 100.0)
+        soc = await _latest_soc(dev)
+        if soc is None:
+            soc = floor
+        if soc >= target - 1.0:
+            await _stop_precharge(f"předchystání hotovo (SoC {soc:.0f}% ≥ cíl {target:.0f}%)")
+            continue
+
+        # 3) pásmo L h před oknem + nejlevnější sloty s ekonomickou pojistkou
+        pre = [s for s in slots if (t_high - timedelta(hours=L)) <= s["slot"] < t_high]
+        ok = [s for s in pre if (sell_price - s["price"]) >= min_spread and (max_buy <= 0 or s["price"] <= max_buy)]
+        need_kwh = (target - soc) / 100.0 * cap / EFF
+        n = max(1, math.ceil(need_kwh / (pwr * 0.25)))
+        chosen = {s["slot"] for s in sorted(ok, key=lambda x: x["price"])[:n]}
+
+        # 4) je teď nabíjecí slot?
+        cur = next((s for s in slots if s["slot"] <= now < s["slot"] + timedelta(minutes=15)), None)
+        if cur is not None and cur["slot"] in chosen:
+            if st.get("action") != "force_charge":
+                reason = (f"předchystání: levný slot {cur['price']:.0f} Kč/MWh → cíl SoC {target:.0f}% "
+                          f"(prodej {t_high.astimezone(pr):%H:%M} @ ~{sell_price:.0f})")
+                prm = {"power": int(round(pwr * 100)), "source": "spot", "name": "Předchystání baterie", "reason": reason,
+                       "values": {"slot_cena": round(cur["price"]), "prodej_cena": round(sell_price),
+                                  "cil_SoC_%": round(target), "SoC_%": round(soc, 1),
+                                  "spread": round(sell_price - cur["price"])}}
+                cid = await control_db.enqueue(dev, "force_charge", prm, username="spot")
+                await control_db.record("spot", dev, "force_charge", prm, True, {"queued": cid})
+                logger.info("Předchystání %s START %.1f kW: %s", dev, pwr, reason)
+            await control_db.set_precharge_active(dev, True)
+        else:
+            await _stop_precharge("předchystání: mimo levný slot")
+
+
 async def tick_market_and_automation(state: dict) -> None:
     import time as _t
     # obnova spotové ceny (živý feed, pokud není ruční override)
@@ -502,6 +609,11 @@ async def tick_market_and_automation(state: dict) -> None:
         await evaluate_spot_discharge(st.get("price"), skip_devices=skip)
     except Exception as exc:
         logger.warning("Spotové vybíjení selhalo: %s", exc)
+    # předchystání baterie ze sítě před vysokým spotem
+    try:
+        await evaluate_spot_precharge(skip_devices=skip)
+    except Exception as exc:
+        logger.warning("Předchystání baterie selhalo: %s", exc)
     # spínání kontaktu dle SOC (hystereze)
     try:
         await evaluate_outputs()

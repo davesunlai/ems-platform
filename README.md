@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.45.0 — Předchystání baterie na spotové vybíjení (arbitráž levný→drahý spot). U pravidla vybíjení nová sekce „⚡ Předchystat baterii": v pásmu N h před vysokým oknem najde nejlevnější 15min sloty a nabije ZE SÍTĚ přesně tolik energie, kolik se v okně prodá (cíl SoC dopočítán z výkonu×délka okna, kapacita z konfigurace plánovače, round-trip ~90 %). Ekonomická pojistka: nabíjí jen když (prodej−nákup) ≥ min. rozdíl a nákup ≤ strop. force_charge se source=spot, do auditu/notifikací s důvodem a hodnotami. Plánovač i ruční override mají přednost; vybíjení ve svém okně přebírá řízení. market.future_slots() + sloupce precharge_* na spot_discharge_rules.
+
 ## v0.44.4 — Notifikace u řízení (force nabíjení/vybíjení/spirála/stop) teď obsahují i DŮVOD (reason) z parametrů — stejně jako audit. Např. „Vybíjení do sítě – dave-home-solis · 10.0 kW · spot · spot 4200 ≥ zap 4000 Kč/MWh". Spotřebiče důvod v notifikaci měly už dřív.
 
 ## v0.44.3 — Hlídač sítě používá CELOU škálu se znaménkem (jako dashboard): + odběr ze sítě, − dodávka do sítě. Odstraněna podmínka „> 0", takže záporný práh funguje: např. −3 = vypni, když dodávka do sítě klesne pod 3 kW; 0.3 = vypni, když nakupuješ > 0,3 kW. Přidán čas zámku „pak nezapínat (min)" (guard_lock_min, default 30) přímo do formuláře. Reason i hodnoty v auditu rozlišují dodávku/nákup.

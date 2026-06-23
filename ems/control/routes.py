@@ -102,7 +102,12 @@ async def get_spot_rule(module_id: str, _: dict = Depends(require_permission("co
 async def set_spot_rule(module_id: str, body: dict, _: dict = Depends(require_permission("control"))):
     return await db.set_spot_rule(module_id, body.get("enabled", False),
                                   body.get("price_on", 4000), body.get("price_off", 3000),
-                                  body.get("power_kw", 10), body.get("soc_floor", 20))
+                                  body.get("power_kw", 10), body.get("soc_floor", 20),
+                                  precharge_enabled=body.get("precharge_enabled", False),
+                                  precharge_hours=body.get("precharge_hours", 3),
+                                  precharge_power_kw=body.get("precharge_power_kw", 10),
+                                  precharge_min_spread=body.get("precharge_min_spread", 1000),
+                                  precharge_max_buy=body.get("precharge_max_buy", 0))
 
 
 @router.get("/audit")

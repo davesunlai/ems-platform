@@ -126,3 +126,14 @@ async def history_window(days: int = 1, target_points: int = 400) -> list[dict]:
         )
     return [{"start": r["b"].isoformat(), "price": float(r["price"])}
             for r in rows if r["price"] is not None]
+
+
+async def future_slots(hours: float = 24) -> list[dict]:
+    """Budoucí 15min spotové sloty od teď do +hours. [{slot: datetime, price: CZK/MWh}]."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT slot, price FROM spot_history "
+            "WHERE slot >= now() - interval '15 minutes' "
+            f"AND slot <= now() + interval '{int(hours)} hours' ORDER BY slot")
+    return [{"slot": r["slot"], "price": float(r["price"])} for r in rows if r["price"] is not None]

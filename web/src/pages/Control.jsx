@@ -236,6 +236,9 @@ function SpotDischargePanel({ moduleId }) {
       const saved = await api.setSpotRule(moduleId, {
         enabled: !!r.enabled, price_on: Number(r.price_on), price_off: Number(r.price_off),
         power_kw: Number(r.power_kw), soc_floor: Number(r.soc_floor),
+        precharge_enabled: !!r.precharge_enabled, precharge_hours: Number(r.precharge_hours),
+        precharge_power_kw: Number(r.precharge_power_kw), precharge_min_spread: Number(r.precharge_min_spread),
+        precharge_max_buy: Number(r.precharge_max_buy),
       });
       setR(saved); setMsg("✓ Uloženo"); setTimeout(() => setMsg(""), 2500);
     } catch (e) { setMsg("✗ " + (e.message || e)); }
@@ -263,6 +266,29 @@ function SpotDischargePanel({ moduleId }) {
           <input value={r.soc_floor} onChange={(e) => set("soc_floor", e.target.value)} style={fld} /></div>
         <button className="btn primary" onClick={save} style={{ padding: "6px 14px" }}>Uložit</button>
         {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+      </div>
+
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px dashed var(--border)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+          <input type="checkbox" checked={!!r.precharge_enabled} onChange={(e) => set("precharge_enabled", e.target.checked)} />
+          ⚡ Předchystat baterii (nabít ze sítě před vysokým spotem)
+          {r.precharge_active && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: "var(--green)", color: "#0b0e13" }}>právě nabíjí</span>}
+        </label>
+        <p className="muted" style={{ fontSize: 11.5, margin: "4px 0 8px" }}>
+          Před drahým oknem najde v zadaném pásmu nejlevnější sloty a nabije přesně tolik, kolik se v okně prodá. Nabíjí jen když je rozdíl nákup→prodej dost velký.
+        </p>
+        {r.precharge_enabled && (
+          <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div><label style={lbl}>Kolik hodin předem hledat</label>
+              <input value={r.precharge_hours} onChange={(e) => set("precharge_hours", e.target.value)} style={fld} /></div>
+            <div><label style={lbl}>Výkon nabíjení (kW)</label>
+              <input value={r.precharge_power_kw} onChange={(e) => set("precharge_power_kw", e.target.value)} style={fld} /></div>
+            <div><label style={lbl}>Min. rozdíl prodej−nákup (Kč/MWh)</label>
+              <input value={r.precharge_min_spread} onChange={(e) => set("precharge_min_spread", e.target.value)} style={fld} /></div>
+            <div><label style={lbl}>Strop nákupu (Kč/MWh, 0 = bez)</label>
+              <input value={r.precharge_max_buy} onChange={(e) => set("precharge_max_buy", e.target.value)} style={fld} /></div>
+          </div>
+        )}
       </div>
     </div>
   );
