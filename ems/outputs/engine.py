@@ -10,7 +10,10 @@ Stav (is_on, on_since) se drží v DB → edge-trigger, žádné poskakování.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+_PRAGUE = ZoneInfo("Europe/Prague")
 
 from ems.api.db import get_pool
 from ems.control import db as control_db
@@ -79,15 +82,61 @@ async def _actuate(o: dict, desired: bool) -> dict:
     return await set_load_switch(mod.params["host"], int(mod.params.get("port", 8899)), desired)
 
 
-def _decide_soc(o: dict, soc: float) -> tuple[bool, str]:
+async def _grid_import_sustained(locality_id, kw: float, minutes: float) -> bool:
+    """True, pokud se po CELÝCH posledních `minutes` bral ze sítě import > kw."""
+    ids = await _loc_device_ids(locality_id)
+    if not ids:
+        return False
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT max(value) AS worst, min(time) AS first, count(*) AS n FROM samples "
+            "WHERE device_id=ANY($1::text[]) AND metric='grid_power' "
+            f"AND time > now() - interval '{int(minutes)} minutes'", ids)
+    if not row or not row["n"] or row["worst"] is None:
+        return False
+    # data musí pokrýt aspoň 80 % okna, jinak nevíme
+    span = (datetime.now(timezone.utc) - row["first"]).total_seconds() / 60.0
+    if span < minutes * 0.8:
+        return False
+    # kladné grid_power = export → import je záporné; "po celou dobu import > kw"
+    # = i ten nejmenší import (nejvyšší grid_power) je pod -kw*1000 W
+    return float(row["worst"]) <= -kw * 1000.0
+
+
+async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str]:
+    """Vrací (desired, lock_until|None, reason). lock_until = nastavit zámek po hlídači sítě."""
     p = o["params"]
     upper = float(p.get("upper_soc", 100)); lower = float(p.get("lower_soc", 95))
     on = o["is_on"]
+    now_utc = datetime.now(timezone.utc)
+
+    # 1) zámek po hlídači sítě – drž vypnuto
+    lock = o.get("off_lock_until")
+    if lock and now_utc < lock:
+        return False, None, f"uzamčeno hlídačem sítě do {lock.astimezone(_PRAGUE):%H:%M}"
+
+    # 2) denní okno (lokální čas) – mimo něj vypnout
+    ds, de = p.get("day_start"), p.get("day_end")
+    if ds not in (None, "") and de not in (None, ""):
+        h = datetime.now(_PRAGUE).hour
+        if not (float(ds) <= h < float(de)):
+            return False, None, f"mimo denní okno {ds}–{de} h (teď {h})"
+
+    # 3) hlídač sítě – jen když je sepnuto: import > kw po celé okno → vypnout + zámek
+    gk, gm = p.get("grid_guard_kw"), p.get("grid_guard_min")
+    if on and gk not in (None, "") and gm not in (None, "") and float(gk) > 0 and float(gm) > 0:
+        if await _grid_import_sustained(o["locality_id"], float(gk), float(gm)):
+            lock_min = float(p.get("guard_lock_min", 120))
+            return (False, now_utc + timedelta(minutes=lock_min),
+                    f"hlídač sítě: import >{gk} kW déle než {gm} min → vypnuto (zámek {lock_min:.0f} min)")
+
+    # 4) SoC hystereze
     if not on and soc >= upper:
         on = True
     elif on and soc <= lower:
         on = False
-    return on, f"SoC={soc:.0f} % (mez {lower:.0f}–{upper:.0f})"
+    return on, None, f"SoC={soc:.0f} % (mez {lower:.0f}–{upper:.0f})"
 
 
 def _decide_surplus(o: dict, tele: dict, spot) -> tuple[bool, str]:
@@ -130,7 +179,9 @@ async def evaluate_outputs() -> None:
                 if soc is None:
                     await out_db.set_decision(o["id"], "no_data:soc")
                     continue
-                desired, reason = _decide_soc(o, soc)
+                desired, lock_until, reason = await _decide_soc(o, soc)
+                if lock_until is not None:
+                    await out_db.set_lock(o["id"], lock_until)
             else:  # surplus
                 tele = await _loc_telemetry(o["locality_id"])
                 desired, reason = _decide_surplus(o, tele, spot)

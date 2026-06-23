@@ -36,6 +36,7 @@ function SearchSelect({ value, options, onChange, placeholder = "— vyber —" 
 const emptyOut = {
   name: "", enabled: true, output_kind: "ewelink", target: "", trigger: "surplus",
   upper_soc: 100, lower_soc: 95, surplus_kw: 1.5, soc_min: 80, spot_max: "", min_on_min: 10,
+  day_start: "", day_end: "", grid_guard_kw: "", grid_guard_min: "",
 };
 
 function OutputsPanel({ locId }) {
@@ -62,7 +63,9 @@ function OutputsPanel({ locId }) {
     : gw.map((m) => ({ id: m.id, label: m.name || m.id }));
 
   const buildParams = () => f.trigger === "soc"
-    ? { upper_soc: Number(f.upper_soc), lower_soc: Number(f.lower_soc) }
+    ? { upper_soc: Number(f.upper_soc), lower_soc: Number(f.lower_soc),
+        ...(f.day_start !== "" && f.day_end !== "" ? { day_start: Number(f.day_start), day_end: Number(f.day_end) } : {}),
+        ...(f.grid_guard_kw !== "" && f.grid_guard_min !== "" ? { grid_guard_kw: Number(f.grid_guard_kw), grid_guard_min: Number(f.grid_guard_min) } : {}) }
     : { surplus_kw: Number(f.surplus_kw), soc_min: Number(f.soc_min), min_on_min: Number(f.min_on_min),
         ...(f.spot_max !== "" && f.spot_max != null ? { spot_max: Number(f.spot_max) } : {}) };
   const body = () => ({ name: f.name.trim(), enabled: f.enabled, output_kind: f.output_kind, target: f.target,
@@ -72,7 +75,9 @@ function OutputsPanel({ locId }) {
   const save = async () => { setErr(""); try { if (editing) await api.updateOutput(editing, body()); else await api.createOutput(body()); reset(); setOpen(false); load(); } catch (e) { setErr(e.message); } };
   const edit = (o) => { setEditing(o.id); setOpen(true); setF({ name: o.name, enabled: o.enabled, output_kind: o.output_kind, target: o.target, trigger: o.trigger,
       upper_soc: o.params.upper_soc ?? 100, lower_soc: o.params.lower_soc ?? 95, surplus_kw: o.params.surplus_kw ?? 1.5,
-      soc_min: o.params.soc_min ?? 80, spot_max: o.params.spot_max ?? "", min_on_min: o.params.min_on_min ?? 10 }); };
+      soc_min: o.params.soc_min ?? 80, spot_max: o.params.spot_max ?? "", min_on_min: o.params.min_on_min ?? 10,
+      day_start: o.params.day_start ?? "", day_end: o.params.day_end ?? "",
+      grid_guard_kw: o.params.grid_guard_kw ?? "", grid_guard_min: o.params.grid_guard_min ?? "" }); };
   const toggle = async (o) => { try { await api.updateOutput(o.id, { enabled: !o.enabled }); load(); } catch (e) { setErr(e.message); } };
   const remove = async (o) => { if (!confirm(`Smazat spotřebič „${o.name}"?`)) return; try { await api.deleteOutput(o.id); if (editing === o.id) reset(); load(); } catch (e) { setErr(e.message); } };
   const test = async (o, on) => { setBusy(o.id); setErr(""); try { await api.testOutput(o.id, on); setTimeout(load, 600); } catch (e) { setErr(e.message); } finally { setBusy(0); } };
@@ -111,6 +116,18 @@ function OutputsPanel({ locId }) {
               <>
                 <div><label style={{ fontSize: 12, display: "block" }}>Sepnout při SoC ≥ (%)</label><input value={f.upper_soc} onChange={(e) => setF({ ...f, upper_soc: e.target.value })} style={inp} /></div>
                 <div><label style={{ fontSize: 12, display: "block" }}>Rozepnout při SoC ≤ (%)</label><input value={f.lower_soc} onChange={(e) => setF({ ...f, lower_soc: e.target.value })} style={inp} /></div>
+                <div><label style={{ fontSize: 12, display: "block" }}>Jen přes den od–do (hod, prázdné = nonstop)</label>
+                  <span style={{ display: "inline-flex", gap: 4 }}>
+                    <input value={f.day_start} placeholder="8" onChange={(e) => setF({ ...f, day_start: e.target.value })} style={{ ...inp, width: 56 }} />
+                    <input value={f.day_end} placeholder="18" onChange={(e) => setF({ ...f, day_end: e.target.value })} style={{ ...inp, width: 56 }} />
+                  </span>
+                </div>
+                <div><label style={{ fontSize: 12, display: "block" }}>Vypni, když import ze sítě &gt; (kW) déle než (min)</label>
+                  <span style={{ display: "inline-flex", gap: 4 }}>
+                    <input value={f.grid_guard_kw} placeholder="0.5" onChange={(e) => setF({ ...f, grid_guard_kw: e.target.value })} style={{ ...inp, width: 64 }} />
+                    <input value={f.grid_guard_min} placeholder="15" onChange={(e) => setF({ ...f, grid_guard_min: e.target.value })} style={{ ...inp, width: 64 }} />
+                  </span>
+                </div>
               </>
             ) : (
               <>

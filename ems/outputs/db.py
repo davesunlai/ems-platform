@@ -27,6 +27,7 @@ async def ensure_schema() -> None:
             )
             """
         )
+        await conn.execute("ALTER TABLE switch_outputs ADD COLUMN IF NOT EXISTS off_lock_until TIMESTAMPTZ")
         # jednorázová migrace starých SOC kontaktů
         n = await conn.fetchval("SELECT count(*) FROM switch_outputs")
         if n == 0:
@@ -104,6 +105,12 @@ async def set_state(out_id: int, is_on: bool, decision: str) -> None:
             "UPDATE switch_outputs SET is_on=$1, last_decision=$2, last_action_at=now(), "
             "on_since = CASE WHEN $1 AND NOT is_on THEN now() WHEN NOT $1 THEN NULL ELSE on_since END "
             "WHERE id=$3", is_on, decision, out_id)
+
+
+async def set_lock(out_id: int, until) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE switch_outputs SET off_lock_until=$1 WHERE id=$2", until, out_id)
 
 
 async def set_decision(out_id: int, decision: str) -> None:

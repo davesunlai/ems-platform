@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.42.0 — Spotřebiče (SoC hystereze) rozšířeny o dvě podmínky pro „spirálu přes eWeLink": (1) DENNÍ OKNO – sepni jen mezi zvolenými hodinami (lokální čas), mimo okno vypnuto; (2) HLÍDAČ SÍTĚ – když se ze sítě bere import > X kW (default 0,5) souvisle déle než Y min (default 15), spotřebič se vypne a uzamkne na guard_lock_min (default 120 min), aby neposkakoval. Tím lze: při SoC ≥ 95 % sepnout spirálu, držet do 80 %, jen přes den a jen dokud to netáhne ze sítě. UI v Řízení → Spínané spotřebiče (trigger SoC) má nová pole. Sloupec off_lock_until.
+
 ## v0.41.6 — Grafy: výraznější osa X (nulová linka, silnější a kontrastní var(--fg)) a na ose Y vlevo se vždy vypisuje 0 (tučně), ať je zřejmé, kde leží nula. Sjednoceno napříč TimeChart, MultiChart, ForecastChart i SpotCurve (spotová křivka teď začíná od 0 — korektní sloupcový graf).
 
 ## v0.41.5 — Oprava popisu výkonu: ruční výkon je na CELÉ ÚLOŽIŠTĚ (obě baterie dohromady), ne na pack. Zrušen chybný ×2 odhad i popisek „kW / pack" v Řízení (label, tlačítka, status hláška „✓ Vybíjet teď (X kW)") a stejně i text v notifikacích/alertech (operační událost: „X kW" místo „X kW/pack").
