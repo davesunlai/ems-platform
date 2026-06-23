@@ -190,3 +190,58 @@ async def get_states(module_ids: list[str]) -> dict[str, dict]:
         d["since"] = d["since"].isoformat() if d["since"] else None
         out[d["module_id"]] = d
     return out
+
+
+# --- Spotové auto-vybíjení do sítě (per Solis modul, hystereze + podlaha SoC) ---
+_SPOT_DEFAULT = {"enabled": False, "price_on": 4000.0, "price_off": 3000.0,
+                 "power_kw": 10.0, "soc_floor": 20.0, "active": False}
+
+
+async def ensure_spot_rule_schema() -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS spot_discharge_rules (
+                module_id TEXT PRIMARY KEY,
+                enabled   BOOLEAN NOT NULL DEFAULT FALSE,
+                price_on  DOUBLE PRECISION NOT NULL DEFAULT 4000,
+                price_off DOUBLE PRECISION NOT NULL DEFAULT 3000,
+                power_kw  DOUBLE PRECISION NOT NULL DEFAULT 10,
+                soc_floor DOUBLE PRECISION NOT NULL DEFAULT 20,
+                active    BOOLEAN NOT NULL DEFAULT FALSE
+            )
+            """
+        )
+
+
+async def get_spot_rule(module_id: str) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        r = await conn.fetchrow("SELECT * FROM spot_discharge_rules WHERE module_id=$1", module_id)
+    return dict(r) if r else {"module_id": module_id, **_SPOT_DEFAULT}
+
+
+async def set_spot_rule(module_id: str, enabled, price_on, price_off, power_kw, soc_floor) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        r = await conn.fetchrow(
+            "INSERT INTO spot_discharge_rules (module_id, enabled, price_on, price_off, power_kw, soc_floor) "
+            "VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (module_id) DO UPDATE SET "
+            "enabled=EXCLUDED.enabled, price_on=EXCLUDED.price_on, price_off=EXCLUDED.price_off, "
+            "power_kw=EXCLUDED.power_kw, soc_floor=EXCLUDED.soc_floor RETURNING *",
+            module_id, bool(enabled), float(price_on), float(price_off), float(power_kw), float(soc_floor))
+    return dict(r)
+
+
+async def list_spot_rules_enabled() -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT * FROM spot_discharge_rules WHERE enabled=true")
+    return [dict(r) for r in rows]
+
+
+async def set_spot_rule_active(module_id: str, active: bool) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE spot_discharge_rules SET active=$2 WHERE module_id=$1", module_id, bool(active))

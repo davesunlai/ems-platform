@@ -4,6 +4,10 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.44.0 — Spotové auto-vybíjení do sítě (Solis) přímo v ŘÍZENÍ u měniče. Pravidlo per modul: zapnout při spotu ≥ X Kč/MWh, vypnout při spotu < Y (hystereze), výkon v kW, podlaha SoC (nevybíjí pod ni). Kolektor vyhodnocuje každé kolo (živá cena), pouští force_discharge se source='spot'; plánovač i ruční zásah (override 30 min) mají přednost. Akce se zapisují do auditu (spot:auto) s důvodem i hodnotami; stav modulu ukazuje „· spot". Tabulka spot_discharge_rules. Menu „Automatizace" → „SPOT".
+
+## v0.43.11 — Menu „Automatizace" přejmenováno na „SPOT" (stránka se spotovou cenou a pravidly). Route /automation beze změny.
+
 ## v0.43.10 — Zámek hlídače sítě je teď VIDĚT: v tabulce spínaných spotřebičů se u uzamčeného výstupu zobrazí „🔒 uzamčeno hlídačem do HH:MM" + tlačítko Odemknout (POST /api/outputs/{id}/unlock → zruší off_lock_until). Dosud byl zámek jen v DB/textu důvodu.
 
 ## v0.43.9 — Hlídač sítě (grid_guard) zpřehledněn: ve formuláři spotřebiče popisek „Hlídač sítě … prázdné = vypnuto", placeholder „vyp". Úprava/uložení výstupu nově ruší případný zámek off_lock_until (takže vyprázdnění hlídače = okamžité odemčení, nečeká se na vypršení). Hlídač je aktivní jen když je vyplněné kW i min > 0.

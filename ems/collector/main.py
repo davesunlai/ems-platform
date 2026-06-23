@@ -228,6 +228,7 @@ async def run() -> None:
         await automation_db.ensure_schema()
         await control_db.ensure_queue_schema()
         await control_db.ensure_state_schema()
+        await control_db.ensure_spot_rule_schema()
         await forecast_db.ensure_schema()
         await pricing_db.ensure_schema()
         await planner_db.ensure_schema()
@@ -388,6 +389,83 @@ async def tick_notify(state: dict) -> None:
         logger.warning("Notify dispatch selhal: %s", exc)
 
 
+async def _latest_soc(device_id: str):
+    """Poslední SoC celého úložiště (battery_soc), případně průměr packů."""
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        v = await conn.fetchval(
+            "SELECT value FROM samples WHERE device_id=$1 AND metric='battery_soc' "
+            "AND time > now() - interval '10 minutes' ORDER BY time DESC LIMIT 1", device_id)
+        if v is None:
+            v = await conn.fetchval(
+                "SELECT avg(value) FROM (SELECT DISTINCT ON (metric) value FROM samples "
+                "WHERE device_id=$1 AND metric IN ('battery_soc_1','battery_soc_2') "
+                "AND time > now() - interval '10 minutes' ORDER BY metric, time DESC) t", device_id)
+    return float(v) if v is not None else None
+
+
+async def evaluate_spot_discharge(price, skip_devices=None) -> None:
+    """Spotové auto-vybíjení do sítě (Solis force_discharge).
+
+    Hystereze: zapni při spot ≥ price_on, vypni při spot < price_off.
+    Podlaha SoC: nevybíjej pod soc_floor (a vypni, když na ni klesne).
+    Respektuje plánovač (skip) i ruční override (MANUAL_OVERRIDE_SEC).
+    Vlastní povely jdou se source='spot' (ručně/Stop jde přebít kdykoli).
+    """
+    if price is None:
+        return
+    from datetime import datetime, timezone
+    skip = set(skip_devices or [])
+    rules = await control_db.list_spot_rules_enabled()
+    if not rules:
+        return
+    states = await control_db.get_states([r["module_id"] for r in rules])
+    for r in rules:
+        dev = r["module_id"]
+        if dev in skip:           # plánovač má přednost
+            continue
+        st = states.get(dev) or {}
+        # ruční přebití: po manuálním povelu nech modul chvíli na pokoji
+        since = st.get("since")
+        if st.get("source") == "manual" and since:
+            try:
+                s = since if hasattr(since, "tzinfo") else datetime.fromisoformat(since)
+                if (datetime.now(timezone.utc) - s).total_seconds() < MANUAL_OVERRIDE_SEC:
+                    continue
+            except Exception:
+                pass
+        soc = await _latest_soc(dev)
+        cur = st.get("action", "idle")
+        floor = float(r["soc_floor"])
+        if bool(r["active"]):
+            low_soc = soc is not None and soc <= floor
+            if price < float(r["price_off"]) or low_soc:
+                if cur == "force_discharge" and st.get("source") in (None, "spot"):
+                    reason = (f"SoC {soc:.0f}% ≤ podlaha {floor:.0f}%" if low_soc
+                              else f"spot {price:.0f} < vyp {float(r['price_off']):.0f} Kč/MWh")
+                    prm = {"source": "spot", "name": "Spotové vybíjení", "reason": reason,
+                           "values": {"spot": round(price), "vyp_pod": float(r["price_off"]),
+                                      "SoC_%": (round(soc, 1) if soc is not None else None), "podlaha_SoC_%": floor}}
+                    cmd_id = await control_db.enqueue(dev, "stop", prm, username="spot")
+                    await control_db.record("spot", dev, "stop", prm, True, {"queued": cmd_id})
+                    logger.info("Spot-vybíjení %s STOP: %s", dev, reason)
+                await control_db.set_spot_rule_active(dev, False)
+        else:
+            if price >= float(r["price_on"]) and (soc is None or soc > floor):
+                if cur != "force_discharge":
+                    power_reg = int(round(float(r["power_kw"]) * 100))
+                    reason = f"spot {price:.0f} ≥ zap {float(r['price_on']):.0f} Kč/MWh"
+                    prm = {"power": power_reg, "source": "spot", "name": "Spotové vybíjení", "reason": reason,
+                           "values": {"spot": round(price), "zap_od": float(r["price_on"]),
+                                      "vykon_kW": float(r["power_kw"]),
+                                      "SoC_%": (round(soc, 1) if soc is not None else None), "podlaha_SoC_%": floor}}
+                    cmd_id = await control_db.enqueue(dev, "force_discharge", prm, username="spot")
+                    await control_db.record("spot", dev, "force_discharge", prm, True, {"queued": cmd_id})
+                    logger.info("Spot-vybíjení %s START %.1f kW: %s", dev, float(r["power_kw"]), reason)
+                await control_db.set_spot_rule_active(dev, True)
+
+
 async def tick_market_and_automation(state: dict) -> None:
     import time as _t
     # obnova spotové ceny (živý feed, pokud není ruční override)
@@ -414,6 +492,11 @@ async def tick_market_and_automation(state: dict) -> None:
         await evaluate_all(st.get("price"), skip_devices=skip)
     except Exception as exc:
         logger.warning("Automatizace selhala: %s", exc)
+    # spotové auto-vybíjení do sítě (Solis force_discharge, hystereze + podlaha SoC)
+    try:
+        await evaluate_spot_discharge(st.get("price"), skip_devices=skip)
+    except Exception as exc:
+        logger.warning("Spotové vybíjení selhalo: %s", exc)
     # spínání kontaktu dle SOC (hystereze)
     try:
         await evaluate_outputs()

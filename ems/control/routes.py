@@ -93,6 +93,18 @@ async def set_mode(module_id: str, body: BatteryModeCommand,
     return result
 
 
+@router.get("/spot-rule/{module_id}")
+async def get_spot_rule(module_id: str, _: dict = Depends(require_permission("control"))):
+    return await db.get_spot_rule(module_id)
+
+
+@router.put("/spot-rule/{module_id}")
+async def set_spot_rule(module_id: str, body: dict, _: dict = Depends(require_permission("control"))):
+    return await db.set_spot_rule(module_id, body.get("enabled", False),
+                                  body.get("price_on", 4000), body.get("price_off", 3000),
+                                  body.get("power_kw", 10), body.get("soc_floor", 20))
+
+
 @router.get("/audit")
 async def audit(limit: int = 50, offset: int = 0, q: str = "", _: dict = Depends(require_permission("control"))):
     return await db.list_recent(limit=limit, offset=offset, q=q)

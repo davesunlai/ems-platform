@@ -63,6 +63,8 @@ export const api = {
   getMode: (id) => request(`/api/control/${encodeURIComponent(id)}/mode`),
   setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
   controlAudit: (limit = 50, offset = 0, q = "") => request(`/api/control/audit?limit=${limit}&offset=${offset}&q=${encodeURIComponent(q)}`),
+  getSpotRule: (id) => request(`/api/control/spot-rule/${encodeURIComponent(id)}`),
+  setSpotRule: (id, body) => request(`/api/control/spot-rule/${encodeURIComponent(id)}`, { method: "PUT", body }),
   controlStates: (ids) => request(`/api/control/states?ids=${encodeURIComponent(ids)}`),
   getPlanner: (id) => request(`/api/planner/${id}`),
   setPlannerConfig: (id, cfg) => request(`/api/planner/${id}/config`, { method: "PUT", body: cfg }),

@@ -217,6 +217,50 @@ function StatusLine({ status }) {
   return <p style={{ marginTop: 8, fontSize: 13, color: c }}>{status.text}</p>;
 }
 
+function SpotDischargePanel({ moduleId }) {
+  const [r, setR] = useState(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => { api.getSpotRule(moduleId).then(setR).catch(() => {}); }, [moduleId]);
+  if (!r) return null;
+  const set = (k, v) => setR({ ...r, [k]: v });
+  const save = async () => {
+    setMsg("Ukládám…");
+    try {
+      const saved = await api.setSpotRule(moduleId, {
+        enabled: !!r.enabled, price_on: Number(r.price_on), price_off: Number(r.price_off),
+        power_kw: Number(r.power_kw), soc_floor: Number(r.soc_floor),
+      });
+      setR(saved); setMsg("✓ Uloženo"); setTimeout(() => setMsg(""), 2500);
+    } catch (e) { setMsg("✗ " + (e.message || e)); }
+  };
+  const fld = { width: 90, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+  const lbl = { fontSize: 12, display: "block", marginBottom: 2 };
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: 13.5, cursor: "pointer" }}>
+        <input type="checkbox" checked={!!r.enabled} onChange={(e) => set("enabled", e.target.checked)} />
+        🔻 Auto-vybíjení do sítě podle spotu
+        {r.active && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: "var(--amber)", color: "#0b0e13" }}>právě vybíjí</span>}
+      </label>
+      <p className="muted" style={{ fontSize: 11.5, margin: "4px 0 8px" }}>
+        Když spot ≥ „zapnout", vybíjí zadaným výkonem do sítě. Vypne při spot &lt; „vypnout" nebo při dosažení podlahy SoC. Plánovač a ruční zásah mají přednost.
+      </p>
+      <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div><label style={lbl}>Zapnout při spotu ≥ (Kč/MWh)</label>
+          <input value={r.price_on} onChange={(e) => set("price_on", e.target.value)} style={fld} /></div>
+        <div><label style={lbl}>Vypnout při spotu &lt; (Kč/MWh)</label>
+          <input value={r.price_off} onChange={(e) => set("price_off", e.target.value)} style={fld} /></div>
+        <div><label style={lbl}>Výkon (kW)</label>
+          <input value={r.power_kw} onChange={(e) => set("power_kw", e.target.value)} style={fld} /></div>
+        <div><label style={lbl}>Podlaha SoC (%)</label>
+          <input value={r.soc_floor} onChange={(e) => set("soc_floor", e.target.value)} style={fld} /></div>
+        <button className="btn primary" onClick={save} style={{ padding: "6px 14px" }}>Uložit</button>
+        {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 function SolisControl({ mod }) {
   const has = (k) => (mod.control_enabled || []).includes(k);
   const [power, setPower] = useState(5);
@@ -292,7 +336,7 @@ function SolisControl({ mod }) {
           };
           const a = curState?.action || "idle";
           const b = B[a] || { t: a, bg: "var(--muted)" };
-          const src = curState?.source === "planner" ? " · plánovač" : curState?.source === "manual" ? " · ručně" : "";
+          const src = curState?.source === "planner" ? " · plánovač" : curState?.source === "spot" ? " · spot" : curState?.source === "manual" ? " · ručně" : "";
           return <span style={{ padding: "3px 12px", borderRadius: 999, fontSize: 12.5, fontWeight: 700,
             color: "#0b0e13", background: b.bg, whiteSpace: "nowrap" }}>{b.t}{src}</span>;
         })()}
@@ -347,6 +391,7 @@ function SolisControl({ mod }) {
           <button className="btn" disabled={busy} onClick={() => setLimit("set_work_mode", { word: 33 }, "režim Self-Use")}>Self-Use</button>
         </div>
       </div>
+      <SpotDischargePanel moduleId={mod.id} />
       <StatusLine status={status} />
     </div>
   );
