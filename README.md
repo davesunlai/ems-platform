@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.44.1 — (1) Stránka SPOT: stará Goodwe automatika (formulář + seznam pravidel) schována za zatržítko „Zobrazit stará pravidla automatiky (Goodwe)", default skryté (na Solis se nepoužívá, spot vybíjení je v Řízení). (2) Audit povelů: zatržítko „zobrazit čtení stavu (read_controls)" — defaultně se read_controls SKRÝVAJÍ (filtr na serveru, neplýtvá místem), zapnutím se zobrazí.
+
 ## v0.44.0 — Spotové auto-vybíjení do sítě (Solis) přímo v ŘÍZENÍ u měniče. Pravidlo per modul: zapnout při spotu ≥ X Kč/MWh, vypnout při spotu < Y (hystereze), výkon v kW, podlaha SoC (nevybíjí pod ni). Kolektor vyhodnocuje každé kolo (živá cena), pouští force_discharge se source='spot'; plánovač i ruční zásah (override 30 min) mají přednost. Akce se zapisují do auditu (spot:auto) s důvodem i hodnotami; stav modulu ukazuje „· spot". Tabulka spot_discharge_rules. Menu „Automatizace" → „SPOT".
 
 ## v0.43.11 — Menu „Automatizace" přejmenováno na „SPOT" (stránka se spotovou cenou a pravidly). Route /automation beze změny.

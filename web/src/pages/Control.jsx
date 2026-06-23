@@ -623,6 +623,7 @@ function AuditPanel() {
   const [q, setQ] = useState("");
   const [dq, setDq] = useState("");      // debounced dotaz
   const [page, setPage] = useState(0);
+  const [reads, setReads] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -635,15 +636,15 @@ function AuditPanel() {
   }, []);
 
   useEffect(() => { const t = setTimeout(() => setDq(q), 300); return () => clearTimeout(t); }, [q]);
-  useEffect(() => { setPage(0); }, [dq]);
+  useEffect(() => { setPage(0); }, [dq, reads]);
   useEffect(() => {
     let alive = true; setLoading(true);
-    api.controlAudit(AUDIT_PAGE, page * AUDIT_PAGE, dq)
+    api.controlAudit(AUDIT_PAGE, page * AUDIT_PAGE, dq, reads ? 1 : 0)
       .then((r) => { if (alive) { setRows(r || []); setOpen(new Set()); } })
       .catch(() => {})
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [page, dq]);
+  }, [page, dq, reads]);
 
   const toggle = (id) => setOpen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const inp = { padding: "6px 10px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", fontSize: 13 };
@@ -655,6 +656,9 @@ function AuditPanel() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 hledat (název, modul, akce, důvod, chyba…)"
           style={{ ...inp, flex: "1 1 240px", maxWidth: 360 }} />
         {q && <button className="btn" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => setQ("")}>×</button>}
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, cursor: "pointer", marginLeft: "auto" }}>
+          <input type="checkbox" checked={reads} onChange={(e) => setReads(e.target.checked)} /> zobrazit čtení stavu (read_controls)
+        </label>
       </div>
       <table style={{ marginTop: 12 }}>
         <thead><tr><th style={{ width: 18 }}></th><th>Čas</th><th>Uživatel</th><th>Modul</th><th>Akce</th><th>Co se stalo / důvod</th><th>Výsledek</th></tr></thead>

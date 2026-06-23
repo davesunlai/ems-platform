@@ -62,7 +62,7 @@ export const api = {
   unlockOutput: (id) => request(`/api/outputs/${id}/unlock`, { method: "POST" }),
   getMode: (id) => request(`/api/control/${encodeURIComponent(id)}/mode`),
   setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
-  controlAudit: (limit = 50, offset = 0, q = "") => request(`/api/control/audit?limit=${limit}&offset=${offset}&q=${encodeURIComponent(q)}`),
+  controlAudit: (limit = 50, offset = 0, q = "", reads = 0) => request(`/api/control/audit?limit=${limit}&offset=${offset}&q=${encodeURIComponent(q)}&reads=${reads ? 1 : 0}`),
   getSpotRule: (id) => request(`/api/control/spot-rule/${encodeURIComponent(id)}`),
   setSpotRule: (id, body) => request(`/api/control/spot-rule/${encodeURIComponent(id)}`, { method: "PUT", body }),
   controlStates: (ids) => request(`/api/control/states?ids=${encodeURIComponent(ids)}`),

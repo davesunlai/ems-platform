@@ -46,6 +46,7 @@ export default function Automation() {
   const [err, setErr] = useState("");
   const [spot, setSpot] = useState(null);
   const [controlled, setControlled] = useState([]);
+  const [showRules, setShowRules] = useState(false);
 
   const load = () => api.listRules().then(setRules).catch((e) => setErr(e.message));
   const loadSpot = () => api.spot().then(setSpot).catch(() => {});
@@ -106,6 +107,17 @@ export default function Automation() {
         <SpotCurve rules={rules} />
       </div>
 
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+          <input type="checkbox" checked={showRules} onChange={(e) => setShowRules(e.target.checked)} />
+          Zobrazit stará pravidla automatiky (Goodwe)
+        </label>
+        <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
+          Pozn.: tato automatika je pro Goodwe (režimy ECO). Na Solis se nepoužívá — spotové vybíjení nastav v <b>Řízení</b> u měniče.
+        </p>
+      </div>
+
+      {showRules && (<>
       <div className="panel" style={{ marginBottom: 18 }}>
         <h3>{editing ? `Upravit pravidlo: ${editing}` : "Nové pravidlo"}</h3>
         <div className="row" style={{ flexWrap: "wrap" }}>
@@ -194,6 +206,7 @@ export default function Automation() {
           </tbody>
         </table>
       </div>
+      </>)}
     </main>
   );
 }

@@ -106,8 +106,8 @@ async def set_spot_rule(module_id: str, body: dict, _: dict = Depends(require_pe
 
 
 @router.get("/audit")
-async def audit(limit: int = 50, offset: int = 0, q: str = "", _: dict = Depends(require_permission("control"))):
-    return await db.list_recent(limit=limit, offset=offset, q=q)
+async def audit(limit: int = 50, offset: int = 0, q: str = "", reads: int = 0, _: dict = Depends(require_permission("control"))):
+    return await db.list_recent(limit=limit, offset=offset, q=q, include_reads=bool(reads))
 
 
 @router.get("/states")
