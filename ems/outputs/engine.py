@@ -125,43 +125,53 @@ async def _grid_import_sustained(locality_id, kw: float, minutes: float) -> bool
     return float(row["worst"]) <= -kw * 1000.0
 
 
-async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str]:
-    """Vrací (desired, lock_until|None, reason). lock_until = nastavit zámek po hlídači sítě."""
+async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str, dict]:
+    """Vrací (desired, lock_until|None, reason, detail). detail = naměřené hodnoty pro audit."""
     p = o["params"]
     upper = float(p.get("upper_soc", 100)); lower = float(p.get("lower_soc", 95))
     on = o["is_on"]
     now_utc = datetime.now(timezone.utc)
+    nowloc = datetime.now(_PRAGUE)
+    det = {"SoC_%": round(soc, 1), "sepni_pri_>=_%": upper, "rozepni_pri_<=_%": lower,
+           "byl_zapnuty": on, "cas": nowloc.strftime("%H:%M")}
 
     # 1) zámek po hlídači sítě – drž vypnuto
     lock = o.get("off_lock_until")
     if lock and now_utc < lock:
-        return False, None, f"uzamčeno hlídačem sítě do {lock.astimezone(_PRAGUE):%H:%M}"
+        det["zamek_do"] = lock.astimezone(_PRAGUE).strftime("%H:%M")
+        return False, None, f"uzamčeno hlídačem sítě do {det['zamek_do']}", det
 
     # 2) denní okno (lokální čas) – mimo něj vypnout. Podpora HH:MM i starých celých hodin.
     ds, de = _hm_to_min(p.get("day_start")), _hm_to_min(p.get("day_end"))
     if ds is not None and de is not None:
-        nowm = datetime.now(_PRAGUE).hour * 60 + datetime.now(_PRAGUE).minute
+        nowm = nowloc.hour * 60 + nowloc.minute
+        det["okno"] = f"{_min_to_hm(ds)}–{_min_to_hm(de)}"
         inside = (ds <= nowm < de) if ds <= de else (nowm >= ds or nowm < de)  # de<ds = přes půlnoc
         if not inside:
-            return False, None, f"mimo denní okno {_min_to_hm(ds)}–{_min_to_hm(de)}"
+            return False, None, f"mimo denní okno {det['okno']} (teď {det['cas']})", det
 
     # 3) hlídač sítě – jen když je sepnuto: import > kw po celé okno → vypnout + zámek
     gk, gm = p.get("grid_guard_kw"), p.get("grid_guard_min")
     if on and gk not in (None, "") and gm not in (None, "") and float(gk) > 0 and float(gm) > 0:
         if await _grid_import_sustained(o["locality_id"], float(gk), float(gm)):
             lock_min = float(p.get("guard_lock_min", 120))
+            det["hlidac_import_kW"] = float(gk); det["hlidac_min"] = float(gm)
             return (False, now_utc + timedelta(minutes=lock_min),
-                    f"hlídač sítě: import >{gk} kW déle než {gm} min → vypnuto (zámek {lock_min:.0f} min)")
+                    f"hlídač sítě: import >{gk} kW déle než {gm} min → vypnuto (zámek {lock_min:.0f} min)", det)
 
     # 4) SoC hystereze
     if not on and soc >= upper:
         on = True
+        reason = f"SoC {soc:.0f} % ≥ {upper:.0f} % → zapnuto"
     elif on and soc <= lower:
         on = False
-    return on, None, f"SoC={soc:.0f} % (mez {lower:.0f}–{upper:.0f})"
+        reason = f"SoC {soc:.0f} % ≤ {lower:.0f} % → vypnuto"
+    else:
+        reason = f"SoC {soc:.0f} % v pásmu {lower:.0f}–{upper:.0f} % → beze změny ({'zapnuto' if on else 'vypnuto'})"
+    return on, None, reason, det
 
 
-def _decide_surplus(o: dict, tele: dict, spot) -> tuple[bool, str]:
+def _decide_surplus(o: dict, tele: dict, spot) -> tuple[bool, str, dict]:
     p = o["params"]
     need_kw = float(p.get("surplus_kw", 1.0))
     soc_min = float(p.get("soc_min", 0))
@@ -169,7 +179,7 @@ def _decide_surplus(o: dict, tele: dict, spot) -> tuple[bool, str]:
     min_on_min = float(p.get("min_on_min", 0))
     exp = tele["export_kw"]; soc = tele["soc"]
     if exp is None or soc is None:
-        return o["is_on"], "no_data:telemetrie lokality"
+        return o["is_on"], "no_data:telemetrie lokality", {"export_kw": exp, "SoC_%": soc}
 
     spot_force = spot_max is not None and spot is not None and float(spot) <= float(spot_max)
     on = o["is_on"]
@@ -179,15 +189,24 @@ def _decide_surplus(o: dict, tele: dict, spot) -> tuple[bool, str]:
         # drž, dokud je aspoň poloviční přebytek (hystereze), nebo levný spot
         desired = (exp >= need_kw * 0.5 and soc >= max(0.0, soc_min - 5)) or spot_force
 
+    forced_min_on = False
     # minimální doba sepnutí
     if on and not desired and min_on_min > 0 and o.get("on_since"):
         elapsed = (datetime.now(timezone.utc) - o["on_since"]).total_seconds() / 60.0
         if elapsed < min_on_min:
             desired = True
-    reason = f"přebytek={exp:.1f} kW (práh {need_kw:.1f}), SoC={soc:.0f}≥{soc_min:.0f}"
+            forced_min_on = True
+    det = {"export_kW": round(exp, 2), "prah_kW": need_kw, "SoC_%": round(soc, 1), "SoC_min_%": soc_min}
     if spot_max is not None:
-        reason += f", spot={spot if spot is not None else '?'}≤{spot_max}{' →sepnout' if spot_force else ''}"
-    return desired, reason
+        det["spot"] = spot; det["spot_max"] = spot_max; det["spot_levny"] = spot_force
+    if forced_min_on:
+        det["drzeno_min_doba_min"] = min_on_min
+    reason = f"přebytek {exp:.1f} kW (práh {need_kw:.1f}), SoC {soc:.0f} % ≥ {soc_min:.0f} %"
+    if spot_max is not None:
+        reason += f", spot {spot if spot is not None else '?'} ≤ {spot_max}{' → sepnout' if spot_force else ''}"
+    if forced_min_on:
+        reason += f" (drženo min. dobou {min_on_min:.0f} min)"
+    return desired, reason, det
 
 
 async def evaluate_outputs() -> None:
@@ -195,18 +214,19 @@ async def evaluate_outputs() -> None:
     for o in await out_db.list_all():
         if not o["enabled"]:
             continue
+        det = {}
         try:
             if o["trigger"] == "soc":
                 soc = (await _loc_telemetry(o["locality_id"]))["soc"] if o["locality_id"] else await _device_soc(o["target"])
                 if soc is None:
                     await out_db.set_decision(o["id"], "no_data:soc")
                     continue
-                desired, lock_until, reason = await _decide_soc(o, soc)
+                desired, lock_until, reason, det = await _decide_soc(o, soc)
                 if lock_until is not None:
                     await out_db.set_lock(o["id"], lock_until)
             else:  # surplus
                 tele = await _loc_telemetry(o["locality_id"])
-                desired, reason = _decide_surplus(o, tele, spot)
+                desired, reason, det = _decide_surplus(o, tele, spot)
         except Exception as exc:
             await out_db.set_decision(o["id"], f"chyba: {exc}")
             continue
@@ -219,7 +239,7 @@ async def evaluate_outputs() -> None:
             res = await _actuate(o, desired)
             await out_db.set_state(o["id"], desired, f"{reason} → {'sepnuto' if desired else 'rozepnuto'}")
             await control_db.record("output:auto", o["target"], "switch",
-                                    {"on": desired, "trigger": o["trigger"], "name": o["name"], "reason": reason}, True, res)
+                                    {"on": desired, "trigger": o["trigger"], "name": o["name"], "reason": reason, "values": det}, True, res)
             try:
                 from ems.alerts import db as alerts_db
                 await alerts_db.record_event(
@@ -232,6 +252,6 @@ async def evaluate_outputs() -> None:
             logger.info("Výstup [%s] → %s (%s)", o["name"], "ON" if desired else "OFF", reason)
         except Exception as exc:
             await control_db.record("output:auto", o["target"], "switch",
-                                    {"on": desired, "trigger": o["trigger"], "name": o["name"], "reason": reason}, False, {"error": str(exc)})
+                                    {"on": desired, "trigger": o["trigger"], "name": o["name"], "reason": reason, "values": det}, False, {"error": str(exc)})
             await out_db.set_decision(o["id"], f"přepnutí selhalo: {exc}")
             logger.warning("Výstup [%s] přepnutí selhalo: %s", o["name"], exc)

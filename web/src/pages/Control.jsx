@@ -630,6 +630,18 @@ function AuditPanel() {
                     <td colSpan={6} style={{ background: "var(--bg-2)", borderRadius: 8 }}>
                       <div style={{ padding: "8px 4px", display: "grid", gap: 8 }}>
                         {reason && <div><b>Důvod:</b> {reason}</div>}
+                        {a.params?.values && (
+                          <div>
+                            <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>Naměřené hodnoty v okamžiku rozhodnutí</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px" }}>
+                              {Object.entries(a.params.values).map(([k, v]) => (
+                                <span key={k} style={{ fontSize: 12.5 }}>
+                                  <span className="muted">{k.replace(/_/g, " ")}:</span> <b>{String(v)}</b>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         <div>
                           <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 2 }}>Parametry</div>
                           <pre style={{ margin: 0, fontSize: 12, fontFamily: "var(--mono)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{JSON.stringify(a.params, null, 2)}</pre>
