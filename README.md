@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.43.5 — Audit povelů teď u neúspěšného povelu ukazuje DŮVOD chyby (z result.error) přímo pod „chyba" — např. text chyby z eWeLink. Pomáhá poznat, proč přepnutí spotřebiče selhalo (offline / autorizace / API).
+
 ## v0.43.4 — Spínané spotřebiče (SoC): denní okno „od–do" teď bere i MINUTY (HH:MM, např. 19:33) — vstup je typu čas. Podpora okna přes půlnoc (de<ds). Zpětně kompatibilní se starými celými hodinami. Backend porovnává na minuty (Europe/Prague).
 
 ## v0.43.3 — Dashboard: sepnuté spínané spotřebiče (eWeLink/kontakt) se teď ukazují v pruhu aktivního řízení pod názvem lokality — vedle „🔻 Vybíjení do sítě" je „🔌 <název> · sepnuto · od <čas>" (tyrkysový pruh). ControlBanners čte i stav výstupů (is_on/on_since) pro danou lokalitu, obnova á 5 s.

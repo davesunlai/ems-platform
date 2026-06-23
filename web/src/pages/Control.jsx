@@ -608,7 +608,9 @@ export default function Control() {
                 <td className="role">{a.module_id}</td>
                 <td>{a.action}</td>
                 <td className="muted" style={{ fontSize: 12, fontFamily: "var(--mono)" }}>{JSON.stringify(a.params)}</td>
-                <td><span className={a.ok ? "badge-on" : "badge-off"}>{a.ok ? "OK" : "chyba"}</span></td>
+                <td><span className={a.ok ? "badge-on" : "badge-off"}>{a.ok ? "OK" : "chyba"}</span>
+                  {!a.ok && a.result?.error && <div style={{ fontSize: 11, marginTop: 3, color: "#e06c75" }}>{a.result.error}</div>}
+                </td>
               </tr>
             ))}
           </tbody>
