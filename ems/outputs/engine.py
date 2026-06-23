@@ -130,6 +130,29 @@ async def _grid_import_sustained(locality_id, kw: float, minutes: float) -> bool
     return float(row["worst"]) <= -kw * 1000.0
 
 
+async def _grid_export_sustained(locality_id, kw: float, minutes: float) -> bool:
+    """True, pokud po CELÝCH posledních `minutes` byl výkon ze sítě ≤ práh `kw` (dost přebytku).
+
+    Práh `kw` v konvenci dashboardu (+ odběr, − dodávka). „Po celou dobu ≤ kw" =
+    i nejhorší okamžik (nejmenší export / největší odběr = min grid_power) je nad −kw·1000 W.
+    """
+    ids = await _loc_device_ids(locality_id)
+    if not ids:
+        return False
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT min(value) AS best, min(time) AS first, count(*) AS n FROM samples "
+            "WHERE device_id=ANY($1::text[]) AND metric='grid_power' "
+            f"AND time > now() - interval '{int(minutes)} minutes'", ids)
+    if not row or not row["n"] or row["best"] is None:
+        return False
+    span = (datetime.now(timezone.utc) - row["first"]).total_seconds() / 60.0
+    if span < minutes * 0.8:
+        return False
+    return float(row["best"]) >= -kw * 1000.0
+
+
 async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str, dict]:
     """Vrací (desired, lock_until|None, reason, detail). detail = naměřené hodnoty pro audit."""
     p = o["params"]
@@ -168,10 +191,19 @@ async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str, dict]:
             return (False, now_utc + timedelta(minutes=lock_min),
                     f"hlídač sítě: {why} po {gm:g} min → vypnuto (nezapínat {lock_min:.0f} min)", det)
 
-    # 4) SoC hystereze
+    # 4) SoC hystereze (+ volitelná ZAPÍNACÍ podmínka na výkon ze sítě)
+    gon_kw, gon_min = p.get("grid_on_kw"), p.get("grid_on_min")
     if not on and soc >= upper:
-        on = True
-        reason = f"SoC {soc:.0f} % ≥ {upper:.0f} % → zapnuto"
+        gate_ok = True
+        if gon_kw not in (None, "") and gon_min not in (None, "") and float(gon_min) > 0:
+            gate_ok = await _grid_export_sustained(o["locality_id"], float(gon_kw), float(gon_min))
+            det["zapinaci_prah_kW"] = float(gon_kw); det["zapinaci_min"] = float(gon_min)
+        if gate_ok:
+            on = True
+            reason = f"SoC {soc:.0f} % ≥ {upper:.0f} % → zapnuto"
+        else:
+            reason = (f"SoC {soc:.0f} % ≥ {upper:.0f} %, ale čeká na přebytek "
+                      f"(síť ≤ {float(gon_kw):g} kW po {float(gon_min):g} min)")
     elif on and soc <= lower:
         on = False
         reason = f"SoC {soc:.0f} % ≤ {lower:.0f} % → vypnuto"

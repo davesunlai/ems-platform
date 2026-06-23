@@ -198,7 +198,9 @@ async def get_states(module_ids: list[str]) -> dict[str, dict]:
 _SPOT_DEFAULT = {"enabled": False, "price_on": 4000.0, "price_off": 3000.0,
                  "power_kw": 10.0, "soc_floor": 20.0, "active": False,
                  "precharge_enabled": False, "precharge_hours": 3.0, "precharge_power_kw": 10.0,
-                 "precharge_min_spread": 1000.0, "precharge_max_buy": 0.0, "precharge_active": False}
+                 "precharge_min_spread": 1000.0, "precharge_max_buy": 0.0, "precharge_active": False,
+                 "charge_enabled": False, "charge_price_on": 0.0, "charge_price_off": 200.0,
+                 "charge_power_kw": 10.0, "charge_soc_ceiling": 95.0, "charge_active": False}
 
 
 async def ensure_spot_rule_schema() -> None:
@@ -224,6 +226,12 @@ async def ensure_spot_rule_schema() -> None:
             ("precharge_min_spread", "DOUBLE PRECISION NOT NULL DEFAULT 1000"),
             ("precharge_max_buy", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
             ("precharge_active", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("charge_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("charge_price_on", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+            ("charge_price_off", "DOUBLE PRECISION NOT NULL DEFAULT 200"),
+            ("charge_power_kw", "DOUBLE PRECISION NOT NULL DEFAULT 10"),
+            ("charge_soc_ceiling", "DOUBLE PRECISION NOT NULL DEFAULT 95"),
+            ("charge_active", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ):
             await conn.execute(f"ALTER TABLE spot_discharge_rules ADD COLUMN IF NOT EXISTS {col} {ddl}")
 
@@ -237,21 +245,29 @@ async def get_spot_rule(module_id: str) -> dict:
 
 async def set_spot_rule(module_id: str, enabled, price_on, price_off, power_kw, soc_floor,
                         precharge_enabled=False, precharge_hours=3, precharge_power_kw=10,
-                        precharge_min_spread=1000, precharge_max_buy=0) -> dict:
+                        precharge_min_spread=1000, precharge_max_buy=0,
+                        charge_enabled=False, charge_price_on=0, charge_price_off=200,
+                        charge_power_kw=10, charge_soc_ceiling=95) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         r = await conn.fetchrow(
             "INSERT INTO spot_discharge_rules (module_id, enabled, price_on, price_off, power_kw, soc_floor, "
-            "  precharge_enabled, precharge_hours, precharge_power_kw, precharge_min_spread, precharge_max_buy) "
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (module_id) DO UPDATE SET "
+            "  precharge_enabled, precharge_hours, precharge_power_kw, precharge_min_spread, precharge_max_buy, "
+            "  charge_enabled, charge_price_on, charge_price_off, charge_power_kw, charge_soc_ceiling) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT (module_id) DO UPDATE SET "
             "enabled=EXCLUDED.enabled, price_on=EXCLUDED.price_on, price_off=EXCLUDED.price_off, "
             "power_kw=EXCLUDED.power_kw, soc_floor=EXCLUDED.soc_floor, "
             "precharge_enabled=EXCLUDED.precharge_enabled, precharge_hours=EXCLUDED.precharge_hours, "
             "precharge_power_kw=EXCLUDED.precharge_power_kw, precharge_min_spread=EXCLUDED.precharge_min_spread, "
-            "precharge_max_buy=EXCLUDED.precharge_max_buy RETURNING *",
+            "precharge_max_buy=EXCLUDED.precharge_max_buy, "
+            "charge_enabled=EXCLUDED.charge_enabled, charge_price_on=EXCLUDED.charge_price_on, "
+            "charge_price_off=EXCLUDED.charge_price_off, charge_power_kw=EXCLUDED.charge_power_kw, "
+            "charge_soc_ceiling=EXCLUDED.charge_soc_ceiling RETURNING *",
             module_id, bool(enabled), float(price_on), float(price_off), float(power_kw), float(soc_floor),
             bool(precharge_enabled), float(precharge_hours), float(precharge_power_kw),
-            float(precharge_min_spread), float(precharge_max_buy))
+            float(precharge_min_spread), float(precharge_max_buy),
+            bool(charge_enabled), float(charge_price_on), float(charge_price_off),
+            float(charge_power_kw), float(charge_soc_ceiling))
     return dict(r)
 
 
@@ -272,3 +288,9 @@ async def set_precharge_active(module_id: str, active: bool) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("UPDATE spot_discharge_rules SET precharge_active=$2 WHERE module_id=$1", module_id, bool(active))
+
+
+async def set_charge_active(module_id: str, active: bool) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE spot_discharge_rules SET charge_active=$2 WHERE module_id=$1", module_id, bool(active))

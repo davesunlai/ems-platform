@@ -107,7 +107,12 @@ async def set_spot_rule(module_id: str, body: dict, _: dict = Depends(require_pe
                                   precharge_hours=body.get("precharge_hours", 3),
                                   precharge_power_kw=body.get("precharge_power_kw", 10),
                                   precharge_min_spread=body.get("precharge_min_spread", 1000),
-                                  precharge_max_buy=body.get("precharge_max_buy", 0))
+                                  precharge_max_buy=body.get("precharge_max_buy", 0),
+                                  charge_enabled=body.get("charge_enabled", False),
+                                  charge_price_on=body.get("charge_price_on", 0),
+                                  charge_price_off=body.get("charge_price_off", 200),
+                                  charge_power_kw=body.get("charge_power_kw", 10),
+                                  charge_soc_ceiling=body.get("charge_soc_ceiling", 95))
 
 
 @router.get("/audit")

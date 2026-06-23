@@ -578,6 +578,65 @@ async def evaluate_spot_precharge(skip_devices=None) -> None:
             await _stop_precharge("předchystání: mimo levný slot")
 
 
+async def evaluate_spot_charge(price, skip_devices=None) -> None:
+    """Auto-nabíjení ZE SÍTĚ podle spotu (levné/záporné ceny, hlavně když FVE nestíhá).
+    Hystereze: zapni při spot ≤ charge_price_on, vypni při spot > charge_price_off; strop SoC.
+    Plánovač/ruční override mají přednost; vybíjení má přednost před nabíjením."""
+    if price is None:
+        return
+    from datetime import datetime, timezone
+    skip = set(skip_devices or [])
+    rules = [r for r in await control_db.list_spot_rules_enabled() if r.get("charge_enabled")]
+    if not rules:
+        return
+    states = await control_db.get_states([r["module_id"] for r in rules])
+    for r in rules:
+        dev = r["module_id"]
+        if dev in skip:
+            continue
+        st = states.get(dev) or {}
+        if st.get("action") == "force_discharge":      # vybíjení má přednost
+            await control_db.set_charge_active(dev, False)
+            continue
+        since = st.get("since")
+        if st.get("source") == "manual" and since:
+            try:
+                s = since if hasattr(since, "tzinfo") else datetime.fromisoformat(since)
+                if (datetime.now(timezone.utc) - s).total_seconds() < MANUAL_OVERRIDE_SEC:
+                    continue
+            except Exception:
+                pass
+        soc = await _latest_soc(dev)
+        ceiling = float(r["charge_soc_ceiling"])
+        cur = st.get("action", "idle")
+        if bool(r["charge_active"]):
+            high_soc = soc is not None and soc >= ceiling
+            if price > float(r["charge_price_off"]) or high_soc:
+                if cur == "force_charge" and st.get("source") in (None, "spot"):
+                    reason = (f"SoC {soc:.0f}% ≥ strop {ceiling:.0f}%" if high_soc
+                              else f"spot {price:.0f} > vyp {float(r['charge_price_off']):.0f} Kč/MWh")
+                    prm = {"source": "spot", "name": "Spotové nabíjení", "reason": reason,
+                           "values": {"spot": round(price), "vyp_nad": float(r["charge_price_off"]),
+                                      "SoC_%": (round(soc, 1) if soc is not None else None), "strop_SoC_%": ceiling}}
+                    cid = await control_db.enqueue(dev, "stop", prm, username="spot")
+                    await control_db.record("spot", dev, "stop", prm, True, {"queued": cid})
+                    logger.info("Spot-nabíjení %s STOP: %s", dev, reason)
+                await control_db.set_charge_active(dev, False)
+        else:
+            if price <= float(r["charge_price_on"]) and (soc is None or soc < ceiling):
+                if cur != "force_charge":
+                    power_reg = int(round(float(r["charge_power_kw"]) * 100))
+                    reason = f"spot {price:.0f} ≤ zap {float(r['charge_price_on']):.0f} Kč/MWh (levné/záporné)"
+                    prm = {"power": power_reg, "source": "spot", "name": "Spotové nabíjení", "reason": reason,
+                           "values": {"spot": round(price), "zap_do": float(r["charge_price_on"]),
+                                      "vykon_kW": float(r["charge_power_kw"]),
+                                      "SoC_%": (round(soc, 1) if soc is not None else None), "strop_SoC_%": ceiling}}
+                    cid = await control_db.enqueue(dev, "force_charge", prm, username="spot")
+                    await control_db.record("spot", dev, "force_charge", prm, True, {"queued": cid})
+                    logger.info("Spot-nabíjení %s START %.1f kW: %s", dev, float(r["charge_power_kw"]), reason)
+                await control_db.set_charge_active(dev, True)
+
+
 async def tick_market_and_automation(state: dict) -> None:
     import time as _t
     # obnova spotové ceny (živý feed, pokud není ruční override)
@@ -614,6 +673,11 @@ async def tick_market_and_automation(state: dict) -> None:
         await evaluate_spot_precharge(skip_devices=skip)
     except Exception as exc:
         logger.warning("Předchystání baterie selhalo: %s", exc)
+    # auto-nabíjení ze sítě podle spotu (levné/záporné ceny)
+    try:
+        await evaluate_spot_charge(st.get("price"), skip_devices=skip)
+    except Exception as exc:
+        logger.warning("Spotové nabíjení selhalo: %s", exc)
     # spínání kontaktu dle SOC (hystereze)
     try:
         await evaluate_outputs()

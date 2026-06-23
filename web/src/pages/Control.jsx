@@ -36,7 +36,7 @@ function SearchSelect({ value, options, onChange, placeholder = "— vyber —" 
 const emptyOut = {
   name: "", enabled: true, output_kind: "ewelink", target: "", trigger: "surplus",
   upper_soc: 100, lower_soc: 95, surplus_kw: 1.5, soc_min: 80, spot_max: "", min_on_min: 10,
-  day_start: "", day_end: "", grid_guard_kw: "", grid_guard_min: "", guard_lock_min: "",
+  day_start: "", day_end: "", grid_on_kw: "", grid_on_min: "", grid_guard_kw: "", grid_guard_min: "", guard_lock_min: "",
 };
 
 // stará hodnota (celá hodina) i "HH:MM" -> "HH:MM" pro <input type=time>
@@ -74,6 +74,7 @@ function OutputsPanel({ locId }) {
   const buildParams = () => f.trigger === "soc"
     ? { upper_soc: Number(f.upper_soc), lower_soc: Number(f.lower_soc),
         ...(f.day_start !== "" && f.day_end !== "" ? { day_start: f.day_start, day_end: f.day_end } : {}),
+        ...(f.grid_on_kw !== "" && Number(f.grid_on_min) > 0 ? { grid_on_kw: Number(f.grid_on_kw), grid_on_min: Number(f.grid_on_min) } : {}),
         ...(f.grid_guard_kw !== "" && Number(f.grid_guard_min) > 0 ? { grid_guard_kw: Number(f.grid_guard_kw), grid_guard_min: Number(f.grid_guard_min), ...(f.guard_lock_min !== "" ? { guard_lock_min: Number(f.guard_lock_min) } : {}) } : {}) }
     : { surplus_kw: Number(f.surplus_kw), soc_min: Number(f.soc_min), min_on_min: Number(f.min_on_min),
         ...(f.spot_max !== "" && f.spot_max != null ? { spot_max: Number(f.spot_max) } : {}) };
@@ -86,7 +87,7 @@ function OutputsPanel({ locId }) {
       upper_soc: o.params.upper_soc ?? 100, lower_soc: o.params.lower_soc ?? 95, surplus_kw: o.params.surplus_kw ?? 1.5,
       soc_min: o.params.soc_min ?? 80, spot_max: o.params.spot_max ?? "", min_on_min: o.params.min_on_min ?? 10,
       day_start: hm(o.params.day_start), day_end: hm(o.params.day_end),
-      grid_guard_kw: o.params.grid_guard_kw ?? "", grid_guard_min: o.params.grid_guard_min ?? "", guard_lock_min: o.params.guard_lock_min ?? "" }); };
+      grid_on_kw: o.params.grid_on_kw ?? "", grid_on_min: o.params.grid_on_min ?? "", grid_guard_kw: o.params.grid_guard_kw ?? "", grid_guard_min: o.params.grid_guard_min ?? "", guard_lock_min: o.params.guard_lock_min ?? "" }); };
   const toggle = async (o) => { try { await api.updateOutput(o.id, { enabled: !o.enabled }); load(); } catch (e) { setErr(e.message); } };
   const remove = async (o) => { if (!confirm(`Smazat spotřebič „${o.name}"?`)) return; try { await api.deleteOutput(o.id); if (editing === o.id) reset(); load(); } catch (e) { setErr(e.message); } };
   const test = async (o, on) => { setBusy(o.id); setErr(""); try { await api.testOutput(o.id, on); setTimeout(load, 600); } catch (e) { setErr(e.message); } finally { setBusy(0); } };
@@ -131,6 +132,13 @@ function OutputsPanel({ locId }) {
                     <input type="time" value={f.day_start} onChange={(e) => setF({ ...f, day_start: e.target.value })} style={{ ...inp, width: 110 }} />
                     <input type="time" value={f.day_end} onChange={(e) => setF({ ...f, day_end: e.target.value })} style={{ ...inp, width: 110 }} />
                   </span>
+                </div>
+                <div><label style={{ fontSize: 12, display: "block" }}>Zapni, jen když výkon ze sítě ≤ práh (kW) po dobu (min) <span className="muted">· prázdné = bez podmínky</span></label>
+                  <span style={{ display: "inline-flex", gap: 4 }}>
+                    <input type="number" step="0.1" value={f.grid_on_kw} placeholder="práh kW" onChange={(e) => setF({ ...f, grid_on_kw: e.target.value })} style={{ ...inp, width: 80 }} />
+                    <input type="number" min="0" step="1" value={f.grid_on_min} placeholder="min" onChange={(e) => setF({ ...f, grid_on_min: e.target.value })} style={{ ...inp, width: 60 }} />
+                  </span>
+                  <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>K SoC podmínce přidá přebytek: zapne, až do sítě dodáváš dost. Např. <b>−2</b> = zapni, jen když dodáváš do sítě ≥ 2 kW.</div>
                 </div>
                 <div><label style={{ fontSize: 12, display: "block" }}>Hlídač sítě – vypni, když výkon ze sítě ≥ práh (kW) po dobu (min) <span className="muted">· prázdné = vypnuto</span></label>
                   <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
@@ -239,6 +247,9 @@ function SpotDischargePanel({ moduleId }) {
         precharge_enabled: !!r.precharge_enabled, precharge_hours: Number(r.precharge_hours),
         precharge_power_kw: Number(r.precharge_power_kw), precharge_min_spread: Number(r.precharge_min_spread),
         precharge_max_buy: Number(r.precharge_max_buy),
+        charge_enabled: !!r.charge_enabled, charge_price_on: Number(r.charge_price_on),
+        charge_price_off: Number(r.charge_price_off), charge_power_kw: Number(r.charge_power_kw),
+        charge_soc_ceiling: Number(r.charge_soc_ceiling),
       });
       setR(saved); setMsg("✓ Uloženo"); setTimeout(() => setMsg(""), 2500);
     } catch (e) { setMsg("✗ " + (e.message || e)); }
@@ -287,6 +298,29 @@ function SpotDischargePanel({ moduleId }) {
               <input value={r.precharge_min_spread} onChange={(e) => set("precharge_min_spread", e.target.value)} style={fld} /></div>
             <div><label style={lbl}>Strop nákupu (Kč/MWh, 0 = bez)</label>
               <input value={r.precharge_max_buy} onChange={(e) => set("precharge_max_buy", e.target.value)} style={fld} /></div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px dashed var(--border)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+          <input type="checkbox" checked={!!r.charge_enabled} onChange={(e) => set("charge_enabled", e.target.checked)} />
+          🔋 Auto-nabíjení ze sítě podle spotu (levné / záporné ceny)
+          {r.charge_active && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: "var(--green)", color: "#0b0e13" }}>právě nabíjí</span>}
+        </label>
+        <p className="muted" style={{ fontSize: 11.5, margin: "4px 0 8px" }}>
+          Když je spot nízký/záporný (a FVE nestíhá – ošklivo), nabije ze sítě do stropu SoC. Hystereze zap/vyp prahem ceny. Vybíjení má přednost.
+        </p>
+        {r.charge_enabled && (
+          <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div><label style={lbl}>Nabíjet při spotu ≤ (Kč/MWh)</label>
+              <input value={r.charge_price_on} onChange={(e) => set("charge_price_on", e.target.value)} style={fld} /></div>
+            <div><label style={lbl}>Přestat při spotu &gt; (Kč/MWh)</label>
+              <input value={r.charge_price_off} onChange={(e) => set("charge_price_off", e.target.value)} style={fld} /></div>
+            <div><label style={lbl}>Výkon (kW)</label>
+              <input value={r.charge_power_kw} onChange={(e) => set("charge_power_kw", e.target.value)} style={fld} /></div>
+            <div><label style={lbl}>Strop SoC (%)</label>
+              <input value={r.charge_soc_ceiling} onChange={(e) => set("charge_soc_ceiling", e.target.value)} style={fld} /></div>
           </div>
         )}
       </div>
