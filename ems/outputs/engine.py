@@ -104,7 +104,12 @@ async def _actuate(o: dict, desired: bool) -> dict:
 
 
 async def _grid_import_sustained(locality_id, kw: float, minutes: float) -> bool:
-    """True, pokud se po CELÝCH posledních `minutes` bral ze sítě import > kw."""
+    """True, pokud po CELÝCH posledních `minutes` byl výkon ze sítě ≥ práh `kw`.
+
+    Práh `kw` je v konvenci dashboardu: + odběr ze sítě (nákup), − dodávka do sítě.
+    Interně grid_power: kladné = export. „Po celou dobu ze sítě ≥ kw" znamená,
+    že i nejlepší okamžik (max grid_power = max export) je pod −kw·1000 W.
+    """
     ids = await _loc_device_ids(locality_id)
     if not ids:
         return False
@@ -150,14 +155,18 @@ async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str, dict]:
         if not inside:
             return False, None, f"mimo denní okno {det['okno']} (teď {det['cas']})", det
 
-    # 3) hlídač sítě – jen když je sepnuto: import > kw po celé okno → vypnout + zámek
+    # 3) hlídač sítě – jen když je sepnuto. Práh v konvenci dashboardu: + odběr ze sítě, − dodávka do sítě.
+    #    Vypne, když po CELÉ okno byl výkon ze sítě ≥ práh (málo dodávky / nákup), pak zámek.
     gk, gm = p.get("grid_guard_kw"), p.get("grid_guard_min")
-    if on and gk not in (None, "") and gm not in (None, "") and float(gk) > 0 and float(gm) > 0:
+    if on and gk not in (None, "") and gm not in (None, "") and float(gm) > 0:
         if await _grid_import_sustained(o["locality_id"], float(gk), float(gm)):
-            lock_min = float(p.get("guard_lock_min", 120))
-            det["hlidac_import_kW"] = float(gk); det["hlidac_min"] = float(gm)
+            lock_min = float(p.get("guard_lock_min", 30))
+            gkf = float(gk)
+            det["hlidac_prah_kW"] = gkf; det["hlidac_min"] = float(gm); det["hlidac_zamek_min"] = lock_min
+            why = (f"dodávka do sítě klesla pod {-gkf:.1f} kW" if gkf < 0
+                   else (f"nákup ze sítě > {gkf:.1f} kW" if gkf > 0 else "do sítě se nedodávalo"))
             return (False, now_utc + timedelta(minutes=lock_min),
-                    f"hlídač sítě: import >{gk} kW déle než {gm} min → vypnuto (zámek {lock_min:.0f} min)", det)
+                    f"hlídač sítě: {why} po {gm:g} min → vypnuto (nezapínat {lock_min:.0f} min)", det)
 
     # 4) SoC hystereze
     if not on and soc >= upper:

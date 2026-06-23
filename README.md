@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.44.3 — Hlídač sítě používá CELOU škálu se znaménkem (jako dashboard): + odběr ze sítě, − dodávka do sítě. Odstraněna podmínka „> 0", takže záporný práh funguje: např. −3 = vypni, když dodávka do sítě klesne pod 3 kW; 0.3 = vypni, když nakupuješ > 0,3 kW. Přidán čas zámku „pak nezapínat (min)" (guard_lock_min, default 30) přímo do formuláře. Reason i hodnoty v auditu rozlišují dodávku/nákup.
+
 ## v0.44.2 — Hlídač sítě u spotřebičů: pole jen pro KLADNÉ kW (type=number min=0), jasnější popis „vypni, když nakupuješ ze sítě > X kW" + pozn., že reaguje na import (nákup), ne na pokles výroby, a při 0 kW se nevypne. Záporná/nulová hodnota se neuloží (= vypnuto) — dřív zápor (-3) hlídač tiše deaktivoval.
 
 ## v0.44.1 — (1) Stránka SPOT: stará Goodwe automatika (formulář + seznam pravidel) schována za zatržítko „Zobrazit stará pravidla automatiky (Goodwe)", default skryté (na Solis se nepoužívá, spot vybíjení je v Řízení). (2) Audit povelů: zatržítko „zobrazit čtení stavu (read_controls)" — defaultně se read_controls SKRÝVAJÍ (filtr na serveru, neplýtvá místem), zapnutím se zobrazí.
