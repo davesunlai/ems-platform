@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.43.10 — Zámek hlídače sítě je teď VIDĚT: v tabulce spínaných spotřebičů se u uzamčeného výstupu zobrazí „🔒 uzamčeno hlídačem do HH:MM" + tlačítko Odemknout (POST /api/outputs/{id}/unlock → zruší off_lock_until). Dosud byl zámek jen v DB/textu důvodu.
+
 ## v0.43.9 — Hlídač sítě (grid_guard) zpřehledněn: ve formuláři spotřebiče popisek „Hlídač sítě … prázdné = vypnuto", placeholder „vyp". Úprava/uložení výstupu nově ruší případný zámek off_lock_until (takže vyprázdnění hlídače = okamžité odemčení, nečeká se na vypršení). Hlídač je aktivní jen když je vyplněné kW i min > 0.
 
 ## v0.43.8 — Audit povelů u spotřebičů zaznamenává NAMĚŘENÉ HODNOTY v okamžiku rozhodnutí (params.values) — u SoC triggeru SoC %, prahy sepni/rozepni, čas, denní okno; u přebytku export kW, práh, SoC, spot. Rozklik řádku má novou sekci „Naměřené hodnoty…". Reason u SoC hystereze je teď srozumitelný: „SoC 94 % ≤ 95 % → vypnuto" / „… v pásmu … → beze změny".

@@ -60,6 +60,12 @@ async def delete_output(out_id: int, _: dict = Depends(require_permission("contr
     return {"ok": True}
 
 
+@router.post("/{out_id}/unlock")
+async def unlock_output(out_id: int, _: dict = Depends(require_permission("control"))):
+    await db.set_lock(out_id, None)
+    return {"ok": True}
+
+
 @router.post("/{out_id}/test")
 async def test_output(out_id: int, body: TestBody, _: dict = Depends(require_permission("control"))):
     o = await db.get(out_id)

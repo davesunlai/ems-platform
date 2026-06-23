@@ -90,6 +90,7 @@ function OutputsPanel({ locId }) {
   const toggle = async (o) => { try { await api.updateOutput(o.id, { enabled: !o.enabled }); load(); } catch (e) { setErr(e.message); } };
   const remove = async (o) => { if (!confirm(`Smazat spotřebič „${o.name}"?`)) return; try { await api.deleteOutput(o.id); if (editing === o.id) reset(); load(); } catch (e) { setErr(e.message); } };
   const test = async (o, on) => { setBusy(o.id); setErr(""); try { await api.testOutput(o.id, on); setTimeout(load, 600); } catch (e) { setErr(e.message); } finally { setBusy(0); } };
+  const unlock = async (o) => { try { await api.unlockOutput(o.id); load(); } catch (e) { setErr(e.message); } };
 
   const kindLabel = (k) => (k === "ewelink" ? "eWeLink" : "kontakt střídače");
   const trigLabel = (t) => (t === "soc" ? "SoC hystereze" : "přebytek/spot");
@@ -166,7 +167,14 @@ function OutputsPanel({ locId }) {
                 <td>{o.name}</td>
                 <td><span className="role">{kindLabel(o.output_kind)}</span><div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)" }}>{o.target}</div></td>
                 <td className="muted">{trigLabel(o.trigger)}</td>
-                <td><span className={o.is_on ? "badge-on" : "badge-off"}>{o.is_on ? "sepnuto" : "rozepnuto"}</span></td>
+                <td><span className={o.is_on ? "badge-on" : "badge-off"}>{o.is_on ? "sepnuto" : "rozepnuto"}</span>
+                  {o.off_lock_until && new Date(o.off_lock_until) > new Date() && (
+                    <div style={{ fontSize: 11, marginTop: 3, color: "#d29922" }}>
+                      🔒 uzamčeno hlídačem do {new Date(o.off_lock_until).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
+                      <button className="btn" onClick={() => unlock(o)} style={{ padding: "1px 7px", marginLeft: 6, fontSize: 11 }}>Odemknout</button>
+                    </div>
+                  )}
+                </td>
                 <td><span className={o.enabled ? "badge-on" : "badge-off"}>{o.enabled ? "ano" : "ne"}</span></td>
                 <td style={{ whiteSpace: "nowrap" }}>
                   <button className="btn" disabled={busy === o.id} onClick={() => test(o, true)} style={{ padding: "2px 8px", marginRight: 4 }}>zap</button>

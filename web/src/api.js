@@ -59,6 +59,7 @@ export const api = {
   updateOutput: (id, patch) => request(`/api/outputs/${id}`, { method: "PUT", body: patch }),
   deleteOutput: (id) => request(`/api/outputs/${id}`, { method: "DELETE" }),
   testOutput: (id, on) => request(`/api/outputs/${id}/test`, { method: "POST", body: { on } }),
+  unlockOutput: (id) => request(`/api/outputs/${id}/unlock`, { method: "POST" }),
   getMode: (id) => request(`/api/control/${encodeURIComponent(id)}/mode`),
   setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
   controlAudit: (limit = 50, offset = 0, q = "") => request(`/api/control/audit?limit=${limit}&offset=${offset}&q=${encodeURIComponent(q)}`),
