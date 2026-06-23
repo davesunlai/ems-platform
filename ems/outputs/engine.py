@@ -178,32 +178,36 @@ async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str, dict]:
         if not inside:
             return False, None, f"mimo denní okno {det['okno']} (teď {det['cas']})", det
 
-    # 3) hlídač sítě – jen když je sepnuto. Práh v konvenci dashboardu: + odběr ze sítě, − dodávka do sítě.
-    #    Vypne, když po CELÉ okno byl výkon ze sítě ≥ práh (málo dodávky / nákup), pak zámek.
+    # 3) hlídač sítě – jen když je sepnuto. Práh v konvenci dashboardu: + odběr, − dodávka.
+    #    Operátor (≥/≤) volitelný; ≥ = vypni při málo dodávky/nákupu, ≤ = vypni při hodně dodávky.
     gk, gm = p.get("grid_guard_kw"), p.get("grid_guard_min")
+    gop = p.get("grid_guard_op", "ge")
     if on and gk not in (None, "") and gm not in (None, "") and float(gm) > 0:
-        if await _grid_import_sustained(o["locality_id"], float(gk), float(gm)):
+        fn = _grid_import_sustained if gop == "ge" else _grid_export_sustained
+        if await fn(o["locality_id"], float(gk), float(gm)):
             lock_min = float(p.get("guard_lock_min", 30))
-            gkf = float(gk)
-            det["hlidac_prah_kW"] = gkf; det["hlidac_min"] = float(gm); det["hlidac_zamek_min"] = lock_min
-            why = (f"dodávka do sítě klesla pod {-gkf:.1f} kW" if gkf < 0
-                   else (f"nákup ze sítě > {gkf:.1f} kW" if gkf > 0 else "do sítě se nedodávalo"))
+            gkf = float(gk); op_txt = "≥" if gop == "ge" else "≤"
+            det["hlidac_op"] = op_txt; det["hlidac_prah_kW"] = gkf
+            det["hlidac_min"] = float(gm); det["hlidac_zamek_min"] = lock_min
             return (False, now_utc + timedelta(minutes=lock_min),
-                    f"hlídač sítě: {why} po {gm:g} min → vypnuto (nezapínat {lock_min:.0f} min)", det)
+                    f"hlídač sítě: výkon ze sítě {op_txt} {gkf:g} kW po {gm:g} min → vypnuto (nezapínat {lock_min:.0f} min)", det)
 
-    # 4) SoC hystereze (+ volitelná ZAPÍNACÍ podmínka na výkon ze sítě)
+    # 4) SoC hystereze (+ volitelná ZAPÍNACÍ podmínka na výkon ze sítě, operátor ≤/≥)
     gon_kw, gon_min = p.get("grid_on_kw"), p.get("grid_on_min")
+    gon_op = p.get("grid_on_op", "le")
     if not on and soc >= upper:
         gate_ok = True
         if gon_kw not in (None, "") and gon_min not in (None, "") and float(gon_min) > 0:
-            gate_ok = await _grid_export_sustained(o["locality_id"], float(gon_kw), float(gon_min))
-            det["zapinaci_prah_kW"] = float(gon_kw); det["zapinaci_min"] = float(gon_min)
+            fn = _grid_import_sustained if gon_op == "ge" else _grid_export_sustained
+            gate_ok = await fn(o["locality_id"], float(gon_kw), float(gon_min))
+            op_txt = "≥" if gon_op == "ge" else "≤"
+            det["zapinaci_op"] = op_txt; det["zapinaci_prah_kW"] = float(gon_kw); det["zapinaci_min"] = float(gon_min)
         if gate_ok:
             on = True
             reason = f"SoC {soc:.0f} % ≥ {upper:.0f} % → zapnuto"
         else:
-            reason = (f"SoC {soc:.0f} % ≥ {upper:.0f} %, ale čeká na přebytek "
-                      f"(síť ≤ {float(gon_kw):g} kW po {float(gon_min):g} min)")
+            reason = (f"SoC {soc:.0f} % ≥ {upper:.0f} %, ale čeká na síť "
+                      f"({op_txt} {float(gon_kw):g} kW po {float(gon_min):g} min)")
     elif on and soc <= lower:
         on = False
         reason = f"SoC {soc:.0f} % ≤ {lower:.0f} % → vypnuto"

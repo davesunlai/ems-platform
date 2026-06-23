@@ -36,7 +36,7 @@ function SearchSelect({ value, options, onChange, placeholder = "— vyber —" 
 const emptyOut = {
   name: "", enabled: true, output_kind: "ewelink", target: "", trigger: "surplus",
   upper_soc: 100, lower_soc: 95, surplus_kw: 1.5, soc_min: 80, spot_max: "", min_on_min: 10,
-  day_start: "", day_end: "", grid_on_kw: "", grid_on_min: "", grid_guard_kw: "", grid_guard_min: "", guard_lock_min: "",
+  day_start: "", day_end: "", grid_on_kw: "", grid_on_min: "", grid_on_op: "le", grid_guard_kw: "", grid_guard_min: "", grid_guard_op: "ge", guard_lock_min: "",
 };
 
 // stará hodnota (celá hodina) i "HH:MM" -> "HH:MM" pro <input type=time>
@@ -74,8 +74,8 @@ function OutputsPanel({ locId }) {
   const buildParams = () => f.trigger === "soc"
     ? { upper_soc: Number(f.upper_soc), lower_soc: Number(f.lower_soc),
         ...(f.day_start !== "" && f.day_end !== "" ? { day_start: f.day_start, day_end: f.day_end } : {}),
-        ...(f.grid_on_kw !== "" && Number(f.grid_on_min) > 0 ? { grid_on_kw: Number(f.grid_on_kw), grid_on_min: Number(f.grid_on_min) } : {}),
-        ...(f.grid_guard_kw !== "" && Number(f.grid_guard_min) > 0 ? { grid_guard_kw: Number(f.grid_guard_kw), grid_guard_min: Number(f.grid_guard_min), ...(f.guard_lock_min !== "" ? { guard_lock_min: Number(f.guard_lock_min) } : {}) } : {}) }
+        ...(f.grid_on_kw !== "" && Number(f.grid_on_min) > 0 ? { grid_on_kw: Number(f.grid_on_kw), grid_on_min: Number(f.grid_on_min), grid_on_op: f.grid_on_op || "le" } : {}),
+        ...(f.grid_guard_kw !== "" && Number(f.grid_guard_min) > 0 ? { grid_guard_kw: Number(f.grid_guard_kw), grid_guard_min: Number(f.grid_guard_min), grid_guard_op: f.grid_guard_op || "ge", ...(f.guard_lock_min !== "" ? { guard_lock_min: Number(f.guard_lock_min) } : {}) } : {}) }
     : { surplus_kw: Number(f.surplus_kw), soc_min: Number(f.soc_min), min_on_min: Number(f.min_on_min),
         ...(f.spot_max !== "" && f.spot_max != null ? { spot_max: Number(f.spot_max) } : {}) };
   const body = () => ({ name: f.name.trim(), enabled: f.enabled, output_kind: f.output_kind, target: f.target,
@@ -87,7 +87,7 @@ function OutputsPanel({ locId }) {
       upper_soc: o.params.upper_soc ?? 100, lower_soc: o.params.lower_soc ?? 95, surplus_kw: o.params.surplus_kw ?? 1.5,
       soc_min: o.params.soc_min ?? 80, spot_max: o.params.spot_max ?? "", min_on_min: o.params.min_on_min ?? 10,
       day_start: hm(o.params.day_start), day_end: hm(o.params.day_end),
-      grid_on_kw: o.params.grid_on_kw ?? "", grid_on_min: o.params.grid_on_min ?? "", grid_guard_kw: o.params.grid_guard_kw ?? "", grid_guard_min: o.params.grid_guard_min ?? "", guard_lock_min: o.params.guard_lock_min ?? "" }); };
+      grid_on_kw: o.params.grid_on_kw ?? "", grid_on_min: o.params.grid_on_min ?? "", grid_on_op: o.params.grid_on_op ?? "le", grid_guard_kw: o.params.grid_guard_kw ?? "", grid_guard_min: o.params.grid_guard_min ?? "", grid_guard_op: o.params.grid_guard_op ?? "ge", guard_lock_min: o.params.guard_lock_min ?? "" }); };
   const toggle = async (o) => { try { await api.updateOutput(o.id, { enabled: !o.enabled }); load(); } catch (e) { setErr(e.message); } };
   const remove = async (o) => { if (!confirm(`Smazat spotřebič „${o.name}"?`)) return; try { await api.deleteOutput(o.id); if (editing === o.id) reset(); load(); } catch (e) { setErr(e.message); } };
   const test = async (o, on) => { setBusy(o.id); setErr(""); try { await api.testOutput(o.id, on); setTimeout(load, 600); } catch (e) { setErr(e.message); } finally { setBusy(0); } };
@@ -133,15 +133,21 @@ function OutputsPanel({ locId }) {
                     <input type="time" value={f.day_end} onChange={(e) => setF({ ...f, day_end: e.target.value })} style={{ ...inp, width: 110 }} />
                   </span>
                 </div>
-                <div><label style={{ fontSize: 12, display: "block" }}>Zapni, jen když výkon ze sítě ≤ práh (kW) po dobu (min) <span className="muted">· prázdné = bez podmínky</span></label>
-                  <span style={{ display: "inline-flex", gap: 4 }}>
+                <div><label style={{ fontSize: 12, display: "block" }}>Zapni, jen když výkon ze sítě (kW) po dobu (min) <span className="muted">· prázdné = bez podmínky</span></label>
+                  <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                    <select value={f.grid_on_op} onChange={(e) => setF({ ...f, grid_on_op: e.target.value })} style={{ ...inp, width: 56 }}>
+                      <option value="le">≤</option><option value="ge">≥</option>
+                    </select>
                     <input type="number" step="0.1" value={f.grid_on_kw} placeholder="práh kW" onChange={(e) => setF({ ...f, grid_on_kw: e.target.value })} style={{ ...inp, width: 80 }} />
                     <input type="number" min="0" step="1" value={f.grid_on_min} placeholder="min" onChange={(e) => setF({ ...f, grid_on_min: e.target.value })} style={{ ...inp, width: 60 }} />
                   </span>
-                  <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>K SoC podmínce přidá přebytek: zapne, až do sítě dodáváš dost. Např. <b>−2</b> = zapni, jen když dodáváš do sítě ≥ 2 kW.</div>
+                  <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>K SoC podmínce přidá podmínku na síť (+odběr / −dodávka). Např. <b>≤ −2</b> = zapni jen při dodávce ≥ 2 kW; <b>≥ 0.5</b> = zapni jen při odběru ≥ 0,5 kW.</div>
                 </div>
-                <div><label style={{ fontSize: 12, display: "block" }}>Hlídač sítě – vypni, když výkon ze sítě ≥ práh (kW) po dobu (min) <span className="muted">· prázdné = vypnuto</span></label>
+                <div><label style={{ fontSize: 12, display: "block" }}>Hlídač sítě – vypni, když výkon ze sítě (kW) po dobu (min) <span className="muted">· prázdné = vypnuto</span></label>
                   <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                    <select value={f.grid_guard_op} onChange={(e) => setF({ ...f, grid_guard_op: e.target.value })} style={{ ...inp, width: 56 }}>
+                      <option value="ge">≥</option><option value="le">≤</option>
+                    </select>
                     <input type="number" step="0.1" value={f.grid_guard_kw} placeholder="práh kW" onChange={(e) => setF({ ...f, grid_guard_kw: e.target.value })} style={{ ...inp, width: 80 }} />
                     <input type="number" min="0" step="1" value={f.grid_guard_min} placeholder="min" onChange={(e) => setF({ ...f, grid_guard_min: e.target.value })} style={{ ...inp, width: 60 }} />
                     <span style={{ fontSize: 12 }} className="muted">pak nezapínat</span>
@@ -150,7 +156,7 @@ function OutputsPanel({ locId }) {
                   </span>
                   <div className="muted" style={{ fontSize: 11, marginTop: 3, lineHeight: 1.5 }}>
                     Znaménko jako na dashboardu: <b>+ odběr</b> ze sítě (nákup), <b>− dodávka</b> do sítě.<br />
-                    Např. <b>−3</b> = vypni, když dodávka do sítě klesne pod 3 kW (málo přebytku). <b>0.3</b> = vypni, když nakupuješ &gt; 0,3 kW.
+                    Např. <b>≥ −3</b> = vypni, když dodávka klesne pod 3 kW; <b>≥ 0.3</b> = vypni, když nakupuješ &gt; 0,3 kW.
                   </div>
                 </div>
               </>
