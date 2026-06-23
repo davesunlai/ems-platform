@@ -4,6 +4,10 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.43.3 — Dashboard: sepnuté spínané spotřebiče (eWeLink/kontakt) se teď ukazují v pruhu aktivního řízení pod názvem lokality — vedle „🔻 Vybíjení do sítě" je „🔌 <název> · sepnuto · od <čas>" (tyrkysový pruh). ControlBanners čte i stav výstupů (is_on/on_since) pro danou lokalitu, obnova á 5 s.
+
+## v0.43.2 — Spínané spotřebiče: po sepnutí/rozepnutí (SoC/přebytek, vč. spirály) se notifikace rozešle HNED (jako u vynuceného nabíjení/vybíjení), ne až za 60 s. (Per-uživatel+lokalita kanály z v0.43.1 vyžadují přebudovaný API kontejner — viz pozn. k nasazení.)
+
 ## v0.43.1 — Notifikační kanály jsou nově PER UŽIVATEL + LOKALITA (ne globálně). Kanály (✉️ e-mail / 🖥️ prohlížeč / 📱 mobil-připravujeme) se zaškrtávají u každého uživatele přímo v editaci lokality vedle 🔔. Sloupce notify_email/notify_browser/notify_mobile přesunuty na user_localities; notify_users_for_locality i dispatcher čtou per-lokalita kanály. /api/alerts vrací browser_localities → zvoneček vypaluje browser notifikaci jen pro lokality, kde má uživatel zapnutý kanál prohlížeč. Globální volba kanálů odstraněna z Vzhledu i ze zvonečku (ve zvonečku zůstává jen povolení prohlížeče + test). Styl rozhraní (Klasický/Moderní) ve Vzhledu zůstává.
 
 ## v0.43.0 — (1) Řízení: zvýrazněný STAV MODULU v hlavičce (barevný odznak Self-Use / ⚡ Nabíjení / 🔻 Vybíjení do sítě / 🌀 Spirála + zdroj ručně/plánovač), aktualizace á 10 s. (2) Notifikace i u „stop" (návrat do Self-Use) — pokryto „cokoli v řízení". (3) Volba kanálů (e-mail / prohlížeč / mobil-připravujeme) je teď i ve Vzhledu (dřív jen pod zvonečkem). (4) Přepínatelný STYL ROZHRANÍ ve Vzhledu: Klasický (výchozí, beze změny) / Moderní (zkouška — měkčí stíny, zaoblení, vzdušnější panely). Styl je třída na <html>, ukládá se do localStorage → okamžité přepnutí bez rebuildu a bez problému s cache.

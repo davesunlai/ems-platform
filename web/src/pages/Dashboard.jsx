@@ -81,21 +81,26 @@ const CONTROL_ACT = {
   set_work_mode: { label: "Změna režimu", color: "#58a6ff", icon: "⚙" },
 };
 
-function ControlBanners({ deviceIds }) {
+function ControlBanners({ deviceIds, localityId }) {
   const [states, setStates] = useState({});
+  const [outputs, setOutputs] = useState([]);
   const key = deviceIds.join(",");
   useEffect(() => {
-    if (!deviceIds.length) return;
+    if (!deviceIds.length && !localityId) return;
     let alive = true;
-    const load = () => api.controlStates(key).then((r) => alive && setStates(r.states || {})).catch(() => {});
+    const load = () => {
+      if (deviceIds.length) api.controlStates(key).then((r) => alive && setStates(r.states || {})).catch(() => {});
+      api.listOutputs().then((list) => alive && setOutputs(list || [])).catch(() => {});
+    };
     load();
     const t = setInterval(load, 5000);
     return () => { alive = false; clearInterval(t); };
-  }, [key]);
+  }, [key, localityId]);
 
   const items = deviceIds.map((id) => ({ id, st: states[id] }))
     .filter(({ st }) => st && st.action && st.action !== "idle");
-  if (!items.length) return null;
+  const onOutputs = (outputs || []).filter((o) => o.is_on && (localityId == null || o.locality_id === localityId));
+  if (!items.length && !onOutputs.length) return null;
 
   return (
     <div style={{ margin: "0 0 12px" }}>
@@ -110,6 +115,20 @@ function ControlBanners({ deviceIds }) {
             <span>{act.label}{actPower != null ? ` (${(actPower / 100).toFixed(1)} kW)` : ""}</span>
             <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: "auto" }}>
               {id} · od {sinceTxt}{st.source && st.source !== "manual" ? ` · ${st.source}` : ""}
+            </span>
+          </div>
+        );
+      })}
+      {onOutputs.map((o) => {
+        const since = o.on_since ? new Date(o.on_since) : null;
+        const sinceTxt = since ? since.toLocaleString("cs-CZ", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
+        const col = "#2dd4bf";
+        return (
+          <div key={`out${o.id}`} className="ems-active-bar" style={{ color: col, background: `color-mix(in srgb, ${col} 14%, transparent)`, marginBottom: 6 }}>
+            <span className="ems-pulse" style={{ fontSize: 16 }}>🔌</span>
+            <span>{o.name} · sepnuto</span>
+            <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: "auto" }}>
+              {o.output_kind === "ewelink" ? "eWeLink" : "spotřebič"}{sinceTxt ? ` · od ${sinceTxt}` : ""}
             </span>
           </div>
         );
@@ -362,7 +381,7 @@ export default function Dashboard() {
           {current === "—" ? "Bez lokality" : `📍 ${current}`}
           <LocalityNow deviceIds={ids} localityId={devs[0].locality_id} />
         </h2>
-        <ControlBanners deviceIds={ids} />
+        <ControlBanners deviceIds={ids} localityId={devs[0].locality_id} />
         <LocalityChart deviceIds={ids} />
         {devs[0].locality_id && (
           <div className="card" style={{ marginTop: 14 }}>

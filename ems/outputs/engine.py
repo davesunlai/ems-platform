@@ -203,6 +203,8 @@ async def evaluate_outputs() -> None:
                 await alerts_db.record_event(
                     o.get("locality_id"), "output_on" if desired else "output_off",
                     f"Spotřebič {o['name']} {'sepnut' if desired else 'rozepnut'}", reason)
+                from ems.notify import dispatch as notify_dispatch
+                await notify_dispatch.notify_new_alerts()   # upozornění hned, ne až za 60 s
             except Exception:
                 pass
             logger.info("Výstup [%s] → %s (%s)", o["name"], "ON" if desired else "OFF", reason)
