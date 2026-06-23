@@ -147,11 +147,16 @@ async def process_queue(active: dict) -> None:
                         pw = p.get("power")
                         label = {"force_charge": "Vynucené nabíjení", "force_discharge": "Vybíjení do sítě",
                                  "spiral": "Spirála", "stop": "Návrat do Self-Use (stop)"}[c["action"]]
+                        src = p.get("source") or "manual"
+                        parts = []
                         if c["action"] == "stop":
-                            detail = "řízení zastaveno · " + (p.get("source") or "ručně")
-                        else:
-                            detail = (f"{pw/100:.1f} kW" if pw is not None else "") + \
-                                     (f" · {p.get('source')}" if p.get("source") and p.get("source") != "manual" else " · ručně")
+                            parts.append("řízení zastaveno")
+                        elif pw is not None:
+                            parts.append(f"{pw/100:.1f} kW")
+                        parts.append("ručně" if src == "manual" else src)
+                        if p.get("reason"):
+                            parts.append(p["reason"])     # důvod (spot/plánovač/spirála) – ať je vidět co se děje
+                        detail = " · ".join(parts)
                         kind = "stop" if c["action"] == "stop" else c["action"]
                         await alerts_db.record_event(loc_id, kind, f"{label} – {c['module_id']}", detail)
                         await notify_dispatch.notify_new_alerts()  # rozešli hned, nečekej na tick
