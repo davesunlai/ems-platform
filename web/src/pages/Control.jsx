@@ -244,15 +244,14 @@ function SolisControl({ mod }) {
     <div className="panel" style={{ marginBottom: 14 }}>
       <h3 style={{ marginBottom: 2 }}>{mod.id} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· Solis</span></h3>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
-        ⚠️ Reálně zapisuje do měniče. Výkon zadáváš v <b>kW na jeden battery pack</b> — tato lokalita má 2 packy, takže <b>celkový výkon ≈ 2×</b> (zadáš 5 → ~10 kW celkem). Vybíjení jde do sítě jen nad rámec spotřeby domu. (nabíjení reg. 43136, vybíjení 43129; jednotka 10 W)
+        ⚠️ Reálně zapisuje do měniče. Výkon zadáváš v <b>kW pro celé úložiště</b> (obě baterie dohromady). Vybíjení jde do sítě jen nad rámec spotřeby domu. (nabíjení reg. 43136, vybíjení 43129; jednotka 10 W)
       </p>
 
       <div style={{ fontWeight: 600, fontSize: 13, margin: "8px 0 4px" }}>Ruční řízení</div>
       <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ fontSize: 12 }}>výkon <span className="muted">(kW / pack)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 80 }} /></label>
-        <span className="muted" style={{ fontSize: 11 }}>≈ {(Number(power) * 2 || 0).toFixed(1)} kW celkem</span>
-        {has("force_charge") && <button className="btn" disabled={busy} onClick={() => force("force_charge", `Nabíjet teď (${power} kW/pack)`)}>⚡ Nabíjet teď</button>}
-        {has("force_discharge") && <button className="btn" disabled={busy} onClick={() => force("force_discharge", `Vybíjet teď (${power} kW/pack)`)}>🔻 Vybíjet teď</button>}
+        <label style={{ fontSize: 12 }}>výkon <span className="muted">(kW, celé úložiště)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 80 }} /></label>
+        {has("force_charge") && <button className="btn" disabled={busy} onClick={() => force("force_charge", `Nabíjet teď (${power} kW)`)}>⚡ Nabíjet teď</button>}
+        {has("force_discharge") && <button className="btn" disabled={busy} onClick={() => force("force_discharge", `Vybíjet teď (${power} kW)`)}>🔻 Vybíjet teď</button>}
         <button className="btn" disabled={busy} style={{ color: "#e06c75" }} onClick={stop}>⏹ Stop</button>
       </div>
 
