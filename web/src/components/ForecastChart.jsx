@@ -89,9 +89,10 @@ export default function ForecastChart({ localityId }) {
         {/* osy kW (vlevo) */}
         {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
           const y = padT + plotH * (1 - f);
+          const zero = f === 0;
           return <g key={i}>
-            <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="var(--border)" strokeWidth="0.5" opacity="0.5" />
-            <text x={padL - 5} y={y + 3} textAnchor="end" fontSize="10" fill="var(--muted,#8b949e)">{(kwMax * f).toFixed(0)}</text>
+            <line x1={padL} y1={y} x2={W - padR} y2={y} stroke={zero ? "var(--fg, #c9d1d9)" : "var(--border)"} strokeWidth={zero ? 1.4 : 0.5} opacity={zero ? 0.85 : 0.5} />
+            <text x={padL - 5} y={y + 3} textAnchor="end" fontSize="10" fill="var(--muted,#8b949e)" fontWeight={zero ? 700 : 400}>{(kwMax * f).toFixed(0)}</text>
             <text x={W - padR + 5} y={y + 3} fontSize="10" fill={SPOT}>{(sLo + (sHi - sLo) * f).toFixed(1)}</text>
           </g>;
         })}

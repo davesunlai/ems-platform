@@ -44,7 +44,7 @@ export default function MultiChart({ series, height = 240 }) {
   };
   const fmtFull = (t) => new Date(t).toLocaleString("cs-CZ",
     { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const yTicks = [lo, lo + span / 2, hi];
+  const yTicks = [...new Set([lo, lo + span / 2, hi, 0])].sort((a, b) => a - b);
   const xN = 5;
   const xTicks = Array.from({ length: xN }, (_, i) => t0 + (tspan * i) / (xN - 1));
 
@@ -78,12 +78,11 @@ export default function MultiChart({ series, height = 240 }) {
           {yTicks.map((v, i) => (
             <g key={i}>
               <line x1={padL} y1={Y(v)} x2={W - padR} y2={Y(v)} stroke="var(--border)" strokeWidth="0.5" opacity="0.45" />
-              <text x={padL - 7} y={Y(v) + 3} textAnchor="end" fontSize="10" fill="var(--muted)">{fmtY(v)}</text>
+              <text x={padL - 7} y={Y(v) + 3} textAnchor="end" fontSize="10" fill="var(--muted)" fontWeight={v === 0 ? 700 : 400}>{fmtY(v)}</text>
             </g>
           ))}
-          {lo < 0 && hi > 0 && (
-            <line x1={padL} y1={Y(0)} x2={W - padR} y2={Y(0)} stroke="var(--border)" strokeWidth="0.8" opacity="0.7" />
-          )}
+          {/* výrazná osa X (nulová linka) */}
+          <line x1={padL} y1={Y(0)} x2={W - padR} y2={Y(0)} stroke="var(--fg, #c9d1d9)" strokeWidth="1.4" opacity="0.85" />
           {xTicks.map((t, i) => (
             <text key={`x${i}`} x={X(t)} y={H - 8}
                   textAnchor={i === 0 ? "start" : i === xN - 1 ? "end" : "middle"}

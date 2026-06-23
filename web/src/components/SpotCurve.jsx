@@ -40,7 +40,7 @@ export default function SpotCurve({ rules = [] }) {
 
   const prices = slots.map((s) => s.price);
   const vals = [...prices, ...chargeThr, ...dischThr, 0];
-  const maxV = Math.max(...vals), minV = Math.min(...vals);
+  const maxV = Math.max(...vals), minV = Math.min(0, ...vals);   // ať je 0 vždy vidět (osa X)
   const span = (maxV - minV) || 1;
 
   const ts = slots.map((s) => new Date(s.start).getTime());
@@ -99,9 +99,11 @@ export default function SpotCurve({ rules = [] }) {
         {[minV, maxV, 0].filter((v, i, a) => a.indexOf(v) === i).map((v, i) => (
           <g key={i}>
             <line x1={padL} y1={y(v)} x2={W - padR} y2={y(v)} stroke="var(--border)" strokeWidth="0.5" opacity="0.4" />
-            <text x={padL - 6} y={y(v) + 3} textAnchor="end" fontSize="10" fill="var(--muted)">{Math.round(v)}</text>
+            <text x={padL - 6} y={y(v) + 3} textAnchor="end" fontSize="10" fill="var(--muted)" fontWeight={v === 0 ? 700 : 400}>{Math.round(v)}</text>
           </g>
         ))}
+        {/* výrazná osa X (nulová linka) */}
+        <line x1={padL} y1={y(0)} x2={W - padR} y2={y(0)} stroke="var(--fg, #c9d1d9)" strokeWidth="1.4" opacity="0.85" />
 
         {chargeThr.map((t, i) => (
           <line key={`c${i}`} x1={padL} y1={y(t)} x2={W - padR} y2={y(t)} stroke={GREEN} strokeWidth="1" strokeDasharray="4 3" opacity="0.6" />

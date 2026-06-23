@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.41.6 — Grafy: výraznější osa X (nulová linka, silnější a kontrastní var(--fg)) a na ose Y vlevo se vždy vypisuje 0 (tučně), ať je zřejmé, kde leží nula. Sjednoceno napříč TimeChart, MultiChart, ForecastChart i SpotCurve (spotová křivka teď začíná od 0 — korektní sloupcový graf).
+
 ## v0.41.5 — Oprava popisu výkonu: ruční výkon je na CELÉ ÚLOŽIŠTĚ (obě baterie dohromady), ne na pack. Zrušen chybný ×2 odhad i popisek „kW / pack" v Řízení (label, tlačítka, status hláška „✓ Vybíjet teď (X kW)") a stejně i text v notifikacích/alertech (operační událost: „X kW" místo „X kW/pack").
 
 ## v0.41.4 — Oprava „nejde stopnout vybíjení": zapnutý plánovač okamžitě přebíjel ruční Stop (cur=idle != desired=force_discharge → znovu poslal vybíjení). Nově RUČNÍ PŘEBITÍ: po jakémkoli ručním povelu (Stop/Nabíjet/Vybíjet, source=manual) nechá plánovač modul 30 min na pokoji (EMS_MANUAL_OVERRIDE_SEC), pak se zase ujme. Navíc pojistka: zatoulaný keepalive „force_poke" z doby před Stopem se přeskočí, když už modul neforcuje. Nápověda v Řízení upřesněna.

@@ -47,7 +47,7 @@ export default function TimeChart({ points, color = "#3fb950", unit = "", height
   const fmtFull = (t) => new Date(t).toLocaleString("cs-CZ",
     { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
-  const yTicks = [lo, lo + span / 2, hi];
+  const yTicks = [...new Set([lo, lo + span / 2, hi, 0])].sort((a, b) => a - b);
   const xN = 5;
   const xTicks = Array.from({ length: xN }, (_, i) => t0 + (tspan * i) / (xN - 1));
 
@@ -77,9 +77,11 @@ export default function TimeChart({ points, color = "#3fb950", unit = "", height
         {yTicks.map((v, i) => (
           <g key={`y${i}`}>
             <line x1={padL} y1={Y(v)} x2={W - padR} y2={Y(v)} stroke="var(--border)" strokeWidth="0.5" opacity="0.45" />
-            <text x={padL - 7} y={Y(v) + 3} textAnchor="end" fontSize="10" fill="var(--muted)">{fmtY(v)}</text>
+            <text x={padL - 7} y={Y(v) + 3} textAnchor="end" fontSize="10" fill="var(--muted)" fontWeight={v === 0 ? 700 : 400}>{fmtY(v)}</text>
           </g>
         ))}
+        {/* výrazná osa X (nulová linka) */}
+        <line x1={padL} y1={Y(0)} x2={W - padR} y2={Y(0)} stroke="var(--fg, #c9d1d9)" strokeWidth="1.4" opacity="0.85" />
         <text x={14} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
               transform={`rotate(-90 14 ${padT + plotH / 2})`}>{dispUnit}</text>
 
