@@ -39,6 +39,15 @@ const emptyOut = {
   day_start: "", day_end: "", grid_guard_kw: "", grid_guard_min: "",
 };
 
+// stará hodnota (celá hodina) i "HH:MM" -> "HH:MM" pro <input type=time>
+const hm = (v) => {
+  if (v == null || v === "") return "";
+  const s = String(v);
+  if (s.includes(":")) { const [h, m] = s.split(":"); return `${String(+h).padStart(2, "0")}:${String(+(m || 0)).padStart(2, "0")}`; }
+  if (/^\d+(\.\d+)?$/.test(s)) return `${String(Math.floor(+s)).padStart(2, "0")}:00`;
+  return "";
+};
+
 function OutputsPanel({ locId }) {
   const [list, setList] = useState([]);
   const [gw, setGw] = useState([]);
@@ -64,7 +73,7 @@ function OutputsPanel({ locId }) {
 
   const buildParams = () => f.trigger === "soc"
     ? { upper_soc: Number(f.upper_soc), lower_soc: Number(f.lower_soc),
-        ...(f.day_start !== "" && f.day_end !== "" ? { day_start: Number(f.day_start), day_end: Number(f.day_end) } : {}),
+        ...(f.day_start !== "" && f.day_end !== "" ? { day_start: f.day_start, day_end: f.day_end } : {}),
         ...(f.grid_guard_kw !== "" && f.grid_guard_min !== "" ? { grid_guard_kw: Number(f.grid_guard_kw), grid_guard_min: Number(f.grid_guard_min) } : {}) }
     : { surplus_kw: Number(f.surplus_kw), soc_min: Number(f.soc_min), min_on_min: Number(f.min_on_min),
         ...(f.spot_max !== "" && f.spot_max != null ? { spot_max: Number(f.spot_max) } : {}) };
@@ -76,7 +85,7 @@ function OutputsPanel({ locId }) {
   const edit = (o) => { setEditing(o.id); setOpen(true); setF({ name: o.name, enabled: o.enabled, output_kind: o.output_kind, target: o.target, trigger: o.trigger,
       upper_soc: o.params.upper_soc ?? 100, lower_soc: o.params.lower_soc ?? 95, surplus_kw: o.params.surplus_kw ?? 1.5,
       soc_min: o.params.soc_min ?? 80, spot_max: o.params.spot_max ?? "", min_on_min: o.params.min_on_min ?? 10,
-      day_start: o.params.day_start ?? "", day_end: o.params.day_end ?? "",
+      day_start: hm(o.params.day_start), day_end: hm(o.params.day_end),
       grid_guard_kw: o.params.grid_guard_kw ?? "", grid_guard_min: o.params.grid_guard_min ?? "" }); };
   const toggle = async (o) => { try { await api.updateOutput(o.id, { enabled: !o.enabled }); load(); } catch (e) { setErr(e.message); } };
   const remove = async (o) => { if (!confirm(`Smazat spotřebič „${o.name}"?`)) return; try { await api.deleteOutput(o.id); if (editing === o.id) reset(); load(); } catch (e) { setErr(e.message); } };
@@ -116,10 +125,10 @@ function OutputsPanel({ locId }) {
               <>
                 <div><label style={{ fontSize: 12, display: "block" }}>Sepnout při SoC ≥ (%)</label><input value={f.upper_soc} onChange={(e) => setF({ ...f, upper_soc: e.target.value })} style={inp} /></div>
                 <div><label style={{ fontSize: 12, display: "block" }}>Rozepnout při SoC ≤ (%)</label><input value={f.lower_soc} onChange={(e) => setF({ ...f, lower_soc: e.target.value })} style={inp} /></div>
-                <div><label style={{ fontSize: 12, display: "block" }}>Jen přes den od–do (hod, prázdné = nonstop)</label>
+                <div><label style={{ fontSize: 12, display: "block" }}>Jen přes den od–do (prázdné = nonstop)</label>
                   <span style={{ display: "inline-flex", gap: 4 }}>
-                    <input value={f.day_start} placeholder="8" onChange={(e) => setF({ ...f, day_start: e.target.value })} style={{ ...inp, width: 56 }} />
-                    <input value={f.day_end} placeholder="18" onChange={(e) => setF({ ...f, day_end: e.target.value })} style={{ ...inp, width: 56 }} />
+                    <input type="time" value={f.day_start} onChange={(e) => setF({ ...f, day_start: e.target.value })} style={{ ...inp, width: 110 }} />
+                    <input type="time" value={f.day_end} onChange={(e) => setF({ ...f, day_end: e.target.value })} style={{ ...inp, width: 110 }} />
                   </span>
                 </div>
                 <div><label style={{ fontSize: 12, display: "block" }}>Vypni, když import ze sítě &gt; (kW) déle než (min)</label>

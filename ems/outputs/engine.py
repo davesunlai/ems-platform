@@ -15,6 +15,27 @@ from zoneinfo import ZoneInfo
 
 _PRAGUE = ZoneInfo("Europe/Prague")
 
+
+def _hm_to_min(v):
+    """ "HH:MM" -> minuty od půlnoci; staré celé hodiny (číslo) -> hodiny*60; jinak None."""
+    if v in (None, ""):
+        return None
+    s = str(v).strip()
+    if ":" in s:
+        try:
+            hh, mm = s.split(":")[:2]
+            return (int(hh) % 24) * 60 + int(mm)
+        except Exception:
+            return None
+    try:
+        return int(float(s)) * 60   # zpětná kompatibilita: dřív se zadávaly celé hodiny
+    except Exception:
+        return None
+
+
+def _min_to_hm(m: int) -> str:
+    return f"{m // 60:02d}:{m % 60:02d}"
+
 from ems.api.db import get_pool
 from ems.control import db as control_db
 from ems.control.goodwe_control import set_load_switch
@@ -116,12 +137,13 @@ async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str]:
     if lock and now_utc < lock:
         return False, None, f"uzamčeno hlídačem sítě do {lock.astimezone(_PRAGUE):%H:%M}"
 
-    # 2) denní okno (lokální čas) – mimo něj vypnout
-    ds, de = p.get("day_start"), p.get("day_end")
-    if ds not in (None, "") and de not in (None, ""):
-        h = datetime.now(_PRAGUE).hour
-        if not (float(ds) <= h < float(de)):
-            return False, None, f"mimo denní okno {ds}–{de} h (teď {h})"
+    # 2) denní okno (lokální čas) – mimo něj vypnout. Podpora HH:MM i starých celých hodin.
+    ds, de = _hm_to_min(p.get("day_start")), _hm_to_min(p.get("day_end"))
+    if ds is not None and de is not None:
+        nowm = datetime.now(_PRAGUE).hour * 60 + datetime.now(_PRAGUE).minute
+        inside = (ds <= nowm < de) if ds <= de else (nowm >= ds or nowm < de)  # de<ds = přes půlnoc
+        if not inside:
+            return False, None, f"mimo denní okno {_min_to_hm(ds)}–{_min_to_hm(de)}"
 
     # 3) hlídač sítě – jen když je sepnuto: import > kw po celé okno → vypnout + zámek
     gk, gm = p.get("grid_guard_kw"), p.get("grid_guard_min")
