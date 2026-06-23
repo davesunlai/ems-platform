@@ -40,6 +40,9 @@ async def ensure_schema() -> None:
         await conn.execute(
             "ALTER TABLE user_localities ADD COLUMN IF NOT EXISTS notify BOOLEAN NOT NULL DEFAULT FALSE"
         )
+        for col in ("notify_email", "notify_browser"):
+            await conn.execute(f"ALTER TABLE user_localities ADD COLUMN IF NOT EXISTS {col} BOOLEAN NOT NULL DEFAULT TRUE")
+        await conn.execute("ALTER TABLE user_localities ADD COLUMN IF NOT EXISTS notify_mobile BOOLEAN NOT NULL DEFAULT FALSE")
         # Zúčtovací období (dle ČEZ) + limit přetoků a upozornění
         for col, ddl in (
             ("billing_start", "DATE"),
@@ -183,23 +186,39 @@ async def unassign_user(loc_id: int, user_id: int) -> None:
         )
 
 
+async def browser_localities_for_user(user_id: int) -> list[int]:
+    """Lokality, kde má uživatel zapnutou notifikaci i kanál prohlížeč."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT locality_id FROM user_localities WHERE user_id=$1 AND notify=true AND notify_browser=true", user_id)
+    return [r["locality_id"] for r in rows]
+
+
 async def users_for_locality(loc_id: int) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT u.id, u.username, u.full_name, ul.notify FROM users u "
+            "SELECT u.id, u.username, u.full_name, ul.notify, ul.notify_email, ul.notify_browser, ul.notify_mobile FROM users u "
             "JOIN user_localities ul ON ul.user_id = u.id WHERE ul.locality_id = $1 ORDER BY u.username",
             loc_id,
         )
     return [dict(r) for r in rows]
 
 
-async def set_user_notify(loc_id: int, user_id: int, notify: bool) -> None:
+async def set_user_notify(loc_id: int, user_id: int, notify: bool,
+                          email: bool | None = None, browser: bool | None = None,
+                          mobile: bool | None = None) -> None:
     pool = await get_pool()
+    sets = ["notify = $3"]
+    args = [loc_id, user_id, bool(notify)]
+    for val, col in ((email, "notify_email"), (browser, "notify_browser"), (mobile, "notify_mobile")):
+        if val is not None:
+            args.append(bool(val))
+            sets.append(f"{col} = ${len(args)}")
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE user_localities SET notify = $3 WHERE locality_id = $1 AND user_id = $2",
-            loc_id, user_id, bool(notify))
+            f"UPDATE user_localities SET {', '.join(sets)} WHERE locality_id = $1 AND user_id = $2", *args)
 
 
 async def notify_users_for_locality(loc_id: int) -> list[dict]:
@@ -207,7 +226,7 @@ async def notify_users_for_locality(loc_id: int) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT u.id, u.username, u.full_name, u.email, u.notify_email, u.notify_browser FROM users u "
+            "SELECT u.id, u.username, u.full_name, u.email, ul.notify_email, ul.notify_browser, ul.notify_mobile FROM users u "
             "JOIN user_localities ul ON ul.user_id = u.id "
             "WHERE ul.locality_id = $1 AND ul.notify = true AND u.active = true ORDER BY u.username",
             loc_id)

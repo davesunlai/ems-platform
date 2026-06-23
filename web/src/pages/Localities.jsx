@@ -320,7 +320,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
 
   const addU = async () => { if (uSel) { await api.assignUser(loc.id, Number(uSel)); setUSel(""); onChange(); } };
   const rmU = async (uid) => { await api.unassignUser(loc.id, uid); onChange(); };
-  const notifU = async (uid, on) => { await api.setUserNotify(loc.id, uid, on); onChange(); };
+  const notifU = async (uid, payload) => { await api.setUserNotify(loc.id, uid, payload); onChange(); };
   const addD = async () => { if (dSel) { await api.assignDevice(loc.id, dSel); setDSel(""); onChange(); } };
   const rmD = async (mid) => { await api.unassignDevice(loc.id, mid); onChange(); };
   const rename = async () => {
@@ -367,12 +367,28 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
           <div style={{ margin: "6px 0", display: "grid", gap: 4 }}>
             {loc.users.length === 0 && <span className="muted">žádní</span>}
             {loc.users.map((u) => (
-              <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+              <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, flexWrap: "wrap" }}>
                 <span style={{ minWidth: 130 }}>{u.full_name || u.username}</span>
                 <label style={{ display: "flex", alignItems: "center", gap: 5, color: u.notify ? "var(--green)" : "var(--muted)", cursor: "pointer" }}>
-                  <input type="checkbox" checked={!!u.notify} onChange={(e) => notifU(u.id, e.target.checked)} />
+                  <input type="checkbox" checked={!!u.notify}
+                    onChange={(e) => notifU(u.id, { notify: e.target.checked, email: u.notify_email, browser: u.notify_browser, mobile: u.notify_mobile })} />
                   🔔 notifikace
                 </label>
+                {u.notify && (
+                  <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+                    <label title="e-mailem" style={{ cursor: "pointer" }}>
+                      <input type="checkbox" checked={u.notify_email !== false}
+                        onChange={(e) => notifU(u.id, { notify: true, email: e.target.checked, browser: u.notify_browser, mobile: u.notify_mobile })} /> ✉️
+                    </label>
+                    <label title="v prohlížeči" style={{ cursor: "pointer" }}>
+                      <input type="checkbox" checked={u.notify_browser !== false}
+                        onChange={(e) => notifU(u.id, { notify: true, email: u.notify_email, browser: e.target.checked, mobile: u.notify_mobile })} /> 🖥️
+                    </label>
+                    <label title="na mobilu (připravujeme)" style={{ opacity: 0.5 }}>
+                      <input type="checkbox" disabled /> 📱
+                    </label>
+                  </span>
+                )}
                 <button className="linkx" onClick={() => rmU(u.id)} style={{ marginLeft: "auto" }}>odebrat ×</button>
               </div>
             ))}
@@ -390,7 +406,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
             <div>⚡ vynucené nabíjení · 🔻 vybíjení do sítě · 🌀 spirála</div>
             <div>🔌 sepnutí / rozepnutí spínaného spotřebiče</div>
             <div>🚧 plánované výpadky (ČEZ) · 🔔 testovací notifikace</div>
-            <div style={{ marginTop: 6 }}><b>Kterým kanálem</b> (volí si každý uživatel sám v zvonečku ⚠ vpravo nahoře):</div>
+            <div style={{ marginTop: 6 }}><b>Kterým kanálem</b> – zaškrtni u každého uživatele (platí pro tuto lokalitu):</div>
             <div>✉️ e-mailem · 🖥️ v prohlížeči (i na jiné kartě, když je appka otevřená) · 📱 na mobilu (připravujeme)</div>
           </div>
         </div>

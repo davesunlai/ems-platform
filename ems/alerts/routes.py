@@ -13,7 +13,12 @@ router = APIRouter(tags=["alerts"])
 @router.get("/api/alerts")
 async def list_alerts(user: dict = Depends(require_permission("read"))):
     alerts = await service.collect_for_user(user)
-    return {"count": len(alerts), "alerts": alerts}
+    from ems.localities import db as loc_db
+    try:
+        browser_locs = await loc_db.browser_localities_for_user(user["id"])
+    except Exception:
+        browser_locs = []
+    return {"count": len(alerts), "alerts": alerts, "browser_localities": browser_locs}
 
 
 @router.post("/api/alerts/test")

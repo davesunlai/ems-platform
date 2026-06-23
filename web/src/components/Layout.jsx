@@ -5,22 +5,21 @@ import { api } from "../api";
 import Tour, { tourSeen } from "./Tour";
 
 function AlertsBell() {
-  const [data, setData] = useState({ count: 0, alerts: [] });
+  const [data, setData] = useState({ count: 0, alerts: [], browser_localities: [] });
   const [open, setOpen] = useState(false);
-  const [pref, setPref] = useState({ notify_email: true, notify_browser: true });
   const [perm, setPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
   const seen = useRef(null);
 
   useEffect(() => {
-    api.me().then((m) => setPref({ notify_email: m.notify_email !== false, notify_browser: m.notify_browser !== false })).catch(() => {});
     const load = () => api.alerts().then((d) => {
       setData(d);
-      // Browser notifikace (jen když je appka otevřená): vypal nové výstrahy.
+      // Browser notifikace: vypal nové výstrahy z lokalit, kde má uživatel zapnutý kanál „prohlížeč".
       const ids = new Set((d.alerts || []).map((a) => a.id));
       if (seen.current === null) { seen.current = ids; return; }   // první načtení neoznamuj
-      if (pref.notify_browser && typeof Notification !== "undefined" && Notification.permission === "granted") {
+      const brLocs = new Set(d.browser_localities || []);
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         for (const a of d.alerts || []) {
-          if (!seen.current.has(a.id)) {
+          if (!seen.current.has(a.id) && brLocs.has(a.locality_id)) {
             try { new Notification(`TERA EMS · ${a.title}`, { body: `${a.locality_name || ""}\n${a.detail || ""}` }); } catch { /* ignore */ }
           }
         }
@@ -28,22 +27,15 @@ function AlertsBell() {
       seen.current = ids;
     }).catch(() => {});
     load(); const t = setInterval(load, 30000); return () => clearInterval(t);
-  }, [pref.notify_browser]);
+  }, []);
 
-  const save = (email, browser) => {
-    setPref({ notify_email: email, notify_browser: browser });
-    api.setNotifyChannels(email, browser).catch(() => {});
-  };
   const enableBrowser = async () => {
     if (typeof Notification === "undefined") return;
-    const p = await Notification.requestPermission();
-    setPerm(p);
-    if (p === "granted") save(pref.notify_email, true);
+    setPerm(await Notification.requestPermission());
   };
 
   const count = data.count || 0;
   const triColor = count > 0 ? "var(--amber, #e0a000)" : "var(--text-muted, #6b6b76)";
-  const ck = { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, cursor: "pointer" };
   return (
     <div style={{ position: "relative" }}>
       <button className="btn" onClick={() => setOpen((o) => !o)} title="Výstrahy"
@@ -73,16 +65,16 @@ function AlertsBell() {
             </div>
           ))}
           <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border, #2a2a35)", background: "var(--panel-2, #16161c)" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--muted)", marginBottom: 6 }}>Jak chci dostávat upozornění</div>
-            <label style={ck}><input type="checkbox" checked={pref.notify_email} onChange={(e) => save(e.target.checked, pref.notify_browser)} /> ✉️ e-mailem</label>
-            <label style={{ ...ck, marginTop: 4 }}><input type="checkbox" checked={pref.notify_browser} onChange={(e) => save(pref.notify_email, e.target.checked)} /> 🖥️ v prohlížeči (když je appka otevřená)</label>
-            <label style={{ ...ck, marginTop: 4, opacity: 0.5 }}><input type="checkbox" disabled /> 📱 na mobilu (push) — připravujeme</label>
-            {pref.notify_browser && perm !== "granted" && perm !== "unsupported" && (
-              <button className="btn" style={{ marginTop: 8, padding: "4px 10px", fontSize: 12 }} onClick={enableBrowser}>
+            {perm !== "granted" && perm !== "unsupported" && (
+              <button className="btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={enableBrowser}>
                 Povolit upozornění v prohlížeči
               </button>
             )}
-            {perm === "denied" && <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>Prohlížeč má upozornění zakázaná — povol je v nastavení webu.</div>}
+            {perm === "granted" && <div className="muted" style={{ fontSize: 11.5 }}>🖥️ Upozornění v prohlížeči povolena.</div>}
+            {perm === "denied" && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>Prohlížeč má upozornění zakázaná — povol je v nastavení webu.</div>}
+            <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+              Kam upozornění chodí (e-mail / prohlížeč) se nastavuje u <b>každé lokality a uživatele</b> (Lokality → uživatel).
+            </div>
             <button className="btn" style={{ marginTop: 10, padding: "4px 10px", fontSize: 12 }}
               onClick={async () => { try { await api.testNotification(); setTimeout(() => api.alerts().then(setData).catch(() => {}), 800); } catch { /* ignore */ } }}>
               🔔 Poslat testovací notifikaci

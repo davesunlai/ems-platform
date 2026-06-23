@@ -62,7 +62,8 @@ async def remove_user(loc_id: int, user_id: int, _: dict = Depends(require_permi
 
 @router.put("/{loc_id}/users/{user_id}/notify")
 async def set_user_notify(loc_id: int, user_id: int, body: dict, _: dict = Depends(require_permission("admin"))):
-    await db.set_user_notify(loc_id, user_id, bool(body.get("notify")))
+    await db.set_user_notify(loc_id, user_id, bool(body.get("notify")),
+                             email=body.get("email"), browser=body.get("browser"), mobile=body.get("mobile"))
     return await _enrich(await db.get(loc_id))
 
 

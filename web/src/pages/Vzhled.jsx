@@ -15,11 +15,9 @@ export default function Vzhled() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [uiStyle, setUiStyle] = useState(currentUiStyle());
-  const [notif, setNotif] = useState({ email: user?.notify_email !== false, browser: user?.notify_browser !== false });
 
   const note = (t) => { setMsg(t); setErr(""); setTimeout(() => setMsg(""), 2500); };
   const pickStyle = (s) => { setUiStyle(s); applyUiStyle(s); note(s === "modern" ? "Moderní styl zapnut." : "Klasický styl zapnut."); };
-  const saveNotif = (email, browser) => { setNotif({ email, browser }); api.setNotifyChannels(email, browser).catch(() => {}); };
 
   // persist active theme + custom + saved list
   const persist = async (theme, customVars, savedList) => {
@@ -76,25 +74,6 @@ export default function Vzhled() {
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="panel" style={{ marginBottom: 18 }}>
-        <h3 style={{ marginTop: 0 }}>Notifikace — kam je chci dostávat</h3>
-        <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
-          Platí pro tvůj účet. Upozornění chodí z lokalit, kde máš zapnutou „notifikaci". (Totéž najdeš i pod zvonečkem ⚠ vpravo nahoře.)
-        </p>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
-          <input type="checkbox" checked={notif.email} onChange={(e) => saveNotif(e.target.checked, notif.browser)} /> ✉️ e-mailem
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer", marginTop: 6 }}>
-          <input type="checkbox" checked={notif.browser} onChange={(e) => saveNotif(notif.email, e.target.checked)} /> 🖥️ v prohlížeči (když je appka otevřená)
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, opacity: 0.5, marginTop: 6 }}>
-          <input type="checkbox" disabled /> 📱 na mobilu (push) — připravujeme
-        </label>
-        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Povolení systémových oken v prohlížeči udělíš tlačítkem „Povolit upozornění v prohlížeči" pod zvonečkem ⚠.
-        </p>
       </div>
 
       <div className="panel" style={{ marginBottom: 18 }}>
