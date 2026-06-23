@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.43.7 — Audit povelů: (1) řádek jde ROZKLIKNOUT (▸) – ukáže důvod rozhodnutí + kompletní parametry a výsledek (JSON). (2) U spotřebičů se do auditu ukládá i DŮVOD (reason) a NÁZEV – sloupec „Co se stalo / důvod" tak rovnou píše třeba „mimo denní okno 06:30–13:29". (3) Sloupec Modul ukazuje NÁZEV (z params.name nebo z mapy modulů/výstupů) + pod ním device ID. Hledání funguje i přes název a důvod.
+
 ## v0.43.6 — (1) OPRAVA: kolektor dostal v docker-compose eWeLink proměnné (EMS_EWELINK_*) — dosud je měl jen api, proto spínání spotřebičů hlásilo „eWeLink není nakonfigurován". Po nasazení s `up -d collector` engine ohřev sám vypne. (2) Audit povelů: fulltextové hledání (uživatel/modul/akce/parametry/chyba) + stránkování (50/stránku, Novější/Starší).
 
 ## v0.43.5 — Audit povelů teď u neúspěšného povelu ukazuje DŮVOD chyby (z result.error) přímo pod „chyba" — např. text chyby z eWeLink. Pomáhá poznat, proč přepnutí spotřebiče selhalo (offline / autorizace / API).

@@ -219,7 +219,7 @@ async def evaluate_outputs() -> None:
             res = await _actuate(o, desired)
             await out_db.set_state(o["id"], desired, f"{reason} → {'sepnuto' if desired else 'rozepnuto'}")
             await control_db.record("output:auto", o["target"], "switch",
-                                    {"on": desired, "trigger": o["trigger"]}, True, res)
+                                    {"on": desired, "trigger": o["trigger"], "name": o["name"], "reason": reason}, True, res)
             try:
                 from ems.alerts import db as alerts_db
                 await alerts_db.record_event(
@@ -232,6 +232,6 @@ async def evaluate_outputs() -> None:
             logger.info("Výstup [%s] → %s (%s)", o["name"], "ON" if desired else "OFF", reason)
         except Exception as exc:
             await control_db.record("output:auto", o["target"], "switch",
-                                    {"on": desired}, False, {"error": str(exc)})
+                                    {"on": desired, "trigger": o["trigger"], "name": o["name"], "reason": reason}, False, {"error": str(exc)})
             await out_db.set_decision(o["id"], f"přepnutí selhalo: {exc}")
             logger.warning("Výstup [%s] přepnutí selhalo: %s", o["name"], exc)

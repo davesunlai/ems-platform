@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 
@@ -565,48 +565,87 @@ function HelpPanel() {
 const AUDIT_PAGE = 50;
 function AuditPanel() {
   const [rows, setRows] = useState([]);
+  const [names, setNames] = useState({});
+  const [open, setOpen] = useState(() => new Set());
   const [q, setQ] = useState("");
   const [dq, setDq] = useState("");      // debounced dotaz
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    Promise.all([api.controlModules().catch(() => []), api.listOutputs().catch(() => [])]).then(([ms, outs]) => {
+      const map = {};
+      for (const m of ms || []) map[m.id] = m.name || m.label || m.id;
+      for (const o of outs || []) if (o.target) map[o.target] = o.name;
+      setNames(map);
+    });
+  }, []);
 
   useEffect(() => { const t = setTimeout(() => setDq(q), 300); return () => clearTimeout(t); }, [q]);
   useEffect(() => { setPage(0); }, [dq]);
   useEffect(() => {
     let alive = true; setLoading(true);
     api.controlAudit(AUDIT_PAGE, page * AUDIT_PAGE, dq)
-      .then((r) => { if (alive) setRows(r || []); })
+      .then((r) => { if (alive) { setRows(r || []); setOpen(new Set()); } })
       .catch(() => {})
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [page, dq]);
 
+  const toggle = (id) => setOpen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const inp = { padding: "6px 10px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", fontSize: 13 };
 
   return (
     <div className="panel">
       <div className="row" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <h3 style={{ margin: 0 }}>Audit povelů</h3>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 hledat (uživatel, modul, akce, chyba…)"
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 hledat (název, modul, akce, důvod, chyba…)"
           style={{ ...inp, flex: "1 1 240px", maxWidth: 360 }} />
         {q && <button className="btn" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => setQ("")}>×</button>}
       </div>
       <table style={{ marginTop: 12 }}>
-        <thead><tr><th>Čas</th><th>Uživatel</th><th>Modul</th><th>Akce</th><th>Parametry</th><th>Výsledek</th></tr></thead>
+        <thead><tr><th style={{ width: 18 }}></th><th>Čas</th><th>Uživatel</th><th>Modul</th><th>Akce</th><th>Co se stalo / důvod</th><th>Výsledek</th></tr></thead>
         <tbody>
-          {rows.map((a) => (
-            <tr key={a.id}>
-              <td className="muted" style={{ fontSize: 12 }}>{new Date(a.time).toLocaleString("cs-CZ")}</td>
-              <td>{a.username}</td>
-              <td className="role">{a.module_id}</td>
-              <td>{a.action}</td>
-              <td className="muted" style={{ fontSize: 12, fontFamily: "var(--mono)" }}>{JSON.stringify(a.params)}</td>
-              <td><span className={a.ok ? "badge-on" : "badge-off"}>{a.ok ? "OK" : "chyba"}</span>
-                {!a.ok && a.result?.error && <div style={{ fontSize: 11, marginTop: 3, color: "#e06c75" }}>{a.result.error}</div>}
-              </td>
-            </tr>
-          ))}
-          {rows.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: "12px 0" }}>{loading ? "Načítám…" : (dq ? "Nic nenalezeno." : "Zatím žádné povely.")}</td></tr>}
+          {rows.map((a) => {
+            const nm = a.params?.name || names[a.module_id];
+            const reason = a.params?.reason;
+            const onOff = a.params?.on === true ? "zapnout" : a.params?.on === false ? "vypnout" : null;
+            const isOpen = open.has(a.id);
+            return (
+              <Fragment key={a.id}>
+                <tr onClick={() => toggle(a.id)} style={{ cursor: "pointer" }}>
+                  <td className="muted" style={{ textAlign: "center" }}>{isOpen ? "▾" : "▸"}</td>
+                  <td className="muted" style={{ fontSize: 12 }}>{new Date(a.time).toLocaleString("cs-CZ")}</td>
+                  <td>{a.username}</td>
+                  <td>{nm ? <><div style={{ fontWeight: 600 }}>{nm}</div><div className="role" style={{ fontSize: 11 }}>{a.module_id}</div></> : <span className="role">{a.module_id}</span>}</td>
+                  <td>{a.action}{onOff ? ` · ${onOff}` : ""}</td>
+                  <td style={{ fontSize: 12.5, maxWidth: 320 }}>{reason || <span className="muted" style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{JSON.stringify(a.params)}</span>}</td>
+                  <td><span className={a.ok ? "badge-on" : "badge-off"}>{a.ok ? "OK" : "chyba"}</span>
+                    {!a.ok && a.result?.error && <div style={{ fontSize: 11, marginTop: 3, color: "#e06c75" }}>{a.result.error}</div>}
+                  </td>
+                </tr>
+                {isOpen && (
+                  <tr>
+                    <td></td>
+                    <td colSpan={6} style={{ background: "var(--bg-2)", borderRadius: 8 }}>
+                      <div style={{ padding: "8px 4px", display: "grid", gap: 8 }}>
+                        {reason && <div><b>Důvod:</b> {reason}</div>}
+                        <div>
+                          <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 2 }}>Parametry</div>
+                          <pre style={{ margin: 0, fontSize: 12, fontFamily: "var(--mono)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{JSON.stringify(a.params, null, 2)}</pre>
+                        </div>
+                        <div>
+                          <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 2 }}>Výsledek</div>
+                          <pre style={{ margin: 0, fontSize: 12, fontFamily: "var(--mono)", whiteSpace: "pre-wrap", wordBreak: "break-word", color: a.ok ? "var(--fg)" : "#e06c75" }}>{JSON.stringify(a.result, null, 2)}</pre>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+          {rows.length === 0 && <tr><td colSpan={7} className="muted" style={{ padding: "12px 0" }}>{loading ? "Načítám…" : (dq ? "Nic nenalezeno." : "Zatím žádné povely.")}</td></tr>}
         </tbody>
       </table>
       <div className="row" style={{ alignItems: "center", gap: 10, marginTop: 10 }}>
