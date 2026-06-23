@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.43.9 — Hlídač sítě (grid_guard) zpřehledněn: ve formuláři spotřebiče popisek „Hlídač sítě … prázdné = vypnuto", placeholder „vyp". Úprava/uložení výstupu nově ruší případný zámek off_lock_until (takže vyprázdnění hlídače = okamžité odemčení, nečeká se na vypršení). Hlídač je aktivní jen když je vyplněné kW i min > 0.
+
 ## v0.43.8 — Audit povelů u spotřebičů zaznamenává NAMĚŘENÉ HODNOTY v okamžiku rozhodnutí (params.values) — u SoC triggeru SoC %, prahy sepni/rozepni, čas, denní okno; u přebytku export kW, práh, SoC, spot. Rozklik řádku má novou sekci „Naměřené hodnoty…". Reason u SoC hystereze je teď srozumitelný: „SoC 94 % ≤ 95 % → vypnuto" / „… v pásmu … → beze změny".
 
 ## v0.43.7 — Audit povelů: (1) řádek jde ROZKLIKNOUT (▸) – ukáže důvod rozhodnutí + kompletní parametry a výsledek (JSON). (2) U spotřebičů se do auditu ukládá i DŮVOD (reason) a NÁZEV – sloupec „Co se stalo / důvod" tak rovnou píše třeba „mimo denní okno 06:30–13:29". (3) Sloupec Modul ukazuje NÁZEV (z params.name nebo z mapy modulů/výstupů) + pod ním device ID. Hledání funguje i přes název a důvod.

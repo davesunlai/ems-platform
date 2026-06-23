@@ -82,6 +82,7 @@ async def update(out_id: int, patch: dict) -> dict | None:
             args.append(patch[k]); sets.append(f"{k} = ${len(args)}")
     if "params" in patch:
         args.append(json.dumps(patch["params"])); sets.append(f"params = ${len(args)}::jsonb")
+        sets.append("off_lock_until = NULL")   # úprava výstupu = zruš případný zámek hlídače sítě
     if not sets:
         return await get(out_id)
     args.append(out_id)

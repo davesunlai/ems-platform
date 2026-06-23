@@ -131,10 +131,10 @@ function OutputsPanel({ locId }) {
                     <input type="time" value={f.day_end} onChange={(e) => setF({ ...f, day_end: e.target.value })} style={{ ...inp, width: 110 }} />
                   </span>
                 </div>
-                <div><label style={{ fontSize: 12, display: "block" }}>Vypni, když import ze sítě &gt; (kW) déle než (min)</label>
+                <div><label style={{ fontSize: 12, display: "block" }}>Hlídač sítě – vypni, když import ze sítě &gt; (kW) déle než (min) <span className="muted">· prázdné = vypnuto</span></label>
                   <span style={{ display: "inline-flex", gap: 4 }}>
-                    <input value={f.grid_guard_kw} placeholder="0.5" onChange={(e) => setF({ ...f, grid_guard_kw: e.target.value })} style={{ ...inp, width: 64 }} />
-                    <input value={f.grid_guard_min} placeholder="15" onChange={(e) => setF({ ...f, grid_guard_min: e.target.value })} style={{ ...inp, width: 64 }} />
+                    <input value={f.grid_guard_kw} placeholder="vyp" onChange={(e) => setF({ ...f, grid_guard_kw: e.target.value })} style={{ ...inp, width: 64 }} />
+                    <input value={f.grid_guard_min} placeholder="vyp" onChange={(e) => setF({ ...f, grid_guard_min: e.target.value })} style={{ ...inp, width: 64 }} />
                   </span>
                 </div>
               </>
