@@ -94,8 +94,8 @@ async def set_mode(module_id: str, body: BatteryModeCommand,
 
 
 @router.get("/audit")
-async def audit(_: dict = Depends(require_permission("control"))):
-    return await db.list_recent()
+async def audit(limit: int = 50, offset: int = 0, q: str = "", _: dict = Depends(require_permission("control"))):
+    return await db.list_recent(limit=limit, offset=offset, q=q)
 
 
 @router.get("/states")

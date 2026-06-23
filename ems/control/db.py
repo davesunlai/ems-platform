@@ -37,13 +37,20 @@ async def record(username, module_id, action, params, ok, result) -> None:
         )
 
 
-async def list_recent(limit: int = 50) -> list[dict]:
+async def list_recent(limit: int = 50, offset: int = 0, q: str = "") -> list[dict]:
     pool = await get_pool()
+    q = (q or "").strip()
+    where = ""
+    args: list = [limit, offset]
+    if q:
+        args.append(f"%{q}%")
+        where = ("WHERE (username ILIKE $3 OR module_id ILIKE $3 OR action ILIKE $3 "
+                 "OR params::text ILIKE $3 OR result::text ILIKE $3) ")
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id, time, username, module_id, action, params, ok, result "
-            "FROM command_audit ORDER BY time DESC LIMIT $1",
-            limit,
+            f"FROM command_audit {where}ORDER BY time DESC LIMIT $1 OFFSET $2",
+            *args,
         )
     out = []
     for r in rows:

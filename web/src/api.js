@@ -61,7 +61,7 @@ export const api = {
   testOutput: (id, on) => request(`/api/outputs/${id}/test`, { method: "POST", body: { on } }),
   getMode: (id) => request(`/api/control/${encodeURIComponent(id)}/mode`),
   setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
-  controlAudit: () => request("/api/control/audit"),
+  controlAudit: (limit = 50, offset = 0, q = "") => request(`/api/control/audit?limit=${limit}&offset=${offset}&q=${encodeURIComponent(q)}`),
   controlStates: (ids) => request(`/api/control/states?ids=${encodeURIComponent(ids)}`),
   getPlanner: (id) => request(`/api/planner/${id}`),
   setPlannerConfig: (id, cfg) => request(`/api/planner/${id}/config`, { method: "PUT", body: cfg }),

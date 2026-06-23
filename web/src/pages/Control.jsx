@@ -562,14 +562,68 @@ function HelpPanel() {
   );
 }
 
+const AUDIT_PAGE = 50;
+function AuditPanel() {
+  const [rows, setRows] = useState([]);
+  const [q, setQ] = useState("");
+  const [dq, setDq] = useState("");      // debounced dotaz
+  const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { const t = setTimeout(() => setDq(q), 300); return () => clearTimeout(t); }, [q]);
+  useEffect(() => { setPage(0); }, [dq]);
+  useEffect(() => {
+    let alive = true; setLoading(true);
+    api.controlAudit(AUDIT_PAGE, page * AUDIT_PAGE, dq)
+      .then((r) => { if (alive) setRows(r || []); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [page, dq]);
+
+  const inp = { padding: "6px 10px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", fontSize: 13 };
+
+  return (
+    <div className="panel">
+      <div className="row" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <h3 style={{ margin: 0 }}>Audit povelů</h3>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 hledat (uživatel, modul, akce, chyba…)"
+          style={{ ...inp, flex: "1 1 240px", maxWidth: 360 }} />
+        {q && <button className="btn" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => setQ("")}>×</button>}
+      </div>
+      <table style={{ marginTop: 12 }}>
+        <thead><tr><th>Čas</th><th>Uživatel</th><th>Modul</th><th>Akce</th><th>Parametry</th><th>Výsledek</th></tr></thead>
+        <tbody>
+          {rows.map((a) => (
+            <tr key={a.id}>
+              <td className="muted" style={{ fontSize: 12 }}>{new Date(a.time).toLocaleString("cs-CZ")}</td>
+              <td>{a.username}</td>
+              <td className="role">{a.module_id}</td>
+              <td>{a.action}</td>
+              <td className="muted" style={{ fontSize: 12, fontFamily: "var(--mono)" }}>{JSON.stringify(a.params)}</td>
+              <td><span className={a.ok ? "badge-on" : "badge-off"}>{a.ok ? "OK" : "chyba"}</span>
+                {!a.ok && a.result?.error && <div style={{ fontSize: 11, marginTop: 3, color: "#e06c75" }}>{a.result.error}</div>}
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: "12px 0" }}>{loading ? "Načítám…" : (dq ? "Nic nenalezeno." : "Zatím žádné povely.")}</td></tr>}
+        </tbody>
+      </table>
+      <div className="row" style={{ alignItems: "center", gap: 10, marginTop: 10 }}>
+        <button className="btn" style={{ padding: "5px 12px", fontSize: 12 }} disabled={page === 0 || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}>← Novější</button>
+        <span className="muted" style={{ fontSize: 12 }}>strana {page + 1}</span>
+        <button className="btn" style={{ padding: "5px 12px", fontSize: 12 }} disabled={rows.length < AUDIT_PAGE || loading} onClick={() => setPage((p) => p + 1)}>Starší →</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Control() {
   const [mods, setMods] = useState(null);
-  const [audit, setAudit] = useState([]);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     api.controlModules().then(setMods).catch((e) => setErr(e.message));
-    api.controlAudit().then(setAudit).catch(() => {});
   }, []);
 
   if (err) return <main><div className="panel"><p className="error">{err}</p></div></main>;
@@ -596,26 +650,7 @@ export default function Control() {
       {mods.length === 0 && <p className="muted">Žádný řiditelný modul.</p>}
       {groups.map((g, i) => <LocalitySection key={i} locId={g.id} locName={g.name} mods={g.mods} />)}
 
-      <div className="panel">
-        <h3>Audit povelů</h3>
-        <table>
-          <thead><tr><th>Čas</th><th>Uživatel</th><th>Modul</th><th>Akce</th><th>Parametry</th><th>Výsledek</th></tr></thead>
-          <tbody>
-            {audit.map((a) => (
-              <tr key={a.id}>
-                <td className="muted" style={{ fontSize: 12 }}>{new Date(a.time).toLocaleString("cs-CZ")}</td>
-                <td>{a.username}</td>
-                <td className="role">{a.module_id}</td>
-                <td>{a.action}</td>
-                <td className="muted" style={{ fontSize: 12, fontFamily: "var(--mono)" }}>{JSON.stringify(a.params)}</td>
-                <td><span className={a.ok ? "badge-on" : "badge-off"}>{a.ok ? "OK" : "chyba"}</span>
-                  {!a.ok && a.result?.error && <div style={{ fontSize: 11, marginTop: 3, color: "#e06c75" }}>{a.result.error}</div>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <AuditPanel />
     </main>
   );
 }
