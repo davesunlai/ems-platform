@@ -137,8 +137,8 @@ async def process_queue(active: dict) -> None:
                                                username=c.get("username"))
                 except Exception:
                     pass
-                # notifikace operace (jen spuštění režimu, ne stop)
-                if c["action"] in ("force_charge", "force_discharge", "spiral"):
+                # notifikace operace (spuštění režimu i návrat do Self-Use)
+                if c["action"] in ("force_charge", "force_discharge", "spiral", "stop"):
                     try:
                         from ems.alerts import db as alerts_db
                         loc_id = next((d.get("locality_id") for d in await list_devices()
@@ -146,10 +146,14 @@ async def process_queue(active: dict) -> None:
                         p = c["params"] or {}
                         pw = p.get("power")
                         label = {"force_charge": "Vynucené nabíjení", "force_discharge": "Vybíjení do sítě",
-                                 "spiral": "Spirála"}[c["action"]]
-                        detail = (f"{pw/100:.1f} kW" if pw is not None else "") + \
-                                 (f" · {p.get('source')}" if p.get("source") and p.get("source") != "manual" else " · ručně")
-                        await alerts_db.record_event(loc_id, c["action"], f"{label} – {c['module_id']}", detail)
+                                 "spiral": "Spirála", "stop": "Návrat do Self-Use (stop)"}[c["action"]]
+                        if c["action"] == "stop":
+                            detail = "řízení zastaveno · " + (p.get("source") or "ručně")
+                        else:
+                            detail = (f"{pw/100:.1f} kW" if pw is not None else "") + \
+                                     (f" · {p.get('source')}" if p.get("source") and p.get("source") != "manual" else " · ručně")
+                        kind = "stop" if c["action"] == "stop" else c["action"]
+                        await alerts_db.record_event(loc_id, kind, f"{label} – {c['module_id']}", detail)
                         await notify_dispatch.notify_new_alerts()  # rozešli hned, nečekej na tick
                     except Exception:
                         pass

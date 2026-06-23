@@ -65,4 +65,17 @@ export function applyInitial() {
     const raw = localStorage.getItem("tera_theme");
     if (raw) { const { theme, custom, saved } = JSON.parse(raw); applyTheme(theme, custom, saved); }
   } catch { /* ignore */ }
+  try { applyUiStyle(localStorage.getItem("tera_ui_style") || "classic"); } catch { /* ignore */ }
+}
+
+// Styl rozhraní (nezávislý na barevném motivu): "classic" | "modern".
+// Aplikuje se jako třída na <html>, takže přepnutí je okamžité bez rebuildu.
+export function applyUiStyle(style) {
+  const root = document.documentElement;
+  root.classList.toggle("ui-modern", style === "modern");
+  try { localStorage.setItem("tera_ui_style", style); } catch { /* ignore */ }
+}
+
+export function currentUiStyle() {
+  try { return localStorage.getItem("tera_ui_style") || "classic"; } catch { return "classic"; }
 }

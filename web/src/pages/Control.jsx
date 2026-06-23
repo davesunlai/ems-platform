@@ -209,6 +209,11 @@ function SolisControl({ mod }) {
   const [socForce, setSocForce] = useState("");
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [curState, setCurState] = useState(null);
+
+  const refreshState = () => api.controlStates(mod.id)
+    .then((r) => setCurState((r.states || {})[mod.id] || null)).catch(() => {});
+  useEffect(() => { refreshState(); const t = setInterval(refreshState, 10000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [mod.id]);
 
   const ask = (msg) => window.confirm(msg);
 
@@ -259,7 +264,22 @@ function SolisControl({ mod }) {
 
   return (
     <div className="panel" style={{ marginBottom: 14 }}>
-      <h3 style={{ marginBottom: 2 }}>{mod.id} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· Solis</span></h3>
+      <h3 style={{ marginBottom: 2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        {mod.id} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· Solis</span>
+        {(() => {
+          const B = {
+            idle: { t: "Self-Use", bg: "var(--blue)" },
+            force_charge: { t: "⚡ Nabíjení", bg: "var(--green)" },
+            force_discharge: { t: "🔻 Vybíjení do sítě", bg: "var(--amber)" },
+            spiral: { t: "🌀 Spirála", bg: "#a371f7" },
+          };
+          const a = curState?.action || "idle";
+          const b = B[a] || { t: a, bg: "var(--muted)" };
+          const src = curState?.source === "planner" ? " · plánovač" : curState?.source === "manual" ? " · ručně" : "";
+          return <span style={{ padding: "3px 12px", borderRadius: 999, fontSize: 12.5, fontWeight: 700,
+            color: "#0b0e13", background: b.bg, whiteSpace: "nowrap" }}>{b.t}{src}</span>;
+        })()}
+      </h3>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
         ⚠️ Reálně zapisuje do měniče. Výkon zadáváš v <b>kW pro celé úložiště</b> (obě baterie dohromady). Vybíjení jde do sítě jen nad rámec spotřeby domu. (nabíjení reg. 43136, vybíjení 43129; jednotka 10 W)
       </p>
