@@ -63,6 +63,7 @@ export const api = {
   getMode: (id) => request(`/api/control/${encodeURIComponent(id)}/mode`),
   setBatteryMode: (id, body) => request(`/api/control/${encodeURIComponent(id)}/battery-mode`, { method: "POST", body }),
   getGlobalTheme: () => request("/api/settings/global-theme"),
+  spotPlan: () => request("/api/control/spot-plan"),
   setGlobalTheme: (body) => request("/api/settings/global-theme", { method: "PUT", body }),
 
   controlAudit: (limit = 50, offset = 0, q = "", reads = 0) => request(`/api/control/audit?limit=${limit}&offset=${offset}&q=${encodeURIComponent(q)}&reads=${reads ? 1 : 0}`),

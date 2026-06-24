@@ -84,6 +84,7 @@ const CONTROL_ACT = {
 function ControlBanners({ deviceIds, localityId }) {
   const [states, setStates] = useState({});
   const [outputs, setOutputs] = useState([]);
+  const [plans, setPlans] = useState([]);
   const key = deviceIds.join(",");
   useEffect(() => {
     if (!deviceIds.length && !localityId) return;
@@ -91,19 +92,46 @@ function ControlBanners({ deviceIds, localityId }) {
     const load = () => {
       if (deviceIds.length) api.controlStates(key).then((r) => alive && setStates(r.states || {})).catch(() => {});
       api.listOutputs().then((list) => alive && setOutputs(list || [])).catch(() => {});
+      api.spotPlan().then((r) => alive && setPlans(r.plans || [])).catch(() => {});
     };
     load();
     const t = setInterval(load, 5000);
     return () => { alive = false; clearInterval(t); };
   }, [key, localityId]);
 
+  const idset = new Set(deviceIds);
+  const myPlans = (plans || []).filter((p) => idset.has(p.module_id) && (p.discharge?.length || p.charge?.length || p.precharge));
   const items = deviceIds.map((id) => ({ id, st: states[id] }))
     .filter(({ st }) => st && st.action && st.action !== "idle");
   const onOutputs = (outputs || []).filter((o) => o.is_on && (localityId == null || o.locality_id === localityId));
-  if (!items.length && !onOutputs.length) return null;
+  if (!items.length && !onOutputs.length && !myPlans.length) return null;
+
+  const fmtT = (iso) => {
+    const d = new Date(iso); const now = new Date();
+    const hm = d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+    const sameDay = d.toDateString() === now.toDateString();
+    const tom = new Date(now); tom.setDate(now.getDate() + 1);
+    const isTom = d.toDateString() === tom.toDateString();
+    return sameDay ? hm : (isTom ? `zítra ${hm}` : `${d.toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit" })} ${hm}`);
+  };
 
   return (
     <div style={{ margin: "0 0 12px" }}>
+      {myPlans.map((p) => (
+        <div key={`plan${p.module_id}`} style={{ marginBottom: 6, padding: "8px 12px", borderRadius: 10,
+          border: "1px dashed var(--border)", background: "color-mix(in srgb, var(--blue) 8%, transparent)", fontSize: 12.5 }}>
+          <span style={{ fontWeight: 700 }}>📅 Spotový plán</span> <span className="muted">({p.module_id})</span>
+          {p.discharge?.length > 0 && (
+            <div style={{ marginTop: 3 }}>🔻 Vybíjení do sítě: {p.discharge.slice(0, 3).map((w, i) =>
+              <span key={i}>{i > 0 ? " · " : " "}{fmtT(w.from)}–{fmtT(w.to)} <span className="muted">(~{w.price} Kč/MWh)</span></span>)}</div>
+          )}
+          {p.precharge && <div style={{ marginTop: 2 }}>⚡ Předchystání ~od {fmtT(p.precharge.at)} <span className="muted">(nejlevnější {p.precharge.price} Kč/MWh)</span></div>}
+          {p.charge?.length > 0 && (
+            <div style={{ marginTop: 2 }}>🔋 Nabíjení (levný spot): {p.charge.slice(0, 3).map((w, i) =>
+              <span key={i}>{i > 0 ? " · " : " "}{fmtT(w.from)}–{fmtT(w.to)}</span>)}</div>
+          )}
+        </div>
+      ))}
       {items.map(({ id, st }) => {
         const act = CONTROL_ACT[st.action] || { label: st.action, color: "#58a6ff", icon: "⚡" };
         const since = st.since ? new Date(st.since) : null;

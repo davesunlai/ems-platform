@@ -93,6 +93,54 @@ async def set_mode(module_id: str, body: BatteryModeCommand,
     return result
 
 
+@router.get("/spot-plan")
+async def spot_plan(_: dict = Depends(require_permission("read"))):
+    """Předpověď, kdy spotová pravidla zaberou (z budoucích spotových slotů + pravidel).
+    Počítá se on-demand → reflektuje uložení pravidla i nové ceny."""
+    from datetime import datetime, timezone, timedelta
+    from ems.market import db as market_db
+    rules = await db.list_spot_rules_enabled()
+    if not rules:
+        return {"plans": []}
+    slots = await market_db.future_slots(36)
+    now = datetime.now(timezone.utc)
+    slots = [s for s in slots if s["slot"] >= now - timedelta(minutes=15)]
+
+    def windows(pred):
+        wins, cur = [], []
+        for s in slots:
+            if pred(s["price"]):
+                if not cur or (s["slot"] - cur[-1]["slot"]).total_seconds() <= 16 * 60:
+                    cur.append(s)
+                else:
+                    wins.append(cur); cur = [s]
+            elif cur:
+                wins.append(cur); cur = []
+        if cur:
+            wins.append(cur)
+        return wins
+
+    def fmt(w):
+        return {"from": w[0]["slot"].isoformat(),
+                "to": (w[-1]["slot"] + timedelta(minutes=15)).isoformat(),
+                "price": round(sum(x["price"] for x in w) / len(w))}
+
+    plans = []
+    for r in rules:
+        dis = [fmt(w) for w in windows(lambda p: p >= float(r["price_on"]))][:4]
+        chg = [fmt(w) for w in windows(lambda p: p <= float(r["charge_price_on"]))][:4] if r.get("charge_enabled") else []
+        pre = None
+        if r.get("precharge_enabled") and dis:
+            t_high = datetime.fromisoformat(dis[0]["from"])
+            L = float(r.get("precharge_hours") or 3)
+            pre_slots = [s for s in slots if (t_high - timedelta(hours=L)) <= s["slot"] < t_high]
+            if pre_slots:
+                best = min(pre_slots, key=lambda s: s["price"])
+                pre = {"at": best["slot"].isoformat(), "price": round(best["price"])}
+        plans.append({"module_id": r["module_id"], "discharge": dis, "charge": chg, "precharge": pre})
+    return {"plans": plans}
+
+
 @router.get("/spot-rule/{module_id}")
 async def get_spot_rule(module_id: str, _: dict = Depends(require_permission("control"))):
     return await db.get_spot_rule(module_id)

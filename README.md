@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.47.1 — Spotový PLÁN na dashboardu: v pruhu řízení (pod názvem lokality) se u zapnutých spotových pravidel vypisuje předpověď — 🔻 Vybíjení do sítě od–do (s průměrnou cenou), ⚡ Předchystání (nejlevnější slot) a 🔋 Nabíjení (levný spot). Endpoint /api/control/spot-plan počítá okna z budoucích 15min slotů + pravidel on-demand → reflektuje uložení pravidla i nové ceny. Obnova á 5 s.
+
 ## v0.47.0 — (1) Řízení (Solis): sekce vizuálně oddělené do pod-karet — „🎛 Ruční řízení", „⚙️ Limity a režim", „📈 Spotová automatika". (2) Globální vzhled: admin může ve Vzhledu nastavit aktuální motiv + styl jako VÝCHOZÍ pro všechny uživatele bez vlastního vzhledu (app_settings, /api/settings/global-theme; PUT jen admin). Uživatel bez vlastního motivu ho zdědí (neuloží se mu lokálně); kdo si zvolí vlastní, má přednost.
 
 ## v0.46.1 — U podmínek na výkon ze sítě (zapínací i hlídač/vypínací) lze nově zvolit OPERÁTOR ≤ / ≥ (rozbalovátko). Zapínací default ≤, hlídač default ≥ (= dosavadní chování). Engine vybírá podle operátoru _grid_export_sustained (≤) nebo _grid_import_sustained (≥). Důvod/hodnoty v auditu ukazují zvolený operátor.
