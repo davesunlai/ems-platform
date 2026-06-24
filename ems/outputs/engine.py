@@ -74,7 +74,7 @@ async def _loc_telemetry(locality_id) -> dict:
             "WHERE device_id=ANY($1::text[]) AND metric='battery_soc' AND time>now()-interval '10 minutes' "
             "ORDER BY device_id, time DESC) t", ids)
     return {"pv_kw": float(pv or 0) / 1000.0,
-            "export_kw": max(0.0, float(grid or 0) / 1000.0),  # kladné grid_power = export
+            "export_kw": max(0.0, -float(grid or 0) / 1000.0),  # ZÁPORNÉ grid_power = export (do sítě)
             "soc": float(soc) if soc is not None else None}
 
 
@@ -106,9 +106,8 @@ async def _actuate(o: dict, desired: bool) -> dict:
 async def _grid_import_sustained(locality_id, kw: float, minutes: float) -> bool:
     """True, pokud po CELÝCH posledních `minutes` byl výkon ze sítě ≥ práh `kw`.
 
-    Práh `kw` je v konvenci dashboardu: + odběr ze sítě (nákup), − dodávka do sítě.
-    Interně grid_power: kladné = export. „Po celou dobu ze sítě ≥ kw" znamená,
-    že i nejlepší okamžik (max grid_power = max export) je pod −kw·1000 W.
+    Práh `kw` i grid_power v konvenci dashboardu: + odběr ze sítě, − dodávka do sítě.
+    „Po celou dobu ≥ kw" = i nejhorší okamžik (min grid_power) je ≥ kw·1000 W.
     """
     ids = await _loc_device_ids(locality_id)
     if not ids:
@@ -116,7 +115,7 @@ async def _grid_import_sustained(locality_id, kw: float, minutes: float) -> bool
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT max(value) AS worst, min(time) AS first, count(*) AS n FROM samples "
+            "SELECT min(value) AS worst, min(time) AS first, count(*) AS n FROM samples "
             "WHERE device_id=ANY($1::text[]) AND metric='grid_power' "
             f"AND time > now() - interval '{int(minutes)} minutes'", ids)
     if not row or not row["n"] or row["worst"] is None:
@@ -125,16 +124,15 @@ async def _grid_import_sustained(locality_id, kw: float, minutes: float) -> bool
     span = (datetime.now(timezone.utc) - row["first"]).total_seconds() / 60.0
     if span < minutes * 0.8:
         return False
-    # kladné grid_power = export → import je záporné; "po celou dobu import > kw"
-    # = i ten nejmenší import (nejvyšší grid_power) je pod -kw*1000 W
-    return float(row["worst"]) <= -kw * 1000.0
+    # + odběr / − dodávka. „Po celou dobu odběr ≥ kw" = i nejmenší okamžik (min grid_power) ≥ kw·1000 W
+    return float(row["worst"]) >= kw * 1000.0
 
 
 async def _grid_export_sustained(locality_id, kw: float, minutes: float) -> bool:
-    """True, pokud po CELÝCH posledních `minutes` byl výkon ze sítě ≤ práh `kw` (dost přebytku).
+    """True, pokud po CELÝCH posledních `minutes` byl výkon ze sítě ≤ práh `kw` (dost dodávky).
 
-    Práh `kw` v konvenci dashboardu (+ odběr, − dodávka). „Po celou dobu ≤ kw" =
-    i nejhorší okamžik (nejmenší export / největší odběr = min grid_power) je nad −kw·1000 W.
+    Práh `kw` i grid_power v konvenci dashboardu: + odběr, − dodávka.
+    „Po celou dobu ≤ kw" = i nejhorší okamžik (max grid_power) je ≤ kw·1000 W.
     """
     ids = await _loc_device_ids(locality_id)
     if not ids:
@@ -142,7 +140,7 @@ async def _grid_export_sustained(locality_id, kw: float, minutes: float) -> bool
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT min(value) AS best, min(time) AS first, count(*) AS n FROM samples "
+            "SELECT max(value) AS best, min(time) AS first, count(*) AS n FROM samples "
             "WHERE device_id=ANY($1::text[]) AND metric='grid_power' "
             f"AND time > now() - interval '{int(minutes)} minutes'", ids)
     if not row or not row["n"] or row["best"] is None:
@@ -150,7 +148,7 @@ async def _grid_export_sustained(locality_id, kw: float, minutes: float) -> bool
     span = (datetime.now(timezone.utc) - row["first"]).total_seconds() / 60.0
     if span < minutes * 0.8:
         return False
-    return float(row["best"]) >= -kw * 1000.0
+    return float(row["best"]) <= kw * 1000.0
 
 
 async def _decide_soc(o: dict, soc: float) -> tuple[bool, object, str, dict]:
