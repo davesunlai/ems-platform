@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api } from "../api";
 import Tour, { tourSeen } from "./Tour";
+import { hasLocalTheme, applyGlobalTheme } from "../theme";
 
 function AlertsBell() {
   const [data, setData] = useState({ count: 0, alerts: [], browser_localities: [] });
@@ -103,6 +104,10 @@ export default function Layout() {
   const [tour, setTour] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => { if (!tourSeen()) setTour(true); }, []);
+  // Uživatel bez vlastního vzhledu zdědí globální (nastavený adminem).
+  useEffect(() => {
+    if (!hasLocalTheme()) api.getGlobalTheme().then(applyGlobalTheme).catch(() => {});
+  }, []);
   const close = () => setMenuOpen(false);
   return (
     <>

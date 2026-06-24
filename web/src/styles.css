@@ -245,3 +245,8 @@ body {
 }
 .ui-modern .badge-on { background: color-mix(in srgb, var(--green) 22%, transparent); }
 .ui-modern .badge-off { background: color-mix(in srgb, var(--muted) 18%, transparent); }
+
+/* Pod-sekce v Řízení (Solis) – vizuální oddělení skupin */
+.ctl-sect { background: var(--panel-2, rgba(127,127,127,.06)); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+.ctl-sect > .ctl-h { font-weight: 700; font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; letter-spacing: .2px; }
+.ctl-sect .ctl-sub { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }

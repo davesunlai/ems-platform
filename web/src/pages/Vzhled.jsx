@@ -7,7 +7,7 @@ const EDIT_VARS = ["--bg", "--panel", "--border", "--fg", "--muted", "--green", 
 const SW = ["--bg", "--panel", "--green", "--blue", "--amber"];
 
 export default function Vzhled() {
-  const { user } = useAuth();
+  const { user, has } = useAuth();
   const [sel, setSel] = useState(user?.theme || "midnight");
   const [saved, setSaved] = useState(() => (user?.theme_saved || []));
   const [custom, setCustom] = useState(() => ({ ...resolveVars(user?.theme || "midnight", user?.theme_custom, user?.theme_saved) }));
@@ -18,6 +18,12 @@ export default function Vzhled() {
 
   const note = (t) => { setMsg(t); setErr(""); setTimeout(() => setMsg(""), 2500); };
   const pickStyle = (s) => { setUiStyle(s); applyUiStyle(s); note(s === "modern" ? "Moderní styl zapnut." : "Klasický styl zapnut."); };
+  const saveGlobal = async () => {
+    try {
+      await api.setGlobalTheme({ theme: sel, custom: custom || null, saved, ui_style: uiStyle });
+      note("Globální vzhled nastaven pro všechny (kdo nemá vlastní).");
+    } catch (e) { setErr(e.message); }
+  };
 
   // persist active theme + custom + saved list
   const persist = async (theme, customVars, savedList) => {
@@ -59,6 +65,18 @@ export default function Vzhled() {
 
   return (
     <main>
+      {has("admin") && (
+        <div className="panel" style={{ marginBottom: 18, borderColor: "var(--blue)" }}>
+          <h3 style={{ marginTop: 0 }}>🌐 Globální vzhled (jen admin)</h3>
+          <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+            Nastav aktuálně zvolený motiv i styl rozhraní jako <b>výchozí pro všechny uživatele</b>, kteří nemají vlastní vzhled. Kdo si vzhled změní sám, má přednost.
+          </p>
+          <button className="btn primary" onClick={saveGlobal} style={{ padding: "8px 16px" }}>
+            Nastavit tento vzhled jako globální
+          </button>
+        </div>
+      )}
+
       <div className="panel" style={{ marginBottom: 18 }}>
         <h3 style={{ marginTop: 0 }}>Styl rozhraní</h3>
         <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>

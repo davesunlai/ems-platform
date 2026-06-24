@@ -263,7 +263,7 @@ function SpotDischargePanel({ moduleId }) {
   const fld = { width: 90, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
   const lbl = { fontSize: 12, display: "block", marginBottom: 2 };
   return (
-    <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+    <div style={{ marginTop: 0 }}>
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: 13.5, cursor: "pointer" }}>
         <input type="checkbox" checked={!!r.enabled} onChange={(e) => set("enabled", e.target.checked)} />
         🔻 Auto-vybíjení do sítě podle spotu
@@ -418,53 +418,61 @@ function SolisControl({ mod }) {
         ⚠️ Reálně zapisuje do měniče. Výkon zadáváš v <b>kW pro celé úložiště</b> (obě baterie dohromady). Vybíjení jde do sítě jen nad rámec spotřeby domu. (nabíjení reg. 43136, vybíjení 43129; jednotka 10 W)
       </p>
 
-      <div style={{ fontWeight: 600, fontSize: 13, margin: "8px 0 4px" }}>Ruční řízení</div>
-      <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ fontSize: 12 }}>výkon <span className="muted">(kW, celé úložiště)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 80 }} /></label>
-        {has("force_charge") && <button className="btn" disabled={busy} onClick={() => force("force_charge", `Nabíjet teď (${power} kW)`)}>⚡ Nabíjet teď</button>}
-        {has("force_discharge") && <button className="btn" disabled={busy} onClick={() => force("force_discharge", `Vybíjet teď (${power} kW)`)}>🔻 Vybíjet teď</button>}
-        <button className="btn" disabled={busy} style={{ color: "#e06c75" }} onClick={stop}>⏹ Stop</button>
+      <div className="ctl-sect">
+        <div className="ctl-h">🎛 Ruční řízení</div>
+        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <label style={{ fontSize: 12 }}>výkon <span className="muted">(kW, celé úložiště)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 80 }} /></label>
+          {has("force_charge") && <button className="btn" disabled={busy} onClick={() => force("force_charge", `Nabíjet teď (${power} kW)`)}>⚡ Nabíjet teď</button>}
+          {has("force_discharge") && <button className="btn" disabled={busy} onClick={() => force("force_discharge", `Vybíjet teď (${power} kW)`)}>🔻 Vybíjet teď</button>}
+          <button className="btn" disabled={busy} style={{ color: "#e06c75" }} onClick={stop}>⏹ Stop</button>
+        </div>
       </div>
 
-      <div style={{ fontWeight: 600, fontSize: 13, margin: "14px 0 6px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span>Limity a režim</span>
-        <button className="btn primary" style={{ padding: "8px 18px", fontSize: 14, fontWeight: 700 }} disabled={busy} onClick={readNow}>
-          ⟳ Načíst aktuální z měniče
-        </button>
-        {busy && <span className="muted" style={{ fontSize: 12 }}>čtu z měniče…</span>}
-        <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>(hodnoty jsou živé z měniče, ne z databáze)</span>
+      <div className="ctl-sect">
+        <div className="ctl-h" style={{ flexWrap: "wrap" }}>
+          <span>⚙️ Limity a režim</span>
+          <button className="btn primary" style={{ padding: "8px 18px", fontSize: 14, fontWeight: 700 }} disabled={busy} onClick={readNow}>
+            ⟳ Načíst aktuální z měniče
+          </button>
+          {busy && <span className="muted" style={{ fontSize: 12 }}>čtu z měniče…</span>}
+          <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>(živé z měniče, ne z databáze)</span>
+        </div>
+        <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
+          <div>
+            <label style={{ fontSize: 12, display: "block" }}>Nabíjecí proud (A)</label>
+            <input value={chA} onChange={(e) => setChA(e.target.value)} style={fld} />
+            <button className="btn" style={{ padding: "3px 9px", marginLeft: 4 }} disabled={busy || chA === ""}
+                    onClick={() => setLimit("set_charge_current", { amps: Number(chA) }, `nabíjecí proud ${chA} A`)}>Uložit</button>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, display: "block" }}>Vybíjecí proud (A)</label>
+            <input value={disA} onChange={(e) => setDisA(e.target.value)} style={fld} />
+            <button className="btn" style={{ padding: "3px 9px", marginLeft: 4 }} disabled={busy || disA === ""}
+                    onClick={() => setLimit("set_discharge_current", { amps: Number(disA) }, `vybíjecí proud ${disA} A`)}>Uložit</button>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, display: "block" }}>Záložní SoC (%)</label>
+            <input value={socBackup} onChange={(e) => setSocBackup(e.target.value)} style={fld} />
+            <button className="btn" style={{ padding: "3px 9px", marginLeft: 4 }} disabled={busy || socBackup === ""}
+                    onClick={() => setLimit("set_soc_backup", { pct: Number(socBackup) }, `záložní SoC ${socBackup} %`)}>Uložit</button>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, display: "block" }}>Force SoC (%)</label>
+            <input value={socForce} onChange={(e) => setSocForce(e.target.value)} style={fld} />
+            <button className="btn" style={{ padding: "3px 9px", marginLeft: 4 }} disabled={busy || socForce === ""}
+                    onClick={() => setLimit("set_soc_force", { pct: Number(socForce) }, `force SoC ${socForce} %`)}>Uložit</button>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, display: "block" }}>Pracovní režim</label>
+            <button className="btn" disabled={busy} onClick={() => setLimit("set_work_mode", { word: 33 }, "režim Self-Use")}>Self-Use</button>
+          </div>
+        </div>
       </div>
-      <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
-        <div>
-          <label style={{ fontSize: 12, display: "block" }}>Nabíjecí proud (A)</label>
-          <input value={chA} onChange={(e) => setChA(e.target.value)} style={fld} />
-          <button className="btn" style={{ padding: "3px 9px", marginLeft: 4 }} disabled={busy || chA === ""}
-                  onClick={() => setLimit("set_charge_current", { amps: Number(chA) }, `nabíjecí proud ${chA} A`)}>Uložit</button>
-        </div>
-        <div>
-          <label style={{ fontSize: 12, display: "block" }}>Vybíjecí proud (A)</label>
-          <input value={disA} onChange={(e) => setDisA(e.target.value)} style={fld} />
-          <button className="btn" style={{ padding: "3px 9px", marginLeft: 4 }} disabled={busy || disA === ""}
-                  onClick={() => setLimit("set_discharge_current", { amps: Number(disA) }, `vybíjecí proud ${disA} A`)}>Uložit</button>
-        </div>
-        <div>
-          <label style={{ fontSize: 12, display: "block" }}>Záložní SoC (%)</label>
-          <input value={socBackup} onChange={(e) => setSocBackup(e.target.value)} style={fld} />
-          <button className="btn" style={{ padding: "3px 9px", marginLeft: 4 }} disabled={busy || socBackup === ""}
-                  onClick={() => setLimit("set_soc_backup", { pct: Number(socBackup) }, `záložní SoC ${socBackup} %`)}>Uložit</button>
-        </div>
-        <div>
-          <label style={{ fontSize: 12, display: "block" }}>Force SoC (%)</label>
-          <input value={socForce} onChange={(e) => setSocForce(e.target.value)} style={fld} />
-          <button className="btn" style={{ padding: "3px 9px", marginLeft: 4 }} disabled={busy || socForce === ""}
-                  onClick={() => setLimit("set_soc_force", { pct: Number(socForce) }, `force SoC ${socForce} %`)}>Uložit</button>
-        </div>
-        <div>
-          <label style={{ fontSize: 12, display: "block" }}>Pracovní režim</label>
-          <button className="btn" disabled={busy} onClick={() => setLimit("set_work_mode", { word: 33 }, "režim Self-Use")}>Self-Use</button>
-        </div>
+
+      <div className="ctl-sect">
+        <div className="ctl-h">📈 Spotová automatika</div>
+        <SpotDischargePanel moduleId={mod.id} />
       </div>
-      <SpotDischargePanel moduleId={mod.id} />
       <StatusLine status={status} />
     </div>
   );

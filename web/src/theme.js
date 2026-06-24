@@ -79,3 +79,17 @@ export function applyUiStyle(style) {
 export function currentUiStyle() {
   try { return localStorage.getItem("tera_ui_style") || "classic"; } catch { return "classic"; }
 }
+
+export function hasLocalTheme() {
+  try { return !!localStorage.getItem("tera_theme") || !!localStorage.getItem("tera_ui_style"); } catch { return false; }
+}
+
+// Aplikuje globální (zděděný) vzhled BEZ uložení do localStorage – tj. uživatel ho „zdědí",
+// ale nestane se jeho vlastním. {theme, custom, saved, ui_style}
+export function applyGlobalTheme(obj) {
+  if (!obj || !obj.theme) return;
+  const vars = resolveVars(obj.theme, obj.custom, obj.saved);
+  const root = document.documentElement;
+  for (const k of THEME_VARS) if (vars[k]) root.style.setProperty(k, vars[k]);
+  if (obj.ui_style) root.classList.toggle("ui-modern", obj.ui_style === "modern");
+}

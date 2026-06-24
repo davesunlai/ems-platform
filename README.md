@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.47.0 — (1) Řízení (Solis): sekce vizuálně oddělené do pod-karet — „🎛 Ruční řízení", „⚙️ Limity a režim", „📈 Spotová automatika". (2) Globální vzhled: admin může ve Vzhledu nastavit aktuální motiv + styl jako VÝCHOZÍ pro všechny uživatele bez vlastního vzhledu (app_settings, /api/settings/global-theme; PUT jen admin). Uživatel bez vlastního motivu ho zdědí (neuloží se mu lokálně); kdo si zvolí vlastní, má přednost.
+
 ## v0.46.1 — U podmínek na výkon ze sítě (zapínací i hlídač/vypínací) lze nově zvolit OPERÁTOR ≤ / ≥ (rozbalovátko). Zapínací default ≤, hlídač default ≥ (= dosavadní chování). Engine vybírá podle operátoru _grid_export_sustained (≤) nebo _grid_import_sustained (≥). Důvod/hodnoty v auditu ukazují zvolený operátor.
 
 ## v0.46.0 — (1) Auto-NABÍJENÍ ze sítě podle spotu: u pravidla nová sekce „🔋 Auto-nabíjení" – nabij při spot ≤ X (levné/záporné), přestaň při spot > Y (hystereze), výkon kW, strop SoC. Hlavně když FVE nestíhá. force_charge se source=spot, audit/notifikace s důvodem. Vybíjení má přednost. (2) Spínané spotřebiče (SoC): přidána ZAPÍNACÍ podmínka na výkon ze sítě – „zapni, jen když výkon ze sítě ≤ práh (kW) po dobu (min)" (zrcadlo k vypínacímu hlídači; znaménko +odběr/−dodávka, např. −2 = zapni jen při dodávce ≥2 kW). Globální šablony spotřebičů přijdou v dalším kroku.

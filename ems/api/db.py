@@ -285,3 +285,27 @@ async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 3
     if metric.endswith("_power") or metric == "load":
         raw = _zero_fill_power(raw, bucket_seconds)
     return [{"time": t.isoformat(), "value": v} for t, v in raw]
+
+
+# --- Globální nastavení aplikace (key/value) ---
+async def ensure_app_settings_schema() -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value JSONB NOT NULL)")
+
+
+async def get_setting(key: str, default=None):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        v = await conn.fetchval("SELECT value FROM app_settings WHERE key=$1", key)
+    if v is None:
+        return default
+    return json.loads(v) if isinstance(v, str) else v
+
+
+async def set_setting(key: str, value) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES ($1, $2::jsonb) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", key, json.dumps(value))
