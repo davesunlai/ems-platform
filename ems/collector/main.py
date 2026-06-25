@@ -637,6 +637,39 @@ async def evaluate_spot_charge(price, skip_devices=None) -> None:
                 await control_db.set_charge_active(dev, True)
 
 
+async def evaluate_spot_winddown(skip_devices=None) -> None:
+    """Zastaví spotovou akci u pravidel, kde byla funkce VYPNUTA, ale modul ji ještě vykonává
+    (po vypnutí zatržítka kolektor přestal pravidlo vyhodnocovat → nikdo by neposlal stop)."""
+    skip = set(skip_devices or [])
+    rules = await control_db.list_spot_rules_winddown()
+    if not rules:
+        return
+    states = await control_db.get_states([r["module_id"] for r in rules])
+    for r in rules:
+        dev = r["module_id"]
+        if dev in skip:
+            continue
+        st = states.get(dev) or {}
+        action = st.get("action"); src = st.get("source")
+        # vyčisti příznaky podle toho, co je vypnuté
+        if r["active"] and not r["enabled"]:
+            await control_db.set_spot_rule_active(dev, False)
+        if r["charge_active"] and not r["charge_enabled"]:
+            await control_db.set_charge_active(dev, False)
+        if r["precharge_active"] and not r["precharge_enabled"]:
+            await control_db.set_precharge_active(dev, False)
+        # pokud měnič řídí někdo jiný (ruční/plánovač), nezasahuj
+        if src not in (None, "spot"):
+            continue
+        stop = (action == "force_discharge" and not r["enabled"]) or \
+               (action == "force_charge" and not r["charge_enabled"] and not r["precharge_enabled"])
+        if stop:
+            prm = {"source": "spot", "name": "Spotová automatika", "reason": "funkce vypnuta uživatelem → stop"}
+            cid = await control_db.enqueue(dev, "stop", prm, username="spot")
+            await control_db.record("spot", dev, "stop", prm, True, {"queued": cid})
+            logger.info("Spot wind-down %s: %s → stop", dev, action)
+
+
 async def tick_market_and_automation(state: dict) -> None:
     import time as _t
     # obnova spotové ceny (živý feed, pokud není ruční override)
@@ -663,6 +696,11 @@ async def tick_market_and_automation(state: dict) -> None:
         await evaluate_all(st.get("price"), skip_devices=skip)
     except Exception as exc:
         logger.warning("Automatizace selhala: %s", exc)
+    # útlum: zastav spotové akce u pravidel, jejichž funkce byla vypnuta
+    try:
+        await evaluate_spot_winddown(skip_devices=skip)
+    except Exception as exc:
+        logger.warning("Útlum spotové automatiky selhal: %s", exc)
     # spotové auto-vybíjení do sítě (Solis force_discharge, hystereze + podlaha SoC)
     try:
         await evaluate_spot_discharge(st.get("price"), skip_devices=skip)

@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.47.3 — OPRAVA: vypnutí zatržítka spotové automatiky (vybíjení/nabíjení/předchystání) nyní akci skutečně ZASTAVÍ. Dosud kolektor vypnuté pravidlo přestal vyhodnocovat, ale poslední force_discharge/charge na měniči zůstal (nikdo neposlal stop). Nová útlumová pasáž evaluate_spot_winddown: u pravidel s vypnutou funkcí, ale stále nastaveným příznakem aktivity, pošle stop a příznak vyčistí (do ~10 s od uložení). Respektuje ruční/plánovačem řízené moduly (nezasahuje).
+
 ## v0.47.2 — OPRAVA znaménka grid_power (kritická). Solis má grid_power ZÁPORNÉ = dodávka do sítě (export), KLADNÉ = odběr — opak dosavadního předpokladu. Důsledek: přebytkové pravidlo (spirála/bojler) vidělo „export 0" i při reálném přetoku 9,23 kW → celý den nesepnulo a měnič se ořezával. Opraveno: _loc_telemetry export_kw = max(0, −grid_power); _grid_import_sustained (≥ práh) = min(grid_power) ≥ kw·1000; _grid_export_sustained (≤ práh) = max(grid_power) ≤ kw·1000. Prahy v UI zůstávají v konvenci dashboardu (+odběr / −dodávka).
 
 ## v0.47.1 — Spotový PLÁN na dashboardu: v pruhu řízení (pod názvem lokality) se u zapnutých spotových pravidel vypisuje předpověď — 🔻 Vybíjení do sítě od–do (s průměrnou cenou), ⚡ Předchystání (nejlevnější slot) a 🔋 Nabíjení (levný spot). Endpoint /api/control/spot-plan počítá okna z budoucích 15min slotů + pravidel on-demand → reflektuje uložení pravidla i nové ceny. Obnova á 5 s.

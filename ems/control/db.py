@@ -278,6 +278,18 @@ async def list_spot_rules_enabled() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+async def list_spot_rules_winddown() -> list[dict]:
+    """Pravidla, kde je nějaká spotová funkce vypnutá, ale příznak aktivity je stále nastaven
+    (modul ji možná ještě vykonává a je třeba ji zastavit)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM spot_discharge_rules WHERE "
+            "(active AND NOT enabled) OR (precharge_active AND NOT precharge_enabled) "
+            "OR (charge_active AND NOT charge_enabled)")
+    return [dict(r) for r in rows]
+
+
 async def set_spot_rule_active(module_id: str, active: bool) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
