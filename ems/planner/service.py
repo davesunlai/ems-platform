@@ -81,6 +81,66 @@ async def run_locality(locality_id: int) -> dict:
     return {"ok": True, "points": len(rows), "soc_now": round(soc_now, 1)}
 
 
+async def _next_local_hour(now, hour: int):
+    from zoneinfo import ZoneInfo
+    pr = ZoneInfo("Europe/Prague")
+    now_pr = now.astimezone(pr)
+    loc = now_pr.replace(hour=int(hour) % 24, minute=0, second=0, microsecond=0)
+    if loc <= now_pr:
+        loc = loc + timedelta(days=1)
+    return loc.astimezone(timezone.utc)
+
+
+async def amplitudes(locality_id: int, *, spiral_target_kwh: float | None = None,
+                     spiral_power_kw: float = 6.0, spiral_deadline_h: int = 7,
+                     breaker_kw: float = 22.0, max_windows: int = 4,
+                     threshold_pct: float = 33.0) -> dict:
+    """Spodní (valley/import) a horní (peak/export) amplitudy na EFEKTIVNÍ ceně + volitelně
+    plán 6 kW spirály (binární deferrable). Čte stejné vstupy jako run_locality."""
+    from . import amplitude
+    cfg = await pdb.get_config(locality_id)
+    pv = await fdb.latest_pv(locality_id, "avg")
+    if len(pv) < 2:
+        return {"ok": False, "reason": "chybí predikce výroby"}
+    load_rows = await fdb.latest_load(locality_id)
+    spot = await fdb.spot_window_hourly(48)
+    tariff = await pricing_db.get_effective(locality_id)
+    load_map = {_key(datetime.fromisoformat(r["ts"])): r["load_w"] for r in load_rows}
+    spot_map = {_key(datetime.fromisoformat(r["ts"])): r["czk_mwh"] for r in spot}
+
+    now = datetime.now(timezone.utc)
+    ts_list, pv_a, load_a, pimp, pexp = [], [], [], [], []
+    for p in pv:
+        t = datetime.fromisoformat(p["ts"])
+        if t < now - timedelta(hours=1):
+            continue
+        if len(ts_list) >= int(cfg["horizon_h"]):
+            break
+        k = _key(t)
+        price = pricing_cost.price_czk_kwh(tariff, t, spot_map.get(k))
+        ts_list.append(t)
+        pv_a.append((p["pv_w"] or 0) / 1000.0)
+        load_a.append((load_map.get(k, 0) or 0) / 1000.0)
+        pimp.append(price["import_czk"]); pexp.append(price["export_czk"])
+    if len(ts_list) < 2:
+        return {"ok": False, "reason": "krátký horizont (málo predikce)"}
+
+    amp = amplitude.find_amplitudes(ts_list, pimp, pexp, max_windows=max_windows, threshold_pct=threshold_pct)
+    out = {"ok": True, "valley": amp["valley"], "peak": amp["peak"], "horizon_h": len(ts_list)}
+    if spiral_target_kwh and spiral_target_kwh > 0:
+        pv_surplus = [max(0.0, pv_a[i] - load_a[i]) for i in range(len(ts_list))]
+        # MVP strop jističe: jistič − zátěž (souběžné nabíjení baterie zohledníme po napojení na plán)
+        headroom = [max(0.0, float(breaker_kw) - load_a[i]) for i in range(len(ts_list))]
+        deadline = await _next_local_hour(now, spiral_deadline_h)
+        sp = amplitude.schedule_spiral_binary(
+            ts_list, pimp, pv_surplus, energy_target_kwh=float(spiral_target_kwh),
+            max_power_kw=float(spiral_power_kw), deadline=deadline,
+            breaker_headroom_kw=headroom, now=now)
+        sp["deadline"] = deadline
+        out["spiral"] = sp
+    return out
+
+
 async def run_all() -> None:
     try:
         locs = await loc_db.list_all()
