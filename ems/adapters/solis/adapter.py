@@ -49,6 +49,20 @@ def _decode(regs: list[int], rtype: str, scale: float) -> float:
     return v * scale
 
 
+def _battery_power(volt, curr, direction):
+    """Výkon baterie se znaménkem EMS: + nabíjení / − vybíjení.
+
+    Pozor: registr proudu 33134 na tomhle modelu vrací MAGNITUDU (vždy kladnou),
+    takže znaménko se musí vzít ze směrového registru 33135 (0 = nabíjení, 1 = vybíjení).
+    Když směr není k dispozici, použij znaménko proudu (fallback pro pack bez směr. registru).
+    """
+    if volt is None or curr is None:
+        return None
+    if direction is not None:
+        return -abs(volt * curr) if int(round(direction)) == 1 else abs(volt * curr)
+    return volt * curr
+
+
 class SolisAdapter:
     def __init__(
         self,
@@ -325,7 +339,7 @@ class SolisAdapter:
             add(Metric.VOLTAGE, d.get("voltage"))
             add(Metric.CURRENT, d.get("current"))
             if d.get("voltage") is not None and d.get("current") is not None:
-                add(Metric.BATTERY_POWER, d["voltage"] * d["current"])
+                add(Metric.BATTERY_POWER, _battery_power(d["voltage"], d["current"], d.get("direction")))
 
         elif dtype == DeviceType.GRID_POINT.value:
             g = self._dec(cache, REG_GRID_METER)
@@ -342,6 +356,7 @@ class SolisAdapter:
             explicit = str(self.battery_packs).isdigit()
             candidates = ([p for p in range(1, int(self.battery_packs) + 1) if p in BATTERY_PACKS]
                           if explicit else list(BATTERY_PACKS))   # "auto" -> zkus všechny
+            bdir = pack_fields(1).get("direction")   # směr 33135 platí pro celou baterii (packy paralelně)
             socs, powers = [], []
             for pid in candidates:
                 d = pack_fields(pid)
@@ -354,7 +369,7 @@ class SolisAdapter:
                 add(volt_m[pid], volt)
                 add(curr_m[pid], curr)
                 if volt is not None and curr is not None:
-                    p = volt * curr
+                    p = _battery_power(volt, curr, bdir)
                     add(pow_m[pid], p)
                     powers.append(p)
                 add(soh_m[pid], d.get("soh"))

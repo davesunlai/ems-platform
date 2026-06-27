@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 
 
 def _zero_fill_power(rows_dt: list[tuple], bucket_seconds: int, gap_factor: int = 3) -> list[tuple]:
@@ -195,6 +198,10 @@ async def aggregate_now(device_ids: list[str]) -> dict:
     # Spotřeba (zátěž) z energetické bilance uzlu: load = FVE + síť − baterie
     # (znaménka EMS: síť + import/− export, baterie + nabíjení/− vybíjení).
     load_w = pv_w + grid_w - bat_w
+    if load_w < 0:
+        logger.warning("Záporná spotřeba lokality (load=%.0f W): pv=%.0f grid=%.0f bat=%.0f "
+                       "— zkontroluj znaménka/měření", load_w, pv_w, grid_w, bat_w)
+        load_w = 0.0
     # Dnešní energie ZE sítě (import) a DO sítě (export) — integrace grid_power
     # přes dnešek (W·s -> kWh), mezery (výpadky) > 120 s se nezapočítají.
     async with pool.acquire() as conn:
@@ -248,9 +255,10 @@ async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 3
             rows = await conn.fetch(
                 """
                 SELECT b,
-                       COALESCE(sum(dev_avg) FILTER (WHERE metric='pv_power'), 0)
-                     + COALESCE(sum(dev_avg) FILTER (WHERE metric='grid_power'), 0)
-                     - COALESCE(sum(dev_avg) FILTER (WHERE metric='battery_power'), 0) AS value
+                       GREATEST(0,
+                         COALESCE(sum(dev_avg) FILTER (WHERE metric='pv_power'), 0)
+                       + COALESCE(sum(dev_avg) FILTER (WHERE metric='grid_power'), 0)
+                       - COALESCE(sum(dev_avg) FILTER (WHERE metric='battery_power'), 0)) AS value
                 FROM (
                     SELECT time_bucket(($1 || ' seconds')::interval, time) AS b,
                            device_id, metric, avg(value) AS dev_avg

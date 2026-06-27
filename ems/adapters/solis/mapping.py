@@ -28,6 +28,7 @@ BATTERY_PACKS = {
         "soc": (33139, "u16", 1.0),
         "voltage": (33133, "u16", 0.1),
         "current": (33134, "s16", 0.1),
+        "direction": (33135, "u16", 1.0),   # 0 = nabíjení, 1 = vybíjení (33134 vrací magnitudu!)
         "soh": (33140, "u16", 1.0),
         "temp": (33144, "s16", 0.1),
     },
