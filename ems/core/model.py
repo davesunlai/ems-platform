@@ -28,6 +28,7 @@ class DeviceType(str, Enum):
     LOAD = "load"               # domácnost, nabíječka, spirály
     GRID_POINT = "grid_point"   # přípojný/měřicí bod
     HYBRID = "hybrid"           # hybridní střídač: FVE + baterie + síť (+ backup) v jednom
+    SENSOR = "sensor"           # čistě měřicí zařízení (teploty AKU z UVR/CMI apod.), bez řízení
 
 
 class Metric(str, Enum):
@@ -62,6 +63,13 @@ class Metric(str, Enum):
     CURRENT = "current"
     FREQUENCY = "frequency"
     TEMPERATURE = "temperature"
+    # --- Teploty akumulačních nádrží (UVR/CMI). Master = 3 zóny, slave = 2 zóny. ---
+    TANK_M_TOP = "tank_m_top"     # master horní (I3) – užitná voda, T_min
+    TANK_M_MID = "tank_m_mid"     # master střed (I2) – proxy stavu TČ
+    TANK_M_BOT = "tank_m_bot"     # master dolní (I1)
+    TANK_S_TOP = "tank_s_top"     # slave horní (I4)
+    TANK_S_BOT = "tank_s_bot"     # slave dolní (I5) – T_max (STOP spirály)
+    TEMP_AMBIENT = "temp_ambient" # technická místnost (I14) – ambient, NE buffer
 
 
 UNIT_OF: dict[Metric, str] = {
@@ -95,6 +103,12 @@ UNIT_OF: dict[Metric, str] = {
     Metric.CURRENT: "A",
     Metric.FREQUENCY: "Hz",
     Metric.TEMPERATURE: "°C",
+    Metric.TANK_M_TOP: "°C",
+    Metric.TANK_M_MID: "°C",
+    Metric.TANK_M_BOT: "°C",
+    Metric.TANK_S_TOP: "°C",
+    Metric.TANK_S_BOT: "°C",
+    Metric.TEMP_AMBIENT: "°C",
 }
 
 

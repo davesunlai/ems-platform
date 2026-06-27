@@ -9,7 +9,7 @@ from .models import Module, ModuleCreate, ModuleUpdate
 
 router = APIRouter(prefix="/api/admin", tags=["modules"])
 
-ADAPTERS = ["goodwe", "solis", "mock"]  # dostupné adaptéry pro UI
+ADAPTERS = ["goodwe", "solis", "uvr_cmi", "mock"]  # dostupné adaptéry pro UI
 
 
 @router.get("/adapters")

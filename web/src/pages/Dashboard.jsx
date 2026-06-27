@@ -3,6 +3,7 @@ import { api } from "../api";
 import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
 import ForecastChart from "../components/ForecastChart";
+import TempChart from "../components/TempChart";
 import BillingTable from "../components/BillingTable";
 import Icon from "../components/Icon";
 import { METRIC_LABEL as LABELS, iconFor, groupMetrics } from "../metrics";
@@ -417,6 +418,7 @@ export default function Dashboard() {
             <ForecastChart localityId={devs[0].locality_id} />
           </div>
         )}
+        {devs[0].locality_id && <TempChart localityId={devs[0].locality_id} deviceIds={ids} />}
         {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} adapter={d.adapter} control={d.control_enabled || []} />)}
         {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}
       </section>

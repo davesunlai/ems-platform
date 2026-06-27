@@ -14,7 +14,7 @@ const KINDS = [
   { v: "source_write", l: "Zápisový (řízení) — fáze C" },
   { v: "logic", l: "Logika (automatizace) — fáze D" },
 ];
-const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point"];
+const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point", "sensor"];
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
 function emptyForm() {

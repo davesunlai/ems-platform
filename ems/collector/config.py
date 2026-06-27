@@ -34,6 +34,9 @@ def build_adapter(device: Device) -> TelemetryAdapter:
         if "device_id" in params and "unit" not in params:
             params["unit"] = params.pop("device_id")
         return SolisAdapter(device_id=device.id, device_type=device.type.value, **params)
+    if name == "uvr_cmi":
+        from ems.adapters.uvr_cmi import UvrCmiAdapter
+        return UvrCmiAdapter(device_id=device.id, **params)
     raise ValueError(f"Neznámý adaptér '{device.adapter}' pro zařízení '{device.id}'")
 
 
