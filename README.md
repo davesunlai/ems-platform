@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.50.2 — FIX: UvrCmiAdapter nemělo metodu connect() → collector ji volá u každého modulu (Solis/Goodwe ji mají kvůli navázání spojení) → „object has no attribute 'connect'" a modul se nikdy nerozjel. Doplněn prázdný async connect() (CMI je bezstavové HTTP, žádné trvalé spojení). CMI z hosta ověřeno funkční (teploty tečou), takže po nasazení data poteče.
+
 ## v0.50.1 — UI: adaptér `uvr_cmi` doplněn do formuláře Moduly (byl jen v backendu). Přidán do hardcoded seznamu adaptérů + label, větev params (host/user/password/node), formulářová pole (IP CMI, uživatel, heslo, CAN uzel), načítání při editaci, a při výběru uvr_cmi se typ rovnou nastaví na „sensor". Teď lze UVR zařízení založit přes UI.
 
 ## v0.50.0 — UVR16x2/CMI: čtení teplot AKU (observabilita, Fáze 1, read-only). Nový adaptér `uvr_cmi` (stdlib, Basic auth, JSON API /INCLUDE/api.cgi), interní throttle 60 s (CMI limit 1 dotaz/min), povinný sentinel filtr (9999.9 odpojený PT1000 / 16383 chyba ozáření → None), klíčování dle Number (I13 chybí). Mapa pilotu: I3/I2/I1 master H/S/D, I4/I5 slave H/D, I14 ambient. 6 nových metrik (tank_m_top/mid/bot, tank_s_top/bot, temp_ambient) + DeviceType.SENSOR. Dashboard: graf „🌡️ Teploty AKU" (5 nádržových čar na °C ose škálované jen dle nádrží, ambient čárkovaně mimo měřítko; rozsahy 12h–7dní; self-hide bez čidel). Žádné řízení od čidel — Fáze 1 jen měří (zimní kalibrace hystereze TČ). Registrace zařízení: adaptér uvr_cmi, typ sensor, params host/user/password/node.

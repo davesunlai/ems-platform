@@ -39,6 +39,10 @@ class UvrCmiAdapter:
         with urllib.request.urlopen(req, timeout=10) as r:   # noqa: S310 (interní LAN)
             return json.load(r)
 
+    async def connect(self) -> None:
+        # CMI je bezstavové HTTP — žádné trvalé spojení se nedrží.
+        return None
+
     async def read(self) -> Reading:
         # CMI limit 1/min: mezi fetchi vrať prázdný odečet (nic se nezapíše)
         now = time.monotonic()
