@@ -28,6 +28,18 @@ class PlannerConfigIn(BaseModel):
     spiral_power_kw: float | None = None
     breaker_kw: float | None = None
     cycle_margin_czk_kwh: float | None = None
+    grid_export_limit_kw: float | None = None
+    dso_export_limit_kw: float | None = None
+    export_price_floor_czk: float | None = None
+    hodnota_tepla_leto: float | None = None
+    season_mode: str | None = None
+    prah_zima: float | None = None
+    prah_leto: float | None = None
+    tc_prikon_kw: float | None = None
+    tc_cop_a: float | None = None
+    tc_cop_b: float | None = None
+    tc_cop_min: float | None = None
+    tc_cop_max: float | None = None
 
 
 @router.get("/controlled/devices")

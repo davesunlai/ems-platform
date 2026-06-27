@@ -11,9 +11,21 @@ from ems.forecast import db as fdb
 from ems.localities import db as loc_db
 from ems.pricing import db as pricing_db
 from ems.pricing import cost as pricing_cost
-from . import core, db as pdb
+from . import core, db as pdb, thermal
 
 logger = logging.getLogger("ems.planner")
+
+
+async def _pv_7d_avg_kwh(device_ids: list[str]) -> float | None:
+    """Rolling 7denní průměr denní výroby FVE (kWh/den) pro sezónní přepínač."""
+    if not device_ids:
+        return None
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        w = await conn.fetchval(
+            "SELECT avg(value) FROM samples WHERE device_id = ANY($1::text[]) "
+            "AND metric='pv_power' AND time > now() - interval '7 days'", device_ids)
+    return float(w) * 24.0 / 1000.0 if w is not None else None   # průměrný W → kWh/den
 
 
 def _key(ts: datetime) -> str:
@@ -71,11 +83,19 @@ async def run_locality(locality_id: int) -> dict:
         soc_now = max(cfg["soc_min_pct"], 30.0)        # bez telemetrie konzervativně
     floor = float(cfg["soc_min_pct"]) + float(cfg["outage_reserve_pct"])
 
+    # sezóna (auto dle 7denního průměru FVE, s hysterezí) → hodnota tepla pro spirálu
+    pv7 = await _pv_7d_avg_kwh(devs)
+    season = thermal.resolve_season(cfg.get("season_mode", "auto"), pv7,
+                                    prah_zima=float(cfg["prah_zima"]), prah_leto=float(cfg["prah_leto"]))
+    heat_value = thermal.heat_value_czk_kwh(season, hodnota_tepla_leto=float(cfg["hodnota_tepla_leto"]))
+
     rows = core.plan(
         ts_list, pv_a, load_a, pimp, pexp,
         cap_kwh=float(cfg["capacity_kwh"]), soc_now_pct=soc_now, floor_pct=floor,
         max_charge_kwh=float(cfg["max_charge_kw"]), max_discharge_kwh=float(cfg["max_discharge_kw"]),
-        allow_grid_discharge=bool(cfg["allow_grid_discharge"]))
+        allow_grid_discharge=bool(cfg["allow_grid_discharge"]),
+        export_price_floor=float(cfg["export_price_floor_czk"]),
+        export_limit_kwh=float(cfg["grid_export_limit_kw"]))
 
     # Odložitelný výstup (spirála / bazén / cokoliv přes eWeLink/relé) jako binární deferrable.
     for r in rows:
@@ -101,7 +121,9 @@ async def run_locality(locality_id: int) -> dict:
                 rows[i]["deferrable_on"] = True
 
     await pdb.write_schedule(locality_id, rows, now)
-    return {"ok": True, "points": len(rows), "soc_now": round(soc_now, 1)}
+    return {"ok": True, "points": len(rows), "soc_now": round(soc_now, 1),
+            "season": season, "heat_value_czk": round(heat_value, 2),
+            "pv_7d_avg_kwh": round(pv7, 1) if pv7 is not None else None}
 
 
 async def _next_local_hour(now, hour: int):

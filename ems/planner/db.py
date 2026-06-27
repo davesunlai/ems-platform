@@ -21,6 +21,16 @@ CONFIG_DEFAULTS = {
     "spiral_power_kw": 6.0,           # příkon spotřebiče
     "breaker_kw": 22.0,               # strop přípojky pro IMPORT (3×32 A ≈ 22 kW)
     "cycle_margin_czk_kwh": 0.5,      # práh, ať se vyplatí cyklovat baterii do sítě
+    # --- 2a: ekonomika exportu + sezónní/tepelný model (SEED hodnoty, kalibrace později) ---
+    "grid_export_limit_kw": 9.25,     # setpoint měniče (proti tomu plánuj export + detekuj ořez)
+    "dso_export_limit_kw": 9.45,      # smluvní limit DS (jen validace: setpoint ≤ tohle)
+    "export_price_floor_czk": 0.7,    # pod tuto cenu prodeje do sítě NIKDY nevybíjet
+    "hodnota_tepla_leto": 2.0,        # Kč/kWh – alternativa získat teplo jinak (léto)
+    "season_mode": "auto",            # auto | summer | winter
+    "prah_zima": 15.0,                # 7denní průměr výroby FVE (kWh/den) < práh → WINTER
+    "prah_leto": 35.0,                # > práh → SUMMER (prah_leto>prah_zima = hystereze)
+    "tc_prikon_kw": 3.5,              # el. příkon TČ (seed)
+    "tc_cop_a": 2.75, "tc_cop_b": 0.11, "tc_cop_min": 1.8, "tc_cop_max": 4.0,
 }
 _CFG_KEYS = list(CONFIG_DEFAULTS.keys())
 
@@ -69,6 +79,18 @@ async def ensure_schema() -> None:
             ("spiral_power_kw", "DOUBLE PRECISION DEFAULT 6"),
             ("breaker_kw", "DOUBLE PRECISION DEFAULT 22"),
             ("cycle_margin_czk_kwh", "DOUBLE PRECISION DEFAULT 0.5"),
+            ("grid_export_limit_kw", "DOUBLE PRECISION DEFAULT 9.25"),
+            ("dso_export_limit_kw", "DOUBLE PRECISION DEFAULT 9.45"),
+            ("export_price_floor_czk", "DOUBLE PRECISION DEFAULT 0.7"),
+            ("hodnota_tepla_leto", "DOUBLE PRECISION DEFAULT 2.0"),
+            ("season_mode", "TEXT DEFAULT 'auto'"),
+            ("prah_zima", "DOUBLE PRECISION DEFAULT 15"),
+            ("prah_leto", "DOUBLE PRECISION DEFAULT 35"),
+            ("tc_prikon_kw", "DOUBLE PRECISION DEFAULT 3.5"),
+            ("tc_cop_a", "DOUBLE PRECISION DEFAULT 2.75"),
+            ("tc_cop_b", "DOUBLE PRECISION DEFAULT 0.11"),
+            ("tc_cop_min", "DOUBLE PRECISION DEFAULT 1.8"),
+            ("tc_cop_max", "DOUBLE PRECISION DEFAULT 4.0"),
         ):
             await conn.execute(f"ALTER TABLE planner_config ADD COLUMN IF NOT EXISTS {col} {ddl}")
         await conn.execute("ALTER TABLE dispatch_schedule ADD COLUMN IF NOT EXISTS deferrable_on BOOLEAN DEFAULT FALSE")
