@@ -252,11 +252,38 @@ def _decide_surplus(o: dict, tele: dict, spot) -> tuple[bool, str, dict]:
     return desired, reason, det
 
 
+async def force_output(out_id: int, desired: bool, reason: str) -> bool:
+    """Vynutí stav spínaného výstupu (vlastník = planner / Smart Control). Edge-trigger:
+    zasáhne jen při změně. Vrací True, pokud reálně přepnul."""
+    o = await out_db.get(out_id)
+    if not o:
+        return False
+    if bool(o["is_on"]) == bool(desired):
+        return False
+    res = await _actuate(o, desired)
+    await out_db.set_state(out_id, desired, f"Chytré řízení: {reason} → {'sepnuto' if desired else 'rozepnuto'}")
+    await control_db.record("output:planner", o["target"], "switch",
+                            {"on": desired, "name": o["name"], "reason": reason, "source": "planner"}, True, res)
+    try:
+        from ems.alerts import db as alerts_db
+        await alerts_db.record_event(o.get("locality_id"), "output_on" if desired else "output_off",
+                                     f"Spotřebič {o['name']} {'sepnut' if desired else 'rozepnut'} (chytré řízení)", reason)
+        from ems.notify import dispatch as notify_dispatch
+        await notify_dispatch.notify_new_alerts()
+    except Exception:
+        pass
+    return True
+
+
 async def evaluate_outputs() -> None:
     spot = await _spot_price()
+    from ems.planner import db as planner_db
+    claimed = await planner_db.claimed_output_ids()    # výstupy vlastněné zapnutým plannerem
     for o in await out_db.list_all():
         if not o["enabled"]:
             continue
+        if o["id"] in claimed:
+            continue   # řídí Chytré řízení (planner) — reaktivní pravidlo se nemíchá
         det = {}
         try:
             if o["trigger"] == "soc":

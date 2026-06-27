@@ -22,6 +22,12 @@ class PlannerConfigIn(BaseModel):
     max_charge_kw: float | None = None
     max_discharge_kw: float | None = None
     horizon_h: int | None = None
+    spiral_output_id: int | None = None
+    spiral_target_kwh: float | None = None
+    spiral_deadline_h: int | None = None
+    spiral_power_kw: float | None = None
+    breaker_kw: float | None = None
+    cycle_margin_czk_kwh: float | None = None
 
 
 @router.get("/controlled/devices")

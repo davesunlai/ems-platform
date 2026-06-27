@@ -77,6 +77,29 @@ async def run_locality(locality_id: int) -> dict:
         max_charge_kwh=float(cfg["max_charge_kw"]), max_discharge_kwh=float(cfg["max_discharge_kw"]),
         allow_grid_discharge=bool(cfg["allow_grid_discharge"]))
 
+    # Odložitelný výstup (spirála / bazén / cokoliv přes eWeLink/relé) jako binární deferrable.
+    for r in rows:
+        r["deferrable_on"] = False
+    sid = cfg.get("spiral_output_id")
+    tgt = float(cfg.get("spiral_target_kwh") or 0)
+    if sid and tgt > 0 and len(rows) == len(ts_list):
+        from . import amplitude
+        pv_surplus = [max(0.0, pv_a[i] - load_a[i]) for i in range(len(ts_list))]
+        breaker = float(cfg.get("breaker_kw") or 22.0)
+        headroom = []
+        for i in range(len(ts_list)):
+            grid_charge = rows[i]["battery_kw"] if rows[i].get("action") == "charge_grid" else 0.0
+            headroom.append(max(0.0, breaker - load_a[i] - float(grid_charge or 0.0)))   # strop jen na IMPORTU
+        deadline = await _next_local_hour(now, int(cfg.get("spiral_deadline_h") or 7))
+        sp = amplitude.schedule_spiral_binary(
+            ts_list, pimp, pv_surplus, energy_target_kwh=tgt,
+            max_power_kw=float(cfg.get("spiral_power_kw") or 6.0), deadline=deadline,
+            breaker_headroom_kw=headroom, now=now)
+        chosen_ts = {s["from"] for s in sp["slots"]}
+        for i, t in enumerate(ts_list):
+            if t in chosen_ts:
+                rows[i]["deferrable_on"] = True
+
     await pdb.write_schedule(locality_id, rows, now)
     return {"ok": True, "points": len(rows), "soc_now": round(soc_now, 1)}
 
@@ -139,6 +162,42 @@ async def amplitudes(locality_id: int, *, spiral_target_kwh: float | None = None
         sp["deadline"] = deadline
         out["spiral"] = sp
     return out
+
+
+async def winddown() -> None:
+    """Lokality s VYPNUTÝM plánovačem: uvolni výstupy, které ještě drží planner.
+    Baterii v source=planner force → stop; jeho odložitelný výstup → vypni (jen pokud ho zapnul planner)."""
+    from ems.control import db as control_db
+    from ems.outputs.engine import force_output
+    from ems.outputs import db as out_db
+    try:
+        cfgs = await pdb.all_configs()
+    except Exception:
+        return
+    for cfg in cfgs:
+        if cfg.get("enabled"):
+            continue
+        lid = cfg["locality_id"]
+        try:
+            devs = [d["id"] for d in await loc_db.devices_for_locality(lid)]
+            states = await control_db.get_states(devs) if devs else {}
+            for dev in devs:
+                st = states.get(dev) or {}
+                if st.get("source") == "planner" and st.get("action") in ("force_charge", "force_discharge"):
+                    await control_db.enqueue(dev, "stop", {"source": "planner", "reason": "Chytré řízení vypnuto"},
+                                             username="planner")
+                    logger.info("Planner winddown lok %s modul %s → stop", lid, dev)
+        except Exception as exc:
+            logger.debug("winddown baterie lok %s: %s", lid, exc)
+        sid = cfg.get("spiral_output_id")
+        if sid:
+            try:
+                o = await out_db.get(int(sid))
+                # vypni jen když je ON a zapnul ho planner (decision „Chytré řízení") → neperu se s ručním zásahem
+                if o and o.get("is_on") and str(o.get("last_decision") or "").startswith("Chytré řízení"):
+                    await force_output(int(sid), False, "Chytré řízení vypnuto → spotřebič off")
+            except Exception as exc:
+                logger.debug("winddown spirála lok %s: %s", lid, exc)
 
 
 async def run_all() -> None:

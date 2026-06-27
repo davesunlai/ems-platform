@@ -315,6 +315,10 @@ async def tick_planner(state: dict) -> None:
         except Exception as exc:
             logger.warning("Planner přepočet selhal: %s", exc)
     try:
+        await planner_service.winddown()      # uvolni výstupy u lokalit s vypnutým Smart Control
+    except Exception as exc:
+        logger.debug("Planner winddown: %s", exc)
+    try:
         controlled = await planner_service.controlled_devices()
         if not controlled:
             return
@@ -348,6 +352,16 @@ async def tick_planner(state: dict) -> None:
                 if cur != desired:
                     await control_db.enqueue(dev, cmd, params, username="planner")
                     logger.info("Planner lok %s modul %s: %s -> %s (%s)", lid, dev, cur, desired, ca.get("reason"))
+            # odložitelný výstup (spirála / bazén / cokoliv přes eWeLink/relé) dle plánu
+            cfg = await planner_db.get_config(lid)
+            sid = cfg.get("spiral_output_id")
+            if sid:
+                try:
+                    from ems.outputs.engine import force_output
+                    await force_output(int(sid), bool(ca.get("deferrable_on")),
+                                       f"plán {'ON' if ca.get('deferrable_on') else 'OFF'}")
+                except Exception as exc:
+                    logger.debug("Planner spirála lok %s: %s", lid, exc)
     except Exception as exc:
         logger.debug("Planner výkon: %s", exc)
 
