@@ -53,6 +53,12 @@ export default function ForecastChart({ localityId }) {
   const { ms, X, Yk, Ys, W, H, padL, padR, padT, plotH, kwMax, sLo, sHi } = geom;
   const line = (pts, fy) => pts.map((p, i) => `${i ? "L" : "M"}${X(ms(p.ts)).toFixed(1)},${fy(p).toFixed(1)}`).join(" ");
 
+  // sloupce plánu: šířka jedné hodiny, barva dle směru baterie
+  const hourW = geom.plotW / Math.max(1, geom.tspan / 36e5);
+  const barW = Math.max(1.5, hourW * 0.7);
+  const battColor = (p) => (p.battery_kw > 0.01 ? "#2ea043"
+    : (p.action === "discharge_grid" ? "#e06c73" : (p.battery_kw < -0.01 ? "#d29922" : null)));
+
   // pásmo nejistoty (lo nahoru, hi dolů)
   const bandTop = avg.map((p) => `${X(ms(p.ts)).toFixed(1)},${Yk((p.pv_w_hi ?? p.pv_w) / 1000).toFixed(1)}`);
   const bandBot = avg.slice().reverse().map((p) => `${X(ms(p.ts)).toFixed(1)},${Yk((p.pv_w_lo ?? p.pv_w) / 1000).toFixed(1)}`);
@@ -83,6 +89,9 @@ export default function ForecastChart({ localityId }) {
         <span style={{ color: LOAD }}>▬ spotřeba</span>
         <span style={{ color: SPOT }}>▬ cena nákup {fixed ? "(pevná)" : ""}</span>
         {plan && plan.length > 0 && <span style={{ color: "#a371f7" }}>┄ SoC plán</span>}
+        {plan && plan.length > 0 && <span style={{ color: "#2ea043" }}>▮ nabíjení</span>}
+        {plan && plan.length > 0 && <span style={{ color: "#e06c73" }}>▮ vybíjení do sítě</span>}
+        {plan && plan.some((p) => p.deferrable_on) && <span style={{ color: "#f0883e" }}>▮ spirála</span>}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}
            onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
@@ -98,6 +107,17 @@ export default function ForecastChart({ localityId }) {
         })}
         <text x={padL - 5} y={padT - 3} textAnchor="end" fontSize="9" fill="var(--muted,#8b949e)">kW</text>
         <text x={W - padR + 5} y={padT - 3} fontSize="9" fill={SPOT}>Kč/kWh</text>
+
+        {/* sloupce baterie (pod čarami): zelená nabíjení / červená vybíjení do sítě / oranžová self-use */}
+        {plan && plan.map((p, i) => {
+          const batt = p.battery_kw || 0;
+          if (Math.abs(batt) < 0.05) return null;
+          const c = battColor(p);
+          if (!c) return null;
+          const x = X(ms(p.ts)), top = Yk(Math.abs(batt)), y0 = Yk(0);
+          return <rect key={`b${i}`} x={x + 1} y={top} width={barW} height={Math.max(0, y0 - top)}
+                       fill={c} opacity="0.30" rx="1"><title>{`${p.ts.slice(11,16)} ${batt > 0 ? "nabíjení" : "vybíjení"} ${Math.abs(batt).toFixed(1)} kW`}</title></rect>;
+        })}
 
         {/* pásmo + výroba */}
         <path d={bandPath} fill={BAND} stroke="none" />
@@ -116,6 +136,13 @@ export default function ForecastChart({ localityId }) {
           <path d={plan.map((p, i) => `${i ? "L" : "M"}${X(new Date(p.ts).getTime()).toFixed(1)},${(padT + plotH * (1 - (p.soc_pct || 0) / 100)).toFixed(1)}`).join(" ")}
                 fill="none" stroke="#a371f7" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.9" />
         )}
+
+        {/* pás běhu spirály (deferrable_on) v dolním okraji */}
+        {plan && plan.filter((p) => p.deferrable_on).map((p, i) => (
+          <rect key={`s${i}`} x={X(ms(p.ts)) + 1} y={padT + plotH + 3} width={barW} height="5" fill="#f0883e" rx="1">
+            <title>{`${p.ts.slice(11,16)} spirála ON`}</title>
+          </rect>
+        ))}
 
         {/* x ticky */}
         {ticks.map((t, i) => (
