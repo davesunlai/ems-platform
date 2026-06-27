@@ -344,13 +344,16 @@ async def tick_planner(state: dict) -> None:
                 if st.get("source") == "manual" and since is not None:
                     try:
                         from datetime import datetime, timezone
-                        if (datetime.now(timezone.utc) - since).total_seconds() < MANUAL_OVERRIDE_SEC:
+                        s = since if hasattr(since, "tzinfo") else datetime.fromisoformat(since)
+                        if (datetime.now(timezone.utc) - s).total_seconds() < MANUAL_OVERRIDE_SEC:
                             continue
                     except Exception:
                         pass
                 cur = st.get("action", "idle")
                 if cur != desired:
-                    await control_db.enqueue(dev, cmd, params, username="planner")
+                    cid = await control_db.enqueue(dev, cmd, params, username="planner")
+                    await control_db.record("planner", dev, cmd,
+                                            {**params, "reason": ca.get("reason")}, True, {"queued": cid})
                     logger.info("Planner lok %s modul %s: %s -> %s (%s)", lid, dev, cur, desired, ca.get("reason"))
             # odložitelný výstup (spirála / bazén / cokoliv přes eWeLink/relé) dle plánu
             cfg = await planner_db.get_config(lid)

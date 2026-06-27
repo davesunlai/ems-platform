@@ -186,6 +186,8 @@ async def winddown() -> None:
                 if st.get("source") == "planner" and st.get("action") in ("force_charge", "force_discharge"):
                     await control_db.enqueue(dev, "stop", {"source": "planner", "reason": "Chytré řízení vypnuto"},
                                              username="planner")
+                    await control_db.record("planner", dev, "stop",
+                                            {"source": "planner", "reason": "Chytré řízení vypnuto"}, True, {})
                     logger.info("Planner winddown lok %s modul %s → stop", lid, dev)
         except Exception as exc:
             logger.debug("winddown baterie lok %s: %s", lid, exc)
