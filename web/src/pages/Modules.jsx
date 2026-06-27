@@ -3,10 +3,11 @@ import { api } from "../api";
 import Icon from "../components/Icon";
 import { MAX_TRACKED, METRIC_LABEL, iconFor, groupMetrics, metricsFor, controlFor } from "../metrics";
 
-const ADAPTERS = ["goodwe", "solis", "mock"];
+const ADAPTERS = ["goodwe", "solis", "uvr_cmi", "mock"];
 const ADAPTER_LABEL = {
   goodwe: "Goodwe — FVE + baterie (UDP/Modbus)",
   solis: "Solis S6-EH3P50K-H — FVE + baterie (Modbus TCP)",
+  uvr_cmi: "UVR16x2 / CMI — teploty AKU (JSON API, read-only)",
   mock: "Mock — simulace (bez HW)",
 };
 const KINDS = [
@@ -19,7 +20,8 @@ const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
 function emptyForm() {
   return { id: "", name: "", adapter: "goodwe", device_type: "storage", kind: "source_read",
-           host: "", port: 8899, device_id: 1, battery_pack: 1, battery_packs: "auto", hidden: [], control: [], pv_peak_w: 16000, battery_capacity_kwh: 52 };
+           host: "", port: 8899, device_id: 1, battery_pack: 1, battery_packs: "auto", hidden: [], control: [], pv_peak_w: 16000, battery_capacity_kwh: 52,
+           cmi_user: "admin", cmi_pass: "", cmi_node: 2 };
 }
 
 export default function Modules() {
@@ -41,6 +43,7 @@ export default function Modules() {
       else if (f.device_type === "storage") p.battery_pack = Number(f.battery_pack);
     }
     else if (f.adapter === "mock") p = { pv_peak_w: Number(f.pv_peak_w), battery_capacity_kwh: Number(f.battery_capacity_kwh) };
+    else if (f.adapter === "uvr_cmi") p = { host: f.host, user: f.cmi_user || "admin", password: f.cmi_pass, node: Number(f.cmi_node || 2) };
     if (f.hidden && f.hidden.length) p.hidden_metrics = f.hidden;
     if (f.control && f.control.length) p.control_enabled = f.control;
     return p;
@@ -72,6 +75,7 @@ export default function Modules() {
       id: m.id, name: m.name || "", adapter: m.adapter, device_type: m.device_type, kind: m.kind,
       host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : 8899),
       device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1, battery_packs: p.battery_packs ?? "auto",
+      cmi_user: p.user ?? "admin", cmi_pass: p.password ?? "", cmi_node: p.node ?? 2,
       hidden: p.hidden_metrics ?? [],
       control: p.control_enabled ?? [],
       pv_peak_w: p.pv_peak_w ?? 16000, battery_capacity_kwh: p.battery_capacity_kwh ?? 52,
@@ -125,7 +129,7 @@ export default function Modules() {
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Adaptér</label>
-            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" ? 502 : a === "goodwe" ? 8899 : f.port, device_type: a === "solis" ? "hybrid" : f.device_type }); }}>
+            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" ? 502 : a === "goodwe" ? 8899 : f.port, device_type: a === "solis" ? "hybrid" : a === "uvr_cmi" ? "sensor" : f.device_type }); }}>
               {ADAPTERS.map((a) => <option key={a} value={a}>{ADAPTER_LABEL[a] || a}</option>)}
             </select>
           </div>
@@ -180,6 +184,24 @@ export default function Modules() {
                 </select>
               </div>
             )}
+          </>)}
+          {f.adapter === "uvr_cmi" && (<>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>IP CMI (host)</label>
+              <input value={f.host} placeholder="192.168.6.144" onChange={(e) => setF({ ...f, host: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Uživatel</label>
+              <input value={f.cmi_user} placeholder="admin" onChange={(e) => setF({ ...f, cmi_user: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Heslo</label>
+              <input type="password" value={f.cmi_pass} onChange={(e) => setF({ ...f, cmi_pass: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>CAN uzel (node)</label>
+              <input value={f.cmi_node} placeholder="2" onChange={(e) => setF({ ...f, cmi_node: e.target.value })} />
+            </div>
           </>)}
           {f.adapter === "mock" && (<>
             <div className="field" style={{ marginBottom: 0 }}>
