@@ -42,6 +42,22 @@ def hp_power_kw(t_out: float | None, *, p_max_kw: float = 3.5,
     return _clamp(frac, 0.0, 1.0) * p_max_kw
 
 
+def hp_load_profile(t_out_series, *, tuv_kwh_den: float = 4.0, p_max_kw: float = 3.5,
+                    t_balance: float = 15.0, t_design: float = -15.0, t_off: float = 18.0) -> list[float]:
+    """Hodinový ELEKTRICKÝ příkon TČ (kW) = TUV (celoroční baseline) + vytápění (sezónní).
+
+    TUV: ohřev teplé vody jede celoročně nezávisle na venkovní teplotě — rozprostřeno
+    jako plochý baseline (tuv_kwh_den/24). Vytápění: hp_power_kw(T_venk), v létě ~0.
+    Seed model — TUV složku kalibrovat z propadů I2 (master střed) při odběru TUV.
+    """
+    tuv_kw = max(0.0, float(tuv_kwh_den)) / 24.0
+    out = []
+    for t in (t_out_series or []):
+        heat = hp_power_kw(t, p_max_kw=p_max_kw, t_balance=t_balance, t_design=t_design, t_off=t_off)
+        out.append(tuv_kw + heat)
+    return out
+
+
 # --- Hodnota tepla pro spirálu (brief §4, §7) ------------------------------
 def heat_value_czk_kwh(season: str, *, hodnota_tepla_leto: float = 2.0) -> float:
     """„Nízký spot" pro spirálu = cena nejlevnější alternativy získat teplo jinak.

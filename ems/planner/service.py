@@ -11,7 +11,7 @@ from ems.forecast import db as fdb
 from ems.localities import db as loc_db
 from ems.pricing import db as pricing_db
 from ems.pricing import cost as pricing_cost
-from . import core, db as pdb, thermal
+from . import core, db as pdb, thermal, reserve
 
 logger = logging.getLogger("ems.planner")
 
@@ -53,12 +53,14 @@ async def run_locality(locality_id: int) -> dict:
     load_rows = await fdb.latest_load(locality_id)
     spot = await fdb.spot_window_hourly(48)
     tariff = await pricing_db.get_effective(locality_id)
+    weather = await fdb.latest_weather(locality_id)
 
     load_map = {_key(datetime.fromisoformat(r["ts"])): r["load_w"] for r in load_rows}
     spot_map = {_key(datetime.fromisoformat(r["ts"])): r["czk_mwh"] for r in spot}
+    temp_map = {_key(datetime.fromisoformat(r["ts"])): r["temp_c"] for r in weather if r.get("temp_c") is not None}
 
     now = datetime.now(timezone.utc)
-    ts_list, pv_a, load_a, pimp, pexp = [], [], [], [], []
+    ts_list, pv_a, load_a, pimp, pexp, pv_lo_a, tout_a = [], [], [], [], [], [], []
     for p in pv:
         t = datetime.fromisoformat(p["ts"])
         if t < now - timedelta(hours=1):
@@ -70,6 +72,8 @@ async def run_locality(locality_id: int) -> dict:
         price = pricing_cost.price_czk_kwh(tariff, t, sp)
         ts_list.append(t)
         pv_a.append((p["pv_w"] or 0) / 1000.0)
+        pv_lo_a.append((p.get("pv_w_lo") if p.get("pv_w_lo") is not None else p["pv_w"] or 0) / 1000.0)
+        tout_a.append(temp_map.get(k))
         load_a.append((load_map.get(k, 0) or 0) / 1000.0)
         pimp.append(price["import_czk"])
         pexp.append(price["export_czk"])
@@ -89,13 +93,30 @@ async def run_locality(locality_id: int) -> dict:
                                     prah_zima=float(cfg["prah_zima"]), prah_leto=float(cfg["prah_leto"]))
     heat_value = thermal.heat_value_czk_kwh(season, hodnota_tepla_leto=float(cfg["hodnota_tepla_leto"]))
 
+    # --- 2b: model TČ (TUV celoročně + vytápění) → noční rezerva → adaptivní ranní SOC + floor profil
+    cap = float(cfg["capacity_kwh"])
+    hp = thermal.hp_load_profile(
+        tout_a, tuv_kwh_den=float(cfg["tc_tuv_kwh_den"]), p_max_kw=float(cfg["tc_prikon_kw"]))
+    n = len(ts_list)
+    nstart, nend = reserve.night_indices(pv_lo_a)
+    soc_min_kwh = float(cfg["soc_min_pct"]) / 100.0 * cap
+    outage_kwh = float(cfg["outage_reserve_pct"]) / 100.0 * cap
+    night_reserve = reserve.night_reserve_kwh(load_a, hp, pv_lo_a, nstart, nend, outage_kwh)
+    night_reserve = min(night_reserve, cap * 0.95)            # nemůže přesáhnout kapacitu
+    tomorrow_surplus = reserve.tomorrow_surplus_kwh(pv_lo_a, load_a, hp, nend)
+    morning_soc = reserve.adaptive_morning_soc_kwh(
+        tomorrow_surplus, soc_min_kwh=soc_min_kwh, cap_kwh=cap, night_reserve_kwh=night_reserve)
+    floor_arr = reserve.floor_profile_kwh(
+        n, nstart, nend, soc_min_kwh=soc_min_kwh, night_reserve_kwh=night_reserve, morning_soc_kwh=morning_soc)
+
     rows = core.plan(
         ts_list, pv_a, load_a, pimp, pexp,
-        cap_kwh=float(cfg["capacity_kwh"]), soc_now_pct=soc_now, floor_pct=floor,
+        cap_kwh=cap, soc_now_pct=soc_now, floor_pct=floor,
         max_charge_kwh=float(cfg["max_charge_kw"]), max_discharge_kwh=float(cfg["max_discharge_kw"]),
         allow_grid_discharge=bool(cfg["allow_grid_discharge"]),
         export_price_floor=float(cfg["export_price_floor_czk"]),
-        export_limit_kwh=float(cfg["grid_export_limit_kw"]))
+        export_limit_kwh=float(cfg["grid_export_limit_kw"]),
+        floor_kwh=floor_arr)
 
     # Odložitelný výstup (spirála / bazén / cokoliv přes eWeLink/relé) jako binární deferrable.
     for r in rows:
@@ -123,7 +144,12 @@ async def run_locality(locality_id: int) -> dict:
     await pdb.write_schedule(locality_id, rows, now)
     return {"ok": True, "points": len(rows), "soc_now": round(soc_now, 1),
             "season": season, "heat_value_czk": round(heat_value, 2),
-            "pv_7d_avg_kwh": round(pv7, 1) if pv7 is not None else None}
+            "pv_7d_avg_kwh": round(pv7, 1) if pv7 is not None else None,
+            "night_reserve_kwh": round(night_reserve, 1),
+            "night_reserve_pct": round(night_reserve / cap * 100.0, 0) if cap else 0,
+            "morning_soc_pct": round(morning_soc / cap * 100.0, 0) if cap else 0,
+            "hp_night_kwh": round(sum(hp[nstart:nend]), 1),
+            "tomorrow_pv_surplus_kwh": round(tomorrow_surplus, 1)}
 
 
 async def _next_local_hour(now, hour: int):

@@ -36,6 +36,7 @@ class PlannerConfigIn(BaseModel):
     prah_zima: float | None = None
     prah_leto: float | None = None
     tc_prikon_kw: float | None = None
+    tc_tuv_kwh_den: float | None = None
     tc_cop_a: float | None = None
     tc_cop_b: float | None = None
     tc_cop_min: float | None = None

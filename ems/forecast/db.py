@@ -149,6 +149,17 @@ async def latest_pv(locality_id: int, source: str = "avg") -> list[dict]:
              "pv_w_lo": r["pv_w_lo"], "pv_w_hi": r["pv_w_hi"]} for r in rows]
 
 
+async def latest_weather(locality_id: int, source: str = "open-meteo") -> list[dict]:
+    """Hodinová venkovní teplota (a oblačnost) z poslední předpovědi počasí."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT ts, temp_c, cloud_pct FROM weather_forecast WHERE locality_id=$1 AND source=$2 "
+            "AND fetched_at=(SELECT max(fetched_at) FROM weather_forecast WHERE locality_id=$1 AND source=$2) "
+            "ORDER BY ts", locality_id, source)
+    return [{"ts": r["ts"].isoformat(), "temp_c": r["temp_c"], "cloud_pct": r["cloud_pct"]} for r in rows]
+
+
 async def latest_fetched_at(locality_id: int, source: str):
     pool = await get_pool()
     async with pool.acquire() as conn:

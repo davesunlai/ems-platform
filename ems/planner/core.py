@@ -16,11 +16,15 @@ def _clamp(x, lo, hi):
 
 def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
          max_charge_kwh, max_discharge_kwh, allow_grid_discharge=False,
-         export_price_floor=0.0, export_limit_kwh=None, neg_price_pull=True) -> list[dict]:
+         export_price_floor=0.0, export_limit_kwh=None, neg_price_pull=True,
+         floor_kwh=None) -> list[dict]:
     n = len(ts)
     soc = soc_now_pct / 100.0 * cap_kwh
-    floor = floor_pct / 100.0 * cap_kwh
+    floor_scalar = floor_pct / 100.0 * cap_kwh
     elimit = float(export_limit_kwh) if export_limit_kwh else float("inf")   # strop měniče (kWh/h)
+
+    def _floor(h):   # per-hodinová spodní mez (§2 noční rezerva) nebo skalár
+        return floor_kwh[h] if floor_kwh else floor_scalar
 
     # nejlevnější / nejdražší hodiny horizontu pro arbitráž
     order_imp = sorted(range(n), key=lambda h: p_imp[h])
@@ -37,11 +41,12 @@ def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
         acc += max(0.0, pv[h] - load[h])
 
     def grid_charge_cap(h):
-        return max(floor, cap_kwh - future_surplus[h])
+        return max(_floor(h), cap_kwh - future_surplus[h])
 
     out = []
     for h in range(n):
         surplus = pv[h] - load[h]
+        floor = _floor(h)                                    # spodní mez této hodiny
         chg = dis = imp = exp = 0.0
         action, reason = "idle", "self-use"
 

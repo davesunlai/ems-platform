@@ -29,7 +29,8 @@ CONFIG_DEFAULTS = {
     "season_mode": "auto",            # auto | summer | winter
     "prah_zima": 15.0,                # 7denní průměr výroby FVE (kWh/den) < práh → WINTER
     "prah_leto": 35.0,                # > práh → SUMMER (prah_leto>prah_zima = hystereze)
-    "tc_prikon_kw": 3.5,              # el. příkon TČ (seed)
+    "tc_prikon_kw": 3.5,              # el. příkon TČ pro vytápění (seed)
+    "tc_tuv_kwh_den": 4.0,            # TUV (teplá voda) – celoroční denní energie TČ (seed)
     "tc_cop_a": 2.75, "tc_cop_b": 0.11, "tc_cop_min": 1.8, "tc_cop_max": 4.0,
 }
 _CFG_KEYS = list(CONFIG_DEFAULTS.keys())
@@ -87,6 +88,7 @@ async def ensure_schema() -> None:
             ("prah_zima", "DOUBLE PRECISION DEFAULT 15"),
             ("prah_leto", "DOUBLE PRECISION DEFAULT 35"),
             ("tc_prikon_kw", "DOUBLE PRECISION DEFAULT 3.5"),
+            ("tc_tuv_kwh_den", "DOUBLE PRECISION DEFAULT 4.0"),
             ("tc_cop_a", "DOUBLE PRECISION DEFAULT 2.75"),
             ("tc_cop_b", "DOUBLE PRECISION DEFAULT 0.11"),
             ("tc_cop_min", "DOUBLE PRECISION DEFAULT 1.8"),
