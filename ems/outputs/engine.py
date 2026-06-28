@@ -252,14 +252,35 @@ def _decide_surplus(o: dict, tele: dict, spot) -> tuple[bool, str, dict]:
     return desired, reason, det
 
 
-async def force_output(out_id: int, desired: bool, reason: str) -> bool:
+async def force_output(out_id: int, desired: bool, reason: str, *,
+                       min_on_s: float = 0, min_off_s: float = 0) -> bool:
     """Vynutí stav spínaného výstupu (vlastník = planner / Smart Control). Edge-trigger:
-    zasáhne jen při změně. Vrací True, pokud reálně přepnul."""
+    zasáhne jen při změně. Anti-short-cycle: nevypne dřív než po min_on_s a nezapne
+    dřív než po min_off_s (ochrana relé proti cvakání). Vrací True, pokud reálně přepnul."""
     o = await out_db.get(out_id)
     if not o:
         return False
     if bool(o["is_on"]) == bool(desired):
         return False
+    from datetime import datetime, timezone
+
+    def _age(v):
+        if not v:
+            return None
+        try:
+            d = v if hasattr(v, "tzinfo") else datetime.fromisoformat(v)
+            return (datetime.now(timezone.utc) - d).total_seconds()
+        except Exception:
+            return None
+
+    if not desired and min_on_s:                       # chrání minimální dobu BĚHU
+        age = _age(o.get("on_since"))
+        if age is not None and age < min_on_s:
+            return False
+    if desired and min_off_s:                          # chrání minimální dobu KLIDU
+        age = _age(o.get("last_action_at"))
+        if age is not None and age < min_off_s:
+            return False
     res = await _actuate(o, desired)
     await out_db.set_state(out_id, desired, f"Chytré řízení: {reason} → {'sepnuto' if desired else 'rozepnuto'}")
     await control_db.record("output:planner", o["target"], "switch",

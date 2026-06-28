@@ -362,7 +362,9 @@ async def tick_planner(state: dict) -> None:
                 try:
                     from ems.outputs.engine import force_output
                     await force_output(int(sid), bool(ca.get("deferrable_on")),
-                                       f"plán {'ON' if ca.get('deferrable_on') else 'OFF'}")
+                                       f"plán {'ON' if ca.get('deferrable_on') else 'OFF'}",
+                                       min_on_s=float(cfg.get("spiral_min_on_min") or 0) * 60,
+                                       min_off_s=float(cfg.get("spiral_min_off_min") or 0) * 60)
                 except Exception as exc:
                     logger.debug("Planner spirála lok %s: %s", lid, exc)
     except Exception as exc:
