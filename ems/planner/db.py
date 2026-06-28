@@ -19,6 +19,9 @@ CONFIG_DEFAULTS = {
     "spiral_target_kwh": 0.0,         # cíl kWh/den (0 = neplánuj odložitelný výstup)
     "spiral_deadline_h": 7,           # hotovo do (pražská hodina, typicky ráno)
     "spiral_power_kw": 6.0,           # příkon spotřebiče
+    "spiral_tmax_metric": "tank_s_bot",  # čidlo stropu (slave dolní I5)
+    "spiral_tmax_c": 65.0,            # T_max – nad tím STOP spirály (seed)
+    "spiral_kwh_per_deg": 2.33,       # tepelná kapacita nádrží (kWh/°C, seed)
     "breaker_kw": 22.0,               # strop přípojky pro IMPORT (3×32 A ≈ 22 kW)
     "cycle_margin_czk_kwh": 0.5,      # práh, ať se vyplatí cyklovat baterii do sítě
     # --- 2a: ekonomika exportu + sezónní/tepelný model (SEED hodnoty, kalibrace později) ---
@@ -78,6 +81,9 @@ async def ensure_schema() -> None:
             ("spiral_target_kwh", "DOUBLE PRECISION DEFAULT 0"),
             ("spiral_deadline_h", "INTEGER DEFAULT 7"),
             ("spiral_power_kw", "DOUBLE PRECISION DEFAULT 6"),
+            ("spiral_tmax_metric", "TEXT DEFAULT 'tank_s_bot'"),
+            ("spiral_tmax_c", "DOUBLE PRECISION DEFAULT 65"),
+            ("spiral_kwh_per_deg", "DOUBLE PRECISION DEFAULT 2.33"),
             ("breaker_kw", "DOUBLE PRECISION DEFAULT 22"),
             ("cycle_margin_czk_kwh", "DOUBLE PRECISION DEFAULT 0.5"),
             ("grid_export_limit_kw", "DOUBLE PRECISION DEFAULT 9.25"),

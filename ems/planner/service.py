@@ -45,6 +45,19 @@ async def _soc_now(device_ids: list[str]) -> float | None:
     return float(v) if v is not None else None
 
 
+async def _latest_temp(device_ids: list[str], metric: str) -> float | None:
+    """Poslední hodnota teplotní metriky (např. tank_s_bot / I5) napříč zařízeními lokality."""
+    if not device_ids or not metric:
+        return None
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        v = await conn.fetchval(
+            "SELECT value FROM samples WHERE device_id = ANY($1::text[]) AND metric=$2 "
+            "AND time > now() - interval '15 minutes' ORDER BY time DESC LIMIT 1",
+            device_ids, metric)
+    return float(v) if v is not None else None
+
+
 async def run_locality(locality_id: int) -> dict:
     cfg = await pdb.get_config(locality_id)
     pv = await fdb.latest_pv(locality_id, "avg")
@@ -118,28 +131,40 @@ async def run_locality(locality_id: int) -> dict:
         export_limit_kwh=float(cfg["grid_export_limit_kw"]),
         floor_kwh=floor_arr)
 
-    # Odložitelný výstup (spirála / bazén / cokoliv přes eWeLink/relé) jako binární deferrable.
+    # Časovaný spotřebič (spirála MVP): ekonomický soak — běží, když se teplo vyplatí
+    # víc než prodej/nákup, strop podle živé teploty nádrže (I5), baterie HOLD při grid soaku.
     for r in rows:
         r["deferrable_on"] = False
     sid = cfg.get("spiral_output_id")
-    tgt = float(cfg.get("spiral_target_kwh") or 0)
-    if sid and tgt > 0 and len(rows) == len(ts_list):
-        from . import amplitude
-        pv_surplus = [max(0.0, pv_a[i] - load_a[i]) for i in range(len(ts_list))]
+    if sid and len(rows) == len(ts_list):
+        from . import deferrable
+        power = float(cfg.get("spiral_power_kw") or 6.0)
         breaker = float(cfg.get("breaker_kw") or 22.0)
+        pv_surplus = [pv_a[i] - load_a[i] for i in range(n)]
         headroom = []
-        for i in range(len(ts_list)):
+        for i in range(n):
             grid_charge = rows[i]["battery_kw"] if rows[i].get("action") == "charge_grid" else 0.0
-            headroom.append(max(0.0, breaker - load_a[i] - float(grid_charge or 0.0)))   # strop jen na IMPORTU
-        deadline = await _next_local_hour(now, int(cfg.get("spiral_deadline_h") or 7))
-        sp = amplitude.schedule_spiral_binary(
-            ts_list, pimp, pv_surplus, energy_target_kwh=tgt,
-            max_power_kw=float(cfg.get("spiral_power_kw") or 6.0), deadline=deadline,
-            breaker_headroom_kw=headroom, now=now)
-        chosen_ts = {s["from"] for s in sp["slots"]}
-        for i, t in enumerate(ts_list):
-            if t in chosen_ts:
-                rows[i]["deferrable_on"] = True
+            headroom.append(max(0.0, breaker - load_a[i] - float(grid_charge or 0.0)))
+        # strop = kolik tepla se ještě vejde (z živé I5); fallback = volitelný denní max
+        i5 = await _latest_temp(devs, cfg.get("spiral_tmax_metric") or "tank_s_bot")
+        daily_max = float(cfg.get("spiral_target_kwh") or 0) or None
+        budget = deferrable.heat_budget_kwh(
+            i5, float(cfg["spiral_tmax_c"]), float(cfg["spiral_kwh_per_deg"]),
+            fallback_kwh=(daily_max or 0.0))
+        on = deferrable.schedule_soak(
+            pv_surplus, pimp, pexp, value_czk_kwh=heat_value, power_kw=power,
+            breaker_headroom_kw=headroom, budget_kwh=budget, daily_max_kwh=daily_max)
+        for h, hold in on.items():
+            rows[h]["deferrable_on"] = True
+            if hold:                                     # topí z gridu → baterie HOLD, spotřeba do importu
+                rows[h]["import_kwh"] = round(rows[h]["import_kwh"] + power, 3)
+            else:                                        # přebytek → uber z exportu, zbytek import
+                use = min(power, rows[h]["export_kwh"])
+                rows[h]["export_kwh"] = round(rows[h]["export_kwh"] - use, 3)
+                rows[h]["import_kwh"] = round(rows[h]["import_kwh"] + (power - use), 3)
+        spiral_kwh = round(len(on) * power, 1)
+    else:
+        spiral_kwh = 0.0
 
     await pdb.write_schedule(locality_id, rows, now)
     return {"ok": True, "points": len(rows), "soc_now": round(soc_now, 1),
@@ -149,7 +174,8 @@ async def run_locality(locality_id: int) -> dict:
             "night_reserve_pct": round(night_reserve / cap * 100.0, 0) if cap else 0,
             "morning_soc_pct": round(morning_soc / cap * 100.0, 0) if cap else 0,
             "hp_night_kwh": round(sum(hp[nstart:nend]), 1),
-            "tomorrow_pv_surplus_kwh": round(tomorrow_surplus, 1)}
+            "tomorrow_pv_surplus_kwh": round(tomorrow_surplus, 1),
+            "spiral_soak_kwh": spiral_kwh}
 
 
 async def _next_local_hour(now, hour: int):
