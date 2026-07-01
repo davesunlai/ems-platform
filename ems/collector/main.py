@@ -361,8 +361,15 @@ async def tick_planner(state: dict) -> None:
             if sid:
                 try:
                     from ems.outputs.engine import force_output
-                    await force_output(int(sid), bool(ca.get("deferrable_on")),
-                                       f"plán {'ON' if ca.get('deferrable_on') else 'OFF'}",
+                    from ems.outputs import db as out_db
+                    want = bool(ca.get("deferrable_on"))
+                    reason = f"plán {'ON' if want else 'OFF'}"
+                    if not want and bool(cfg.get("spiral_anti_curtail", True)):
+                        o = await out_db.get(int(sid))
+                        if await planner_service.anti_curtailment(lid, cfg, bool(o and o.get("is_on"))):
+                            want = True
+                            reason = "anti-ořez (přetok na stropu)"
+                    await force_output(int(sid), want, reason,
                                        min_on_s=float(cfg.get("spiral_min_on_min") or 0) * 60,
                                        min_off_s=float(cfg.get("spiral_min_off_min") or 0) * 60)
                 except Exception as exc:

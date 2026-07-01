@@ -24,6 +24,7 @@ CONFIG_DEFAULTS = {
     "spiral_kwh_per_deg": 2.33,       # tepelná kapacita nádrží (kWh/°C, seed)
     "spiral_min_on_min": 30,          # min. doba běhu (anti-short-cycle, ochrana relé)
     "spiral_min_off_min": 15,         # min. doba klidu
+    "spiral_anti_curtail": True,      # reaktivní soak: baterie plná + přetok na stropu → spirála ON
     "breaker_kw": 22.0,               # strop přípojky pro IMPORT (3×32 A ≈ 22 kW)
     "cycle_margin_czk_kwh": 0.5,      # práh, ať se vyplatí cyklovat baterii do sítě
     # --- 2a: ekonomika exportu + sezónní/tepelný model (SEED hodnoty, kalibrace později) ---
@@ -88,6 +89,7 @@ async def ensure_schema() -> None:
             ("spiral_kwh_per_deg", "DOUBLE PRECISION DEFAULT 2.33"),
             ("spiral_min_on_min", "INTEGER DEFAULT 30"),
             ("spiral_min_off_min", "INTEGER DEFAULT 15"),
+            ("spiral_anti_curtail", "BOOLEAN DEFAULT TRUE"),
             ("breaker_kw", "DOUBLE PRECISION DEFAULT 22"),
             ("cycle_margin_czk_kwh", "DOUBLE PRECISION DEFAULT 0.5"),
             ("grid_export_limit_kw", "DOUBLE PRECISION DEFAULT 9.25"),

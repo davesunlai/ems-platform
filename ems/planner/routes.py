@@ -31,6 +31,7 @@ class PlannerConfigIn(BaseModel):
     spiral_kwh_per_deg: float | None = None
     spiral_min_on_min: int | None = None
     spiral_min_off_min: int | None = None
+    spiral_anti_curtail: bool | None = None
     breaker_kw: float | None = None
     cycle_margin_czk_kwh: float | None = None
     grid_export_limit_kw: float | None = None

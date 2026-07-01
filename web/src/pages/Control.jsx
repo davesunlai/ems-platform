@@ -684,6 +684,10 @@ function PlannerPanel({ locId }) {
         <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
           Spirála soakuje, když se teplo vyplatí víc než prodej (cena ≤ hodnota tepla) nebo při přetoku, do stropu nádrže (T_max) či denního stropu. <b>Denní strop 0</b> = řídí jen teplota nádrže.
         </p>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, marginTop: 8 }}>
+          <input type="checkbox" checked={cfg.spiral_anti_curtail !== false} onChange={(e) => set("spiral_anti_curtail", e.target.checked)} />
+          ⚡ soak přetoku (anti-ořez) — když je baterie plná a přetéká na stropu měniče, sepni i mimo plán
+        </label>
       </div>
 
       {/* pokročilé */}

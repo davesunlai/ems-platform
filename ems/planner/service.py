@@ -58,6 +58,39 @@ async def _latest_temp(device_ids: list[str], metric: str) -> float | None:
     return float(v) if v is not None else None
 
 
+async def _latest_export_kw(device_ids: list[str]) -> float | None:
+    """Živý přetok do sítě (kW). grid_power: záporné=export → export_kw = max(0, −grid/1000)."""
+    if not device_ids:
+        return None
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        v = await conn.fetchval(
+            "SELECT value FROM samples WHERE device_id = ANY($1::text[]) AND metric='grid_power' "
+            "AND time > now() - interval '3 minutes' ORDER BY time DESC LIMIT 1", device_ids)
+    return max(0.0, -float(v) / 1000.0) if v is not None else None
+
+
+async def anti_curtailment(locality_id: int, cfg: dict, spiral_on: bool) -> bool:
+    """Reaktivní anti-ořez (brief §4): baterie ~plná + přetok na stropu měniče + nádrž pod T_max
+    → soakni zadarmo. Virtuální export = měřený přetok + (běží-li spirála) její příkon, ať se
+    podmínka po sepnutí sama nezruší."""
+    device_ids = [d["id"] for d in await loc_db.devices_for_locality(locality_id)]
+    if not device_ids:
+        return False
+    soc = await _soc_now(device_ids)
+    if soc is None or soc < 98.0:
+        return False
+    tank = await _latest_temp(device_ids, cfg.get("spiral_tmax_metric") or "tank_s_bot")
+    if tank is not None and tank >= float(cfg["spiral_tmax_c"]):
+        return False
+    exp = await _latest_export_kw(device_ids)
+    if exp is None:
+        return False
+    limit = float(cfg["grid_export_limit_kw"])
+    virtual = exp + (float(cfg["spiral_power_kw"]) if spiral_on else 0.0)
+    return virtual >= limit * 0.95
+
+
 async def run_locality(locality_id: int) -> dict:
     cfg = await pdb.get_config(locality_id)
     pv = await fdb.latest_pv(locality_id, "avg")
