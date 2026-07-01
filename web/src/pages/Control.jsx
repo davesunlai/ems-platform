@@ -469,10 +469,10 @@ function SolisControl({ mod }) {
         </div>
       </div>
 
-      <div className="ctl-sect">
-        <div className="ctl-h">📈 Spotová automatika</div>
+      <details className="ctl-sect">
+        <summary className="ctl-h" style={{ cursor: "pointer", opacity: 0.7 }}>📈 Spotová automatika <span style={{ fontSize: 11, fontWeight: 400 }}>(zastaralé — nahrazeno chytrým řízením)</span></summary>
         <SpotDischargePanel moduleId={mod.id} />
-      </div>
+      </details>
       <StatusLine status={status} />
     </div>
   );
@@ -591,64 +591,130 @@ function LocalitySummary({ locId, mods }) {
 function PlannerPanel({ locId }) {
   const [data, setData] = useState(null);
   const [cfg, setCfg] = useState(null);
+  const [sum, setSum] = useState(null);
+  const [outputs, setOutputs] = useState([]);
+  const [adv, setAdv] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
   const reload = () => api.getPlanner(locId).then((r) => { setData(r); setCfg({ ...r.config }); }).catch(() => {});
-  useEffect(() => { if (locId) reload(); }, [locId]);
+  const refreshSum = () => api.refreshPlanner(locId).then((r) => r.ok && setSum(r)).catch(() => {});
+  useEffect(() => {
+    if (!locId) return;
+    reload(); refreshSum();
+    api.listOutputs().then((r) => setOutputs(r || [])).catch(() => {});
+  }, [locId]);
   if (!locId || !cfg) return null;
 
   const set = (k, v) => setCfg({ ...cfg, [k]: v });
-  const NUM = ["capacity_kwh", "soc_min_pct", "outage_reserve_pct", "max_charge_kw", "max_discharge_kw", "horizon_h"];
+  const STR = ["season_mode", "spiral_tmax_metric"];
   const save = async () => {
     setBusy(true); setMsg("");
-    const payload = { ...cfg };
-    for (const k of NUM) payload[k] = cfg[k] === "" || cfg[k] == null ? null : Number(cfg[k]);
-    try { await api.setPlannerConfig(locId, payload); setMsg("Uloženo a přepočítáno."); reload(); }
+    const payload = {};
+    for (const [k, v] of Object.entries(cfg)) {
+      if (k === "locality_id") continue;
+      if (typeof v === "boolean" || STR.includes(k)) payload[k] = v;
+      else if (v === "" || v == null) payload[k] = null;
+      else payload[k] = Number(v);
+    }
+    try { await api.setPlannerConfig(locId, payload); setMsg("Uloženo."); await reload(); await refreshSum(); setMsg("Uloženo a přepočítáno."); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   };
 
   const cur = data?.current;
   const sched = data?.schedule || [];
-  const fld = { width: 90, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
-  const planImp = sched.reduce((s, r) => s + (r.import_kwh || 0), 0);
-  const planExp = sched.reduce((s, r) => s + (r.export_kwh || 0), 0);
+  const fld = { width: 96, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+  const F = ({ k, label, w }) => (
+    <div><label style={{ fontSize: 12, display: "block" }}>{label}</label>
+      <input style={{ ...fld, width: w || 96 }} value={cfg[k] ?? ""} onChange={(e) => set(k, e.target.value)} /></div>
+  );
+  const seasonLabel = sum?.season === "winter" ? "❄️ zima" : sum?.season === "summer" ? "☀️ léto" : "—";
+  const chip = { padding: "3px 9px", borderRadius: 999, background: "var(--bg)", border: "1px solid var(--border)", fontSize: 12.5 };
 
   return (
     <div className="panel" style={{ marginBottom: 14, borderColor: cfg.enabled ? "var(--green)" : "var(--border)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontWeight: 700, fontSize: 14 }}>🧠 Plánovač lokality</span>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 600, color: cfg.enabled ? "var(--green)" : "var(--muted)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 700, fontSize: 15 }}>🧠 Chytré řízení</span>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: cfg.enabled ? "var(--green)" : "var(--muted)" }}>
           <input type="checkbox" checked={!!cfg.enabled} onChange={(e) => set("enabled", e.target.checked)} />
-          {cfg.enabled ? "ZAPNUTÝ — řídí měnič" : "vypnutý (jen plán)"}
+          {cfg.enabled ? "ZAPNUTÉ — řídí baterii i spotřebiče" : "vypnuté (jen poradní plán)"}
         </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
           <input type="checkbox" checked={!!cfg.allow_grid_discharge} onChange={(e) => set("allow_grid_discharge", e.target.checked)} />
-          povolit vybíjení do sítě
+          🔻 vybíjet ve špičce do sítě
         </label>
+        <button className="btn primary" style={{ marginLeft: "auto", padding: "7px 15px" }} disabled={busy} onClick={save}>Uložit a přepočítat</button>
       </div>
+
       {cfg.enabled && (
         <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0", color: "var(--amber)" }}>
-          ⚠ Zapnutý plánovač <b>reálně řídí měnič</b> (přes frontu, na nastavených limitech proudu) a přebírá řízení místo reaktivních spot pravidel této lokality.
-          {cfg.allow_grid_discharge ? " Vybíjení do sítě je povolené — sleduj výkon baterie/sítě." : ""}
+          ⚠ Zapnuté chytré řízení <b>reálně řídí měnič</b> (přes frontu, na nastavených limitech) a přebírá řízení baterie i časovaných spotřebičů. Ruční zásah má přednost 30 min.
         </p>
       )}
 
-      <div className="row" style={{ gap: 12, flexWrap: "wrap", marginTop: 10 }}>
-        <div><label style={{ fontSize: 12, display: "block" }}>Kapacita (kWh)</label><input style={fld} value={cfg.capacity_kwh ?? ""} onChange={(e) => set("capacity_kwh", e.target.value)} /></div>
-        <div><label style={{ fontSize: 12, display: "block" }}>SoC min (%)</label><input style={fld} value={cfg.soc_min_pct ?? ""} onChange={(e) => set("soc_min_pct", e.target.value)} /></div>
-        <div><label style={{ fontSize: 12, display: "block" }}>Rezerva výpadek (%)</label><input style={fld} value={cfg.outage_reserve_pct ?? ""} onChange={(e) => set("outage_reserve_pct", e.target.value)} /></div>
-        <div><label style={{ fontSize: 12, display: "block" }}>Max nabíjení (kW)</label><input style={fld} value={cfg.max_charge_kw ?? ""} onChange={(e) => set("max_charge_kw", e.target.value)} /></div>
-        <div><label style={{ fontSize: 12, display: "block" }}>Max vybíjení (kW)</label><input style={fld} value={cfg.max_discharge_kw ?? ""} onChange={(e) => set("max_discharge_kw", e.target.value)} /></div>
-        <div><label style={{ fontSize: 12, display: "block" }}>Horizont (h)</label><input style={fld} value={cfg.horizon_h ?? ""} onChange={(e) => set("horizon_h", e.target.value)} /></div>
-        <button className="btn primary" style={{ alignSelf: "flex-end", padding: "8px 16px" }} disabled={busy} onClick={save}>Uložit a přepočítat</button>
+      {/* živý souhrn plánu */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+        <span style={chip}>{seasonLabel}</span>
+        {sum && <span style={chip}>🌙 noční rezerva <b>{Math.round(sum.night_reserve_pct)} %</b></span>}
+        {sum && <span style={chip}>🌅 ranní SoC <b>{Math.round(sum.morning_soc_pct)} %</b></span>}
+        {sum && <span style={chip}>♨️ spirála <b>{sum.spiral_soak_kwh} kWh/den</b></span>}
+        {sum && <span style={chip}>🔥 TČ noc <b>{sum.hp_night_kwh} kWh</b></span>}
+        {sum && <span style={chip} title="hodnota tepla — pod tuhle cenu prodeje spirála soakuje">🌡️ hodnota tepla <b>{sum.heat_value_czk} Kč</b></span>}
       </div>
+
+      {/* časovaný spotřebič */}
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>⏱️ Časovaný spotřebič</div>
+        <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div><label style={{ fontSize: 12, display: "block" }}>Spotřebič (výstup)</label>
+            <select style={{ ...fld, width: 190 }} value={cfg.spiral_output_id ?? ""} onChange={(e) => set("spiral_output_id", e.target.value === "" ? null : e.target.value)}>
+              <option value="">— žádný —</option>
+              {outputs.map((o) => <option key={o.id} value={o.id}>{o.name} ({o.target})</option>)}
+            </select></div>
+          <F k="spiral_power_kw" label="Příkon (kW)" />
+          <F k="spiral_target_kwh" label="Denní strop (kWh)" />
+          <F k="spiral_tmax_c" label="T_max (°C)" />
+          <F k="spiral_min_on_min" label="Min běh (min)" />
+          <F k="spiral_min_off_min" label="Min klid (min)" />
+        </div>
+        <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
+          Spirála soakuje, když se teplo vyplatí víc než prodej (cena ≤ hodnota tepla) nebo při přetoku, do stropu nádrže (T_max) či denního stropu. <b>Denní strop 0</b> = řídí jen teplota nádrže.
+        </p>
+      </div>
+
+      {/* pokročilé */}
+      <button className="btn" style={{ marginTop: 10, padding: "5px 12px", fontSize: 12 }} onClick={() => setAdv(!adv)}>
+        {adv ? "▲ Skrýt pokročilé" : "⚙️ Pokročilé nastavení"}
+      </button>
+      {adv && (
+        <div style={{ marginTop: 10, display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <F k="capacity_kwh" label="Kapacita (kWh)" />
+          <F k="soc_min_pct" label="SoC min (%)" />
+          <F k="outage_reserve_pct" label="Rezerva výpadek (%)" />
+          <F k="max_charge_kw" label="Max nabíjení (kW)" />
+          <F k="max_discharge_kw" label="Max vybíjení (kW)" />
+          <F k="horizon_h" label="Horizont (h)" />
+          <F k="grid_export_limit_kw" label="Strop exportu (kW)" />
+          <F k="export_price_floor_czk" label="Neprodávat pod (Kč)" />
+          <F k="hodnota_tepla_leto" label="Hodnota tepla léto (Kč)" />
+          <div><label style={{ fontSize: 12, display: "block" }}>Sezóna</label>
+            <select style={{ ...fld, width: 110 }} value={cfg.season_mode ?? "auto"} onChange={(e) => set("season_mode", e.target.value)}>
+              <option value="auto">auto</option><option value="summer">léto</option><option value="winter">zima</option>
+            </select></div>
+          <F k="prah_zima" label="Práh zima (kWh/den)" />
+          <F k="prah_leto" label="Práh léto (kWh/den)" />
+          <F k="tc_prikon_kw" label="TČ vytápění (kW)" />
+          <F k="tc_tuv_kwh_den" label="TČ TUV (kWh/den)" />
+          <F k="breaker_kw" label="Jistič (kW)" />
+          <F k="spiral_kwh_per_deg" label="Nádrž (kWh/°C)" />
+        </div>
+      )}
 
       <div style={{ marginTop: 10, fontSize: 13 }}>
         {cur
-          ? <span>Teď: <b>{ACT_LABEL[cur.action] || cur.action}</b> · SoC plán {Math.round(cur.soc_pct)} % <span className="muted">— {cur.reason}</span></span>
+          ? <span>Teď: <b>{ACT_LABEL[cur.action] || cur.action}</b> · SoC plán {Math.round(cur.soc_pct)} %{cur.deferrable_on ? " · ♨️ spirála ON" : ""} <span className="muted">— {cur.reason}</span></span>
           : <span className="muted">Zatím bez plánu — potřebuje predikci výroby (zadej polohu/panely a dej Přepočítat predikci).</span>}
-        {sched.length > 0 && <span className="muted"> · plán {sched.length} h, odběr {planImp.toFixed(1)} kWh, přetok {planExp.toFixed(1)} kWh</span>}
+        {sched.length > 0 && <span className="muted"> · plán {sched.length} h</span>}
       </div>
       {msg && <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>{msg}</p>}
     </div>
