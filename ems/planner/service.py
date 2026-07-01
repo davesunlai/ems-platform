@@ -114,13 +114,14 @@ async def run_locality(locality_id: int) -> dict:
     nstart, nend = reserve.night_indices(pv_lo_a)
     soc_min_kwh = float(cfg["soc_min_pct"]) / 100.0 * cap
     outage_kwh = float(cfg["outage_reserve_pct"]) / 100.0 * cap
-    night_reserve = reserve.night_reserve_kwh(load_a, hp, pv_lo_a, nstart, nend, outage_kwh)
-    night_reserve = min(night_reserve, cap * 0.95)            # nemůže přesáhnout kapacitu
+    base_floor_kwh = soc_min_kwh + outage_kwh                  # bezpečnostní podlaha (drž vždy)
+    night_use = reserve.night_reserve_kwh(load_a, hp, pv_lo_a, nstart, nend, outage_kwh=0.0)  # čistá spotřeba noci
+    night_reserve = min(night_use + base_floor_kwh, cap * 0.95)   # noc pokryje ze svého, přistane na podlaze
     tomorrow_surplus = reserve.tomorrow_surplus_kwh(pv_lo_a, load_a, hp, nend)
     morning_soc = reserve.adaptive_morning_soc_kwh(
-        tomorrow_surplus, soc_min_kwh=soc_min_kwh, cap_kwh=cap, night_reserve_kwh=night_reserve)
+        tomorrow_surplus, soc_min_kwh=base_floor_kwh, cap_kwh=cap, night_reserve_kwh=night_reserve)
     floor_arr = reserve.floor_profile_kwh(
-        n, nstart, nend, soc_min_kwh=soc_min_kwh, night_reserve_kwh=night_reserve, morning_soc_kwh=morning_soc)
+        n, nstart, nend, soc_min_kwh=base_floor_kwh, night_reserve_kwh=night_reserve, morning_soc_kwh=morning_soc)
 
     rows = core.plan(
         ts_list, pv_a, load_a, pimp, pexp,

@@ -588,6 +588,14 @@ function LocalitySummary({ locId, mods }) {
   );
 }
 
+const _FLD = { padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+function F({ k, label, w, cfg, set }) {
+  return (
+    <div><label style={{ fontSize: 12, display: "block" }}>{label}</label>
+      <input style={{ ..._FLD, width: w || 96 }} value={cfg[k] ?? ""} onChange={(e) => set(k, e.target.value)} /></div>
+  );
+}
+
 function PlannerPanel({ locId }) {
   const [data, setData] = useState(null);
   const [cfg, setCfg] = useState(null);
@@ -624,10 +632,6 @@ function PlannerPanel({ locId }) {
   const cur = data?.current;
   const sched = data?.schedule || [];
   const fld = { width: 96, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
-  const F = ({ k, label, w }) => (
-    <div><label style={{ fontSize: 12, display: "block" }}>{label}</label>
-      <input style={{ ...fld, width: w || 96 }} value={cfg[k] ?? ""} onChange={(e) => set(k, e.target.value)} /></div>
-  );
   const seasonLabel = sum?.season === "winter" ? "❄️ zima" : sum?.season === "summer" ? "☀️ léto" : "—";
   const chip = { padding: "3px 9px", borderRadius: 999, background: "var(--bg)", border: "1px solid var(--border)", fontSize: 12.5 };
 
@@ -671,11 +675,11 @@ function PlannerPanel({ locId }) {
               <option value="">— žádný —</option>
               {outputs.map((o) => <option key={o.id} value={o.id}>{o.name} ({o.target})</option>)}
             </select></div>
-          <F k="spiral_power_kw" label="Příkon (kW)" />
-          <F k="spiral_target_kwh" label="Denní strop (kWh)" />
-          <F k="spiral_tmax_c" label="T_max (°C)" />
-          <F k="spiral_min_on_min" label="Min běh (min)" />
-          <F k="spiral_min_off_min" label="Min klid (min)" />
+          <F cfg={cfg} set={set} k="spiral_power_kw" label="Příkon (kW)" />
+          <F cfg={cfg} set={set} k="spiral_target_kwh" label="Denní strop (kWh)" />
+          <F cfg={cfg} set={set} k="spiral_tmax_c" label="T_max (°C)" />
+          <F cfg={cfg} set={set} k="spiral_min_on_min" label="Min běh (min)" />
+          <F cfg={cfg} set={set} k="spiral_min_off_min" label="Min klid (min)" />
         </div>
         <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
           Spirála soakuje, když se teplo vyplatí víc než prodej (cena ≤ hodnota tepla) nebo při přetoku, do stropu nádrže (T_max) či denního stropu. <b>Denní strop 0</b> = řídí jen teplota nádrže.
@@ -688,25 +692,25 @@ function PlannerPanel({ locId }) {
       </button>
       {adv && (
         <div style={{ marginTop: 10, display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <F k="capacity_kwh" label="Kapacita (kWh)" />
-          <F k="soc_min_pct" label="SoC min (%)" />
-          <F k="outage_reserve_pct" label="Rezerva výpadek (%)" />
-          <F k="max_charge_kw" label="Max nabíjení (kW)" />
-          <F k="max_discharge_kw" label="Max vybíjení (kW)" />
-          <F k="horizon_h" label="Horizont (h)" />
-          <F k="grid_export_limit_kw" label="Strop exportu (kW)" />
-          <F k="export_price_floor_czk" label="Neprodávat pod (Kč)" />
-          <F k="hodnota_tepla_leto" label="Hodnota tepla léto (Kč)" />
+          <F cfg={cfg} set={set} k="capacity_kwh" label="Kapacita (kWh)" />
+          <F cfg={cfg} set={set} k="soc_min_pct" label="SoC min (%)" />
+          <F cfg={cfg} set={set} k="outage_reserve_pct" label="Rezerva výpadek (%)" />
+          <F cfg={cfg} set={set} k="max_charge_kw" label="Max nabíjení (kW)" />
+          <F cfg={cfg} set={set} k="max_discharge_kw" label="Max vybíjení (kW)" />
+          <F cfg={cfg} set={set} k="horizon_h" label="Horizont (h)" />
+          <F cfg={cfg} set={set} k="grid_export_limit_kw" label="Strop exportu (kW)" />
+          <F cfg={cfg} set={set} k="export_price_floor_czk" label="Neprodávat pod (Kč)" />
+          <F cfg={cfg} set={set} k="hodnota_tepla_leto" label="Hodnota tepla léto (Kč)" />
           <div><label style={{ fontSize: 12, display: "block" }}>Sezóna</label>
             <select style={{ ...fld, width: 110 }} value={cfg.season_mode ?? "auto"} onChange={(e) => set("season_mode", e.target.value)}>
               <option value="auto">auto</option><option value="summer">léto</option><option value="winter">zima</option>
             </select></div>
-          <F k="prah_zima" label="Práh zima (kWh/den)" />
-          <F k="prah_leto" label="Práh léto (kWh/den)" />
-          <F k="tc_prikon_kw" label="TČ vytápění (kW)" />
-          <F k="tc_tuv_kwh_den" label="TČ TUV (kWh/den)" />
-          <F k="breaker_kw" label="Jistič (kW)" />
-          <F k="spiral_kwh_per_deg" label="Nádrž (kWh/°C)" />
+          <F cfg={cfg} set={set} k="prah_zima" label="Práh zima (kWh/den)" />
+          <F cfg={cfg} set={set} k="prah_leto" label="Práh léto (kWh/den)" />
+          <F cfg={cfg} set={set} k="tc_prikon_kw" label="TČ vytápění (kW)" />
+          <F cfg={cfg} set={set} k="tc_tuv_kwh_den" label="TČ TUV (kWh/den)" />
+          <F cfg={cfg} set={set} k="breaker_kw" label="Jistič (kW)" />
+          <F cfg={cfg} set={set} k="spiral_kwh_per_deg" label="Nádrž (kWh/°C)" />
         </div>
       )}
 
