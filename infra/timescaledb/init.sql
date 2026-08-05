@@ -13,3 +13,8 @@ SELECT create_hypertable('samples', 'time', if_not_exists => TRUE);
 
 CREATE INDEX IF NOT EXISTS idx_samples_dev_metric_time
     ON samples (device_id, metric, time DESC);
+
+-- Per-device "last seen" lookup (LATERAL ... ORDER BY time DESC LIMIT 1) — bez
+-- filtru na metric index výše nepomůže. Používá list_devices/list_all_with_status.
+CREATE INDEX IF NOT EXISTS idx_samples_dev_time
+    ON samples (device_id, time DESC);

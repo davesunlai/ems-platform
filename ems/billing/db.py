@@ -10,9 +10,10 @@ from datetime import date
 
 from ems.api.db import get_pool
 
-# Spotová cena: hodinová energie sítě (kWh) × hodinová spot cena (CZK/kWh).
-# spot_history je v 15min slotech, cena v CZK/MWh.
-_SPOT_COST_SQL = """
+# Hodinová energie sítě (kWh) + hodinová spot cena (CZK/MWh) — cenu aplikuje Python
+# přes pricing.cost.price_czk_kwh (JEDEN cenový model, shodný s plánovačem: přirážka,
+# distribuce VT/NT, poplatky u nákupu; provize odečtená u prodeje).
+_HOURLY_GRID_SPOT_SQL = """
 WITH gh AS (
     SELECT h, sum(p) / 1000.0 AS np_kwh FROM (
         SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS p
@@ -22,26 +23,51 @@ WITH gh AS (
         GROUP BY 1, device_id
     ) x GROUP BY h
 ), sp AS (
-    SELECT time_bucket('1 hour', slot) AS h, avg(price) / 1000.0 AS czk
+    SELECT time_bucket('1 hour', slot) AS h, avg(price) AS czk_mwh
     FROM spot_history WHERE slot >= $2 AND slot < $3 GROUP BY 1
 )
-SELECT to_char(date_trunc('month', gh.h), 'YYYY-MM') AS m,
-       sum(greatest(0,  np_kwh) * coalesce(sp.czk, 0)) AS import_czk,
-       sum(greatest(0, -np_kwh) * coalesce(sp.czk, 0)) AS export_czk
+SELECT gh.h AS h, to_char(date_trunc('month', gh.h), 'YYYY-MM') AS m,
+       gh.np_kwh AS np_kwh, sp.czk_mwh AS czk_mwh
 FROM gh LEFT JOIN sp ON sp.h = gh.h
-GROUP BY 1
+ORDER BY gh.h
 """
 
 
-async def monthly_spot_cost(device_ids: list[str], start: date, end: date) -> dict[str, dict]:
-    """Spotová cena importu/exportu po měsících: {YYYY-MM: {import_czk, export_czk}}."""
+async def hourly_grid_spot(device_ids: list[str], start: date, end: date) -> list[dict]:
+    """Hodinové řádky: {h, m, np_kwh (+odběr/−dodávka), czk_mwh}."""
     if not device_ids:
-        return {}
+        return []
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(_SPOT_COST_SQL, device_ids, start, end)
-    return {r["m"]: {"import_czk": float(r["import_czk"] or 0),
-                     "export_czk": float(r["export_czk"] or 0)} for r in rows}
+        rows = await conn.fetch(_HOURLY_GRID_SPOT_SQL, device_ids, start, end)
+    return [dict(r) for r in rows]
+
+
+async def monthly_cost(device_ids: list[str], tariff: dict | None,
+                       start: date, end: date) -> dict[str, dict]:
+    """Cena importu/exportu po měsících DLE SAZEBNÍKU lokality (ne holý spot).
+
+    Import se počítá cenou nákupu (spot + přirážka + distribuce[VT/NT] + poplatky),
+    export cenou prodeje (spot − provize) — tedy tím, co reálně platíš/dostáváš.
+    """
+    from ems.pricing import cost as pricing_cost
+
+    out: dict[str, dict] = {}
+    for r in await hourly_grid_spot(device_ids, start, end):
+        m = r["m"]
+        d = out.setdefault(m, {"import_czk": 0.0, "export_czk": 0.0})
+        np_kwh = float(r["np_kwh"] or 0.0)
+        price = pricing_cost.price_czk_kwh(tariff, r["h"], r["czk_mwh"])
+        if np_kwh > 0:
+            d["import_czk"] += np_kwh * price["import_czk"]
+        else:
+            d["export_czk"] += (-np_kwh) * price["export_czk"]
+    return out
+
+
+async def monthly_spot_cost(device_ids: list[str], start: date, end: date) -> dict[str, dict]:
+    """ZASTARALÉ: holý spot bez sazebníku. Ponecháno pro srovnání/diagnostiku."""
+    return await monthly_cost(device_ids, None, start, end)
 
 _GRID_SQL = """
 WITH hourly AS (
@@ -136,14 +162,15 @@ async def period_export_kwh(device_ids: list[str], start: date, end: date) -> fl
     return round(sum(r["export_kwh"] for r in rows), 1)
 
 
-async def spot_cost_total(device_ids: list[str], start: date, end: date) -> dict:
-    """Spotová cena importu/exportu za celé období (součet měsíců) — pro souhrn."""
-    m = await monthly_spot_cost(device_ids, start, end)
+async def spot_cost_total(device_ids: list[str], start: date, end: date,
+                          tariff: dict | None = None) -> dict:
+    """Cena importu/exportu za celé období dle sazebníku (součet měsíců) — pro souhrn."""
+    m = await monthly_cost(device_ids, tariff, start, end)
     return {"import_czk": round(sum(v["import_czk"] for v in m.values()), 2),
             "export_czk": round(sum(v["export_czk"] for v in m.values()), 2)}
 
 
-_TODAY_SPOT_SQL = """
+_TODAY_GRID_SPOT_SQL = """
 WITH gh AS (
     SELECT h, sum(p) / 1000.0 AS np_kwh FROM (
         SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS p
@@ -153,23 +180,31 @@ WITH gh AS (
         GROUP BY 1, device_id
     ) x GROUP BY h
 ), sp AS (
-    SELECT time_bucket('1 hour', slot) AS h, avg(price) / 1000.0 AS czk
+    SELECT time_bucket('1 hour', slot) AS h, avg(price) AS czk_mwh
     FROM spot_history
     WHERE slot >= date_trunc('day', now() AT TIME ZONE 'Europe/Prague') AT TIME ZONE 'Europe/Prague'
     GROUP BY 1
 )
-SELECT COALESCE(sum(greatest(0,  np_kwh) * coalesce(sp.czk, 0)), 0) AS import_czk,
-       COALESCE(sum(greatest(0, -np_kwh) * coalesce(sp.czk, 0)), 0) AS export_czk
+SELECT gh.h AS h, gh.np_kwh AS np_kwh, sp.czk_mwh AS czk_mwh
 FROM gh LEFT JOIN sp ON sp.h = gh.h
 """
 
 
-async def today_spot_cost(device_ids: list[str]) -> dict:
-    """Dnešní spotová cena import/export přes PRAŽSKÝ den (shodně s kWh v souhrnu)."""
+async def today_spot_cost(device_ids: list[str], tariff: dict | None = None) -> dict:
+    """Dnešní cena import/export přes PRAŽSKÝ den dle sazebníku (shodně s kWh v souhrnu)."""
     if not device_ids:
         return {"import_czk": 0.0, "export_czk": 0.0}
+    from ems.pricing import cost as pricing_cost
+
     pool = await get_pool()
     async with pool.acquire() as conn:
-        r = await conn.fetchrow(_TODAY_SPOT_SQL, device_ids)
-    return {"import_czk": round(float(r["import_czk"] or 0), 2),
-            "export_czk": round(float(r["export_czk"] or 0), 2)}
+        rows = await conn.fetch(_TODAY_GRID_SPOT_SQL, device_ids)
+    imp = exp = 0.0
+    for r in rows:
+        np_kwh = float(r["np_kwh"] or 0.0)
+        price = pricing_cost.price_czk_kwh(tariff, r["h"], r["czk_mwh"])
+        if np_kwh > 0:
+            imp += np_kwh * price["import_czk"]
+        else:
+            exp += (-np_kwh) * price["export_czk"]
+    return {"import_czk": round(imp, 2), "export_czk": round(exp, 2)}

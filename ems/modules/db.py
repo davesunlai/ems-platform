@@ -57,12 +57,17 @@ async def list_all_with_status() -> list[dict]:
             """
             SELECT m.*,
                    l.name AS locality,
-                   (max(s.time) > now() - interval '5 minutes') AS active,
-                   max(s.time) AS last_seen
+                   (ls.last_seen > now() - interval '5 minutes') AS active,
+                   ls.last_seen AS last_seen
             FROM modules m
             LEFT JOIN localities l ON l.id = m.locality_id
-            LEFT JOIN samples s    ON s.device_id = m.id
-            GROUP BY m.id, l.name
+            LEFT JOIN LATERAL (
+                SELECT s.time AS last_seen
+                FROM samples s
+                WHERE s.device_id = m.id
+                ORDER BY s.time DESC
+                LIMIT 1
+            ) ls ON true
             ORDER BY m.id
             """
         )

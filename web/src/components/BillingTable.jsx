@@ -14,6 +14,7 @@ export default function BillingTable({ localityId }) {
   }, [localityId]);
 
   if (!b || !b.configured) return null;
+  const s = b.settings;
   const lim = b.settings.export_limit_kwh;
   const exp = b.totals.export_kwh;
   const pct = lim ? Math.min(100, (exp / lim) * 100) : 0;
@@ -53,6 +54,7 @@ export default function BillingTable({ localityId }) {
           <th style={{ textAlign: "right" }}>Nákup od distributora</th>
           <th style={{ textAlign: "right" }}>Cena ze sítě</th>
           <th style={{ textAlign: "right" }}>Cena do sítě</th>
+          <th style={{ textAlign: "right" }}>Saldo</th>
         </tr></thead>
         <tbody>
           {b.baseline && (b.baseline.export_kwh || b.baseline.import_kwh) ? (
@@ -62,6 +64,7 @@ export default function BillingTable({ localityId }) {
               <td style={{ textAlign: "right" }}>—</td>
               <td style={{ textAlign: "right" }}>{b.baseline.export_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right" }}>{b.baseline.import_kwh.toFixed(0)} kWh</td>
+              <td style={{ textAlign: "right" }}>—</td>
               <td style={{ textAlign: "right" }}>—</td>
               <td style={{ textAlign: "right" }}>—</td>
             </tr>
@@ -75,9 +78,12 @@ export default function BillingTable({ localityId }) {
               <td style={{ textAlign: "right" }}>{r.import_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right" }}>{r.import_czk != null ? `${r.import_czk.toFixed(0)} Kč` : "—"}</td>
               <td style={{ textAlign: "right", color: "var(--green)" }}>{r.export_czk != null ? `${r.export_czk.toFixed(0)} Kč` : "—"}</td>
+              <td style={{ textAlign: "right", fontWeight: 600, color: (r.saldo_czk || 0) >= 0 ? "var(--green)" : "#e06c75" }}>
+                {r.saldo_czk != null ? `${r.saldo_czk > 0 ? "+" : ""}${r.saldo_czk.toFixed(0)} Kč` : "—"}
+              </td>
             </tr>
           ))}
-          {!b.months.length && <tr><td colSpan="7" className="muted">Zatím žádná data v tomto období.</td></tr>}
+          {!b.months.length && <tr><td colSpan="8" className="muted">Zatím žádná data v tomto období.</td></tr>}
         </tbody>
         {b.months.length > 0 && (
           <tfoot><tr style={{ fontWeight: 600, borderTop: "1px solid var(--border)" }}>
@@ -88,9 +94,23 @@ export default function BillingTable({ localityId }) {
             <td style={{ textAlign: "right" }}>{fmtKWh(b.totals.import_kwh)}</td>
             <td style={{ textAlign: "right" }}>{b.totals.import_czk != null ? `${b.totals.import_czk.toFixed(0)} Kč` : "—"}</td>
             <td style={{ textAlign: "right", color: "var(--green)" }}>{b.totals.export_czk != null ? `${b.totals.export_czk.toFixed(0)} Kč` : "—"}</td>
+            <td style={{ textAlign: "right", color: (b.totals.saldo_czk || 0) >= 0 ? "var(--green)" : "#e06c75" }}>
+              {b.totals.saldo_czk != null ? `${b.totals.saldo_czk > 0 ? "+" : ""}${b.totals.saldo_czk.toFixed(0)} Kč` : "—"}
+            </td>
           </tr></tfoot>
         )}
       </table>
+
+      <p className="muted" style={{ fontSize: 11.5, marginTop: 8, lineHeight: 1.5 }}>
+        {s.pricing_mode === "tariff"
+          ? <>Ceny z pevného tarifu lokality ({s.tariff_import_czk} / {s.tariff_export_czk} Kč/kWh).</>
+          : <>Ceny podle <b>sazebníku lokality</b> (stejný model jako plánovač):
+              nákup = spot {s.spot_buy_surcharge ? `+ ${s.spot_buy_surcharge} Kč/MWh přirážka` : ""} + distribuce + poplatky;
+              prodej = spot {s.spot_sell_fee ? `− ${s.spot_sell_fee} Kč/MWh provize` : ""}.</>}
+        {" "}<b>Saldo</b> = do sítě − ze sítě (kladné = dodal jsi víc, než odebral).
+        {b.fees_czk ? <> Paušály za období <b>{b.fees_czk.toFixed(0)} Kč</b> (nejsou v saldu).</> : null}
+        {" "}Pozor: měření je z měniče, faktura dodavatele z fakturačního elektroměru — malý rozdíl je normální.
+      </p>
     </div>
   );
 }

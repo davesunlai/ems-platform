@@ -45,25 +45,39 @@ async def close_pool() -> None:
 
 
 async def list_devices() -> list[dict]:
+    """Seznam zařízení + last_seen. Per-device index lookup (idx_samples_dev_time)
+    místo GROUP BY přes celou hypertable samples — dřív ~1,9 s full scan každých
+    30 s (95 % času DB), teď jednotky ms."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT s.device_id,
-                   max(l.name)  AS locality,
-                   max(m.locality_id) AS locality_id,
-                   max(m.params->>'hidden_metrics') AS hidden_metrics,
-                   max(m.params->>'control_enabled') AS control_enabled,
-                   max(m.adapter) AS adapter,
-                   max(s.time)  AS last_seen,
-                   (max(s.time) > now() - interval '5 minutes') AS active
-            FROM samples s
-            LEFT JOIN modules m    ON m.id = s.device_id
+            SELECT d.device_id,
+                   l.name AS locality,
+                   m.locality_id,
+                   m.params->>'hidden_metrics' AS hidden_metrics,
+                   m.params->>'control_enabled' AS control_enabled,
+                   m.adapter,
+                   ls.last_seen,
+                   (ls.last_seen > now() - interval '5 minutes') AS active
+            FROM (
+                SELECT id AS device_id FROM modules
+                UNION
+                SELECT DISTINCT device_id FROM samples
+                WHERE time > now() - interval '5 minutes'
+            ) d
+            LEFT JOIN modules m    ON m.id = d.device_id
             LEFT JOIN localities l ON l.id = m.locality_id
-            GROUP BY s.device_id
-            HAVING (max(s.time) > now() - interval '5 minutes')
-                OR max(m.locality_id) IS NOT NULL
-            ORDER BY s.device_id
+            LEFT JOIN LATERAL (
+                SELECT s.time AS last_seen
+                FROM samples s
+                WHERE s.device_id = d.device_id
+                ORDER BY s.time DESC
+                LIMIT 1
+            ) ls ON true
+            WHERE ls.last_seen > now() - interval '5 minutes'
+               OR m.locality_id IS NOT NULL
+            ORDER BY d.device_id
             """
         )
     return [{
