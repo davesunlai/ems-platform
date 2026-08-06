@@ -37,6 +37,9 @@ class PlannerConfigIn(BaseModel):
     grid_export_limit_kw: float | None = None
     dso_export_limit_kw: float | None = None
     export_price_floor_czk: float | None = None
+    import_price_ceiling_czk: float | None = None
+    reserve_margin_pct: float | None = None
+    priority_order: str | None = None
     hodnota_tepla_leto: float | None = None
     season_mode: str | None = None
     prah_zima: float | None = None

@@ -31,6 +31,9 @@ CONFIG_DEFAULTS = {
     "grid_export_limit_kw": 9.25,     # setpoint měniče (proti tomu plánuj export + detekuj ořez)
     "dso_export_limit_kw": 9.45,      # smluvní limit DS (jen validace: setpoint ≤ tohle)
     "export_price_floor_czk": 0.7,    # pod tuto cenu prodeje do sítě NIKDY nevybíjet
+    "import_price_ceiling_czk": 1.0,  # nad tuto cenu nákupu NIKDY neplánovat odběr z gridu (baterie má prioritu)
+    "reserve_margin_pct": 20.0,       # bezpečnostní marže noční rezervy (+% na predikci spotřeby noci)
+    "priority_order": '["reserve","export","spiral","grid_charge"]',  # pořadí priorit (UI drag&drop)
     "hodnota_tepla_leto": 2.0,        # Kč/kWh – alternativa získat teplo jinak (léto)
     "season_mode": "auto",            # auto | summer | winter
     "prah_zima": 15.0,                # 7denní průměr výroby FVE (kWh/den) < práh → WINTER
@@ -95,6 +98,9 @@ async def ensure_schema() -> None:
             ("grid_export_limit_kw", "DOUBLE PRECISION DEFAULT 9.25"),
             ("dso_export_limit_kw", "DOUBLE PRECISION DEFAULT 9.45"),
             ("export_price_floor_czk", "DOUBLE PRECISION DEFAULT 0.7"),
+            ("import_price_ceiling_czk", "DOUBLE PRECISION DEFAULT 1.0"),
+            ("reserve_margin_pct", "DOUBLE PRECISION DEFAULT 20"),
+            ("priority_order", "TEXT DEFAULT '[\"reserve\",\"export\",\"spiral\",\"grid_charge\"]'"),
             ("hodnota_tepla_leto", "DOUBLE PRECISION DEFAULT 2.0"),
             ("season_mode", "TEXT DEFAULT 'auto'"),
             ("prah_zima", "DOUBLE PRECISION DEFAULT 15"),

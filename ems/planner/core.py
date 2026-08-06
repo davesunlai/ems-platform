@@ -17,7 +17,7 @@ def _clamp(x, lo, hi):
 def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
          max_charge_kwh, max_discharge_kwh, allow_grid_discharge=False,
          export_price_floor=0.0, export_limit_kwh=None, neg_price_pull=True,
-         floor_kwh=None) -> list[dict]:
+         floor_kwh=None, import_price_ceiling=None) -> list[dict]:
     n = len(ts)
     soc = soc_now_pct / 100.0 * cap_kwh
     floor_scalar = floor_pct / 100.0 * cap_kwh
@@ -29,7 +29,9 @@ def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
     # nejlevnější / nejdražší hodiny horizontu pro arbitráž
     order_imp = sorted(range(n), key=lambda h: p_imp[h])
     order_exp = sorted(range(n), key=lambda h: -p_exp[h])
-    cheap = set(order_imp[:max(1, n // 6)])
+    ceil = float(import_price_ceiling) if import_price_ceiling is not None else float("inf")
+    # levné okno = nejlevnější šestina horizontu, ale NIKDY nad cenový strop importu
+    cheap = {h for h in order_imp[:max(1, n // 6)] if p_imp[h] <= ceil}
     # špička pro vybíjení do sítě JEN nad cenovým prahem (nikdy neprodávej levně/záporně, §5)
     peak = {h for h in order_exp[:max(1, n // 8)] if p_exp[h] >= export_price_floor} if allow_grid_discharge else set()
 

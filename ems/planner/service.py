@@ -91,6 +91,19 @@ async def anti_curtailment(locality_id: int, cfg: dict, spiral_on: bool) -> bool
     return virtual >= limit * 0.95
 
 
+def _priorities(cfg: dict) -> dict[str, int]:
+    """Pořadí priorit z UI (drag&drop). Nižší index = vyšší priorita.
+    Bezpečnostní podlaha (soc_min+výpadek) je VŽDY nad vším — není v seznamu."""
+    import json as _json
+    default = ["reserve", "export", "spiral", "grid_charge"]
+    try:
+        order = [k for k in _json.loads(cfg.get("priority_order") or "[]") if k in default]
+    except Exception:
+        order = []
+    order += [k for k in default if k not in order]
+    return {k: i for i, k in enumerate(order)}
+
+
 async def run_locality(locality_id: int) -> dict:
     cfg = await pdb.get_config(locality_id)
     pv = await fdb.latest_pv(locality_id, "avg")
@@ -148,13 +161,18 @@ async def run_locality(locality_id: int) -> dict:
     soc_min_kwh = float(cfg["soc_min_pct"]) / 100.0 * cap
     outage_kwh = float(cfg["outage_reserve_pct"]) / 100.0 * cap
     base_floor_kwh = soc_min_kwh + outage_kwh                  # bezpečnostní podlaha (drž vždy)
-    night_use = reserve.night_reserve_kwh(load_a, hp, pv_lo_a, nstart, nend, outage_kwh=0.0)  # čistá spotřeba noci
+    prio = _priorities(cfg)
+    margin = 1.0 + max(0.0, float(cfg.get("reserve_margin_pct") or 0)) / 100.0
+    night_use = reserve.night_reserve_kwh(load_a, hp, pv_lo_a, nstart, nend, outage_kwh=0.0) * margin
     night_reserve = min(night_use + base_floor_kwh, cap * 0.95)   # noc pokryje ze svého, přistane na podlaze
+    # priorita „rezerva vs export": rezerva výš (default) → večerní špička ji NEPRODÁ;
+    # export přetažen výš → před nocí drží jen bezpečnostní podlahu (prodej má přednost, riskuješ import)
+    pre_night_floor = night_reserve if prio["reserve"] < prio["export"] else base_floor_kwh
     tomorrow_surplus = reserve.tomorrow_surplus_kwh(pv_lo_a, load_a, hp, nend)
     morning_soc = reserve.adaptive_morning_soc_kwh(
         tomorrow_surplus, soc_min_kwh=base_floor_kwh, cap_kwh=cap, night_reserve_kwh=night_reserve)
     floor_arr = reserve.floor_profile_kwh(
-        n, nstart, nend, soc_min_kwh=base_floor_kwh, night_reserve_kwh=night_reserve, morning_soc_kwh=morning_soc)
+        n, nstart, nend, soc_min_kwh=base_floor_kwh, night_reserve_kwh=pre_night_floor, morning_soc_kwh=morning_soc)
 
     rows = core.plan(
         ts_list, pv_a, load_a, pimp, pexp,
@@ -163,7 +181,8 @@ async def run_locality(locality_id: int) -> dict:
         allow_grid_discharge=bool(cfg["allow_grid_discharge"]),
         export_price_floor=float(cfg["export_price_floor_czk"]),
         export_limit_kwh=float(cfg["grid_export_limit_kw"]),
-        floor_kwh=floor_arr)
+        floor_kwh=floor_arr,
+        import_price_ceiling=float(cfg.get("import_price_ceiling_czk") or 0) or None)
 
     # Časovaný spotřebič (spirála MVP): ekonomický soak — běží, když se teplo vyplatí
     # víc než prodej/nákup, strop podle živé teploty nádrže (I5), baterie HOLD při grid soaku.
@@ -187,7 +206,8 @@ async def run_locality(locality_id: int) -> dict:
             fallback_kwh=(daily_max or 0.0))
         on = deferrable.schedule_soak(
             pv_surplus, pimp, pexp, value_czk_kwh=heat_value, power_kw=power,
-            breaker_headroom_kw=headroom, budget_kwh=budget, daily_max_kwh=daily_max)
+            breaker_headroom_kw=headroom, budget_kwh=budget, daily_max_kwh=daily_max,
+            surplus_always=prio["spiral"] < prio["export"])
         for h, hold in on.items():
             rows[h]["deferrable_on"] = True
             if hold:                                     # topí z gridu → baterie HOLD, spotřeba do importu

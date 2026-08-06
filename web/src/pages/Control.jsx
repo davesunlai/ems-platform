@@ -596,12 +596,47 @@ function F({ k, label, w, cfg, set }) {
   );
 }
 
+const PRIO_DEF = ["reserve", "export", "spiral", "grid_charge"];
+const PRIO_ITEMS = {
+  safety: { icon: "🛡️", title: "Bezpečnostní podlaha", desc: "SoC min + rezerva na výpadek — pod tohle baterie nejde nikdy",
+    knobs: [{ k: "soc_min_pct", label: "SoC min (%)" }, { k: "outage_reserve_pct", label: "Rezerva výpadek (%)" }] },
+  reserve: { icon: "🌙", title: "Noční rezerva", desc: "dům + TČ přes noc (s marží) — večer se neprodá; nad cenový strop se z gridu nebere",
+    knobs: [{ k: "reserve_margin_pct", label: "Marže rezervy (%)" }, { k: "import_price_ceiling_czk", label: "Neplánovat odběr nad (Kč)" }, { k: "tc_tuv_kwh_den", label: "TČ TUV (kWh/den)" }] },
+  export: { icon: "🔻", title: "Prodej ve špičce", desc: "vybíjení do sítě jen nad cenovým prahem a nad rezervou",
+    knobs: [{ k: "export_price_floor_czk", label: "Neprodávat pod (Kč)" }, { k: "grid_export_limit_kw", label: "Strop exportu (kW)" }] },
+  spiral: { icon: "♨️", title: "Spirála (časovaný spotřebič)", desc: "soak levné energie do tepla, strop dle teploty nádrže (I5)",
+    knobs: [{ k: "hodnota_tepla_leto", label: "Hodnota tepla léto (Kč)" }, { k: "spiral_tmax_c", label: "T_max (°C)" }, { k: "spiral_target_kwh", label: "Denní strop (kWh)" }] },
+  grid_charge: { icon: "🔌", title: "Levné nabíjení z gridu", desc: "dobití baterie jen v hodinách pod cenovým stropem / při záporné ceně",
+    knobs: [{ k: "import_price_ceiling_czk", label: "Nabíjet jen pod (Kč)" }] },
+};
+
+function PrioRow({ item, idx, locked, open, onOpen, cfg, set, ...drag }) {
+  return (
+    <div {...drag} style={{ width: "min(560px, 100%)", border: "1px solid var(--border)", borderRadius: 8,
+                            background: "var(--bg)", padding: "7px 10px", cursor: locked ? "pointer" : "grab" }}>
+      <div onClick={onOpen} style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", cursor: "pointer" }}>
+        <span className="muted" style={{ fontSize: 11 }}>{idx}</span>
+        <span style={{ fontWeight: 600, fontSize: 13 }}>{item.icon} {item.title}</span>
+        <span className="muted" style={{ fontSize: 11 }} title={locked ? "pevné — bezpečnost je nad vším" : "přetáhni pro změnu priority"}>{locked ? "🔒" : "⠿"}</span>
+      </div>
+      <div className="muted" style={{ fontSize: 11.5, textAlign: "center" }}>{item.desc}</div>
+      {open && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", marginTop: 8 }}>
+          {item.knobs.map((kn) => <F key={kn.k} k={kn.k} label={kn.label} cfg={cfg} set={set} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlannerPanel({ locId }) {
   const [data, setData] = useState(null);
   const [cfg, setCfg] = useState(null);
   const [sum, setSum] = useState(null);
   const [outputs, setOutputs] = useState([]);
   const [adv, setAdv] = useState(false);
+  const [openPrio, setOpenPrio] = useState(null);
+  const [dragIdx, setDragIdx] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -615,7 +650,7 @@ function PlannerPanel({ locId }) {
   if (!locId || !cfg) return null;
 
   const set = (k, v) => setCfg({ ...cfg, [k]: v });
-  const STR = ["season_mode", "spiral_tmax_metric"];
+  const STR = ["season_mode", "spiral_tmax_metric", "priority_order"];
   const save = async () => {
     setBusy(true); setMsg("");
     const payload = {};
@@ -688,6 +723,34 @@ function PlannerPanel({ locId }) {
           <input type="checkbox" checked={cfg.spiral_anti_curtail !== false} onChange={(e) => set("spiral_anti_curtail", e.target.checked)} />
           ⚡ soak přetoku (anti-ořez) — když je baterie plná a přetéká na stropu měniče, sepni i mimo plán
         </label>
+      </div>
+
+      {/* 🧭 Jak to chytře řídíme — priority s drag & drop */}
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+        <div style={{ fontWeight: 600, fontSize: 13, textAlign: "center" }}>🧭 Jak to chytře řídíme</div>
+        <p className="muted" style={{ fontSize: 11.5, textAlign: "center", margin: "2px 0 8px" }}>
+          Energie se rozděluje shora dolů. Řádky 2–5 přetáhni myší pro změnu priority; kliknutím rozbalíš nastavení.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <PrioRow locked item={PRIO_ITEMS.safety} idx="1." cfg={cfg} set={set}
+                   open={openPrio === "safety"} onOpen={() => setOpenPrio(openPrio === "safety" ? null : "safety")} />
+          {(() => {
+            let arr; try { arr = JSON.parse(cfg.priority_order || "[]"); } catch { arr = []; }
+            arr = [...arr.filter((k) => PRIO_DEF.includes(k)), ...PRIO_DEF.filter((k) => !arr.includes(k))];
+            return arr.map((k, i) => (
+              <PrioRow key={k} item={PRIO_ITEMS[k]} idx={`${i + 2}.`} cfg={cfg} set={set}
+                open={openPrio === k} onOpen={() => setOpenPrio(openPrio === k ? null : k)}
+                draggable onDragStart={() => setDragIdx(i)} onDragOver={(e) => e.preventDefault()}
+                onDrop={() => { if (dragIdx == null || dragIdx === i) return;
+                  const a = [...arr]; const [m] = a.splice(dragIdx, 1); a.splice(i, 0, m);
+                  set("priority_order", JSON.stringify(a)); setDragIdx(null); }} />
+            ));
+          })()}
+        </div>
+        <p className="muted" style={{ fontSize: 11, textAlign: "center", marginTop: 8, lineHeight: 1.6 }}>
+          vazby: ☀️ predikce FVE → velikost rezervy a ranní SoC · 🌡️ nádrž I5 → strop spirály ·
+          🗓️ sezóna → hodnota tepla · 🔋 plná baterie + přetok → anti-ořez spirály · ✋ ruční zásah → 30 min přednost
+        </p>
       </div>
 
       {/* pokročilé */}
