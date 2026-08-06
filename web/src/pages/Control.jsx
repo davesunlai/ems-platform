@@ -607,7 +607,7 @@ const PRIO_ITEMS = {
   export: { icon: "🔻", title: "Prodej ve špičce", desc: "vybíjení do sítě jen nad cenovým prahem a nad rezervou",
     knobs: [{ k: "export_price_floor_czk", label: "Neprodávat pod (Kč)" }, { k: "grid_export_limit_kw", label: "Strop exportu (kW)" }] },
   spiral: { icon: "♨️", title: "Spirála (časovaný spotřebič)", desc: "soak levné energie do tepla, strop dle teploty nádrže (I5)",
-    knobs: [{ k: "hodnota_tepla_leto", label: "Hodnota tepla léto (Kč)" }, { k: "spiral_tmax_c", label: "T_max (°C)" }, { k: "spiral_target_kwh", label: "Denní strop (kWh)" }] },
+    knobs: [{ k: "hodnota_tepla_leto", label: "Hodnota tepla léto (Kč)" }, { k: "spiral_tmax_c", label: "T_max (°C)" }, { k: "spiral_target_kwh", label: "Denní strop (kWh)" }, { k: "spiral_curtail_frac", label: "Ořez od podílu (0–1)" }] },
   grid_charge: { icon: "🔌", title: "Levné nabíjení z gridu", desc: "dobití baterie jen v hodinách pod cenovým stropem / při záporné ceně",
     knobs: [{ k: "import_price_ceiling_czk", label: "Nabíjet jen pod (Kč)" }] },
 };

@@ -87,8 +87,13 @@ async def anti_curtailment(locality_id: int, cfg: dict, spiral_on: bool) -> bool
     if exp is None:
         return False
     limit = float(cfg["grid_export_limit_kw"])
-    virtual = exp + (float(cfg["spiral_power_kw"]) if spiral_on else 0.0)
-    return virtual >= limit * 0.95
+    power = float(cfg["spiral_power_kw"])
+    virtual = exp + (power if spiral_on else 0.0)
+    # Sepni jen když by se jinak OŘEZAL podstatný podíl příkonu spirály — jinak je
+    # výhodnější prodávat (spirála 6 kW kvůli 1 kW ořezu = 5 kW ušlého prodeje).
+    curtailed = virtual - limit
+    frac = float(cfg.get("spiral_curtail_frac") or 0.6)
+    return curtailed >= power * frac
 
 
 def _priorities(cfg: dict) -> dict[str, int]:
@@ -209,10 +214,18 @@ async def run_locality(locality_id: int) -> dict:
         budget = deferrable.heat_budget_kwh(
             i5, float(cfg["spiral_tmax_c"]), float(cfg["spiral_kwh_per_deg"]),
             fallback_kwh=(daily_max or 0.0))
+        # spirála POD baterií i prodejem (default) = poslední: v přebytku běž jen z ořezu
+        strict = prio["spiral"] > prio["battery"] and prio["spiral"] > prio["export"]
+        elim = float(cfg["grid_export_limit_kw"])
+        curtail = None
+        if strict:
+            curtail = [max(0.0, pv_surplus[i] - max(0.0, float(rows[i]["battery_kw"] or 0)) - elim)
+                       for i in range(n)]
         on = deferrable.schedule_soak(
             pv_surplus, pimp, pexp, value_czk_kwh=heat_value, power_kw=power,
             breaker_headroom_kw=headroom, budget_kwh=budget, daily_max_kwh=daily_max,
-            surplus_always=prio["spiral"] < prio["export"])
+            surplus_always=prio["spiral"] < prio["export"], surplus_curtail_kw=curtail,
+            curtail_frac=float(cfg.get("spiral_curtail_frac") or 0.6))
         for h, hold in on.items():
             rows[h]["deferrable_on"] = True
             if hold:                                     # topí z gridu → baterie HOLD, spotřeba do importu

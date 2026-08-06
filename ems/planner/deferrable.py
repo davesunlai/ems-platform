@@ -16,7 +16,8 @@ from __future__ import annotations
 def schedule_soak(pv_surplus_kw: list[float], p_imp: list[float], p_exp: list[float], *,
                   value_czk_kwh: float, power_kw: float, breaker_headroom_kw: list[float],
                   budget_kwh: float, daily_max_kwh: float | None = None,
-                  surplus_always: bool = False) -> dict[int, bool]:
+                  surplus_always: bool = False, surplus_curtail_kw: list[float] | None = None,
+                  curtail_frac: float = 0.6) -> dict[int, bool]:
     """Naplánuj binární běh JEDNÉ zátěže (spirála MVP).
 
     - Hodina je eligibilní, když `value_czk_kwh ≥ marginální cena` (přebytek→prodej,
@@ -39,7 +40,12 @@ def schedule_soak(pv_surplus_kw: list[float], p_imp: list[float], p_exp: list[fl
     for h in range(n):
         surplus = (pv_surplus_kw[h] or 0.0) > 0.05
         marg = p_exp[h] if surplus else p_imp[h]        # co tě ta kWh teď stojí/vynese
-        ok = value_czk_kwh >= marg or (surplus and surplus_always)   # priorita spirály nad exportem
+        if surplus and surplus_curtail_kw is not None:
+            # režim „spirála poslední": v přebytku běž JEN když by se jinak ořezal
+            # podstatný podíl jejího příkonu (dům → síť → baterie mají přednost)
+            ok = (surplus_curtail_kw[h] or 0.0) >= power_kw * curtail_frac
+        else:
+            ok = value_czk_kwh >= marg or (surplus and surplus_always)   # priorita spirály nad exportem
         if ok and (breaker_headroom_kw[h] or 0.0) >= e - 1e-6:
             elig.append((marg, h, surplus))
     elig.sort(key=lambda x: x[0])                       # nejlevnější marginální cena první
