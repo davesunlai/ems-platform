@@ -298,9 +298,11 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
 
 function LocalityNow({ deviceIds, localityId }) {
   const [d, setD] = useState(null);
+  const [ts, setTs] = useState(null);
   useEffect(() => {
     let alive = true;
-    const load = () => api.aggregateNow(deviceIds, localityId).then((r) => alive && setD(r)).catch(() => {});
+    const load = () => api.aggregateNow(deviceIds, localityId)
+      .then((r) => { if (alive) { setD(r); setTs(new Date()); } }).catch(() => {});
     load();
     const t = setInterval(load, 30000);
     return () => { alive = false; clearInterval(t); };
@@ -320,7 +322,41 @@ function LocalityNow({ deviceIds, localityId }) {
       {d.soc != null && <> · <Icon name="battery" size={14} style={{ verticalAlign: "-2px", opacity: 0.85 }} /> <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
       {d.import_kwh != null && <> {" · "}<Icon name="tower" size={14} style={{ verticalAlign: "-2px", opacity: 0.85 }} /> ze sítě <strong style={{ color: "var(--blue)" }}>{fmt(impKw)} kW / {fmt(d.import_kwh)} kWh{d.import_czk != null ? ` / ${czk(d.import_czk)}` : ""}</strong></>}
       {d.export_kwh != null && <> · do sítě <strong style={{ color: "var(--green)" }}>{fmt(expKw)} kW / {fmt(d.export_kwh)} kWh{d.export_czk != null ? ` / ${czk(d.export_czk)}` : ""}</strong></>}
+      {ts && (
+        <span className="muted" style={{ fontSize: 11, marginLeft: 8, whiteSpace: "nowrap" }}
+              title="První číslo (kW) je okamžitý výkon, hodnoty za lomítkem (kWh, Kč) jsou součty za dnešní den.">
+          — kW = teď · kWh/Kč = dnes {ts.toLocaleDateString("cs-CZ")} · aktualizováno {ts.toLocaleTimeString("cs-CZ")}
+        </span>
+      )}
     </span>
+  );
+}
+
+function LocalitySection({ name, devs, open, onToggle }) {
+  const ids = devs.map((d) => d.device_id);
+  const locId = devs[0].locality_id;
+  return (
+    <section style={{ marginBottom: open ? 26 : 10 }}>
+      <h2 style={{ margin: "0 0 12px", fontSize: 18, cursor: "pointer", userSelect: "none" }}
+          onClick={onToggle} title={open ? "Sbalit lokalitu" : "Rozbalit lokalitu"}>
+        <span style={{ fontSize: 13, marginRight: 6, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>
+        {name === "—" ? "Bez lokality" : `📍 ${name}`}
+        <LocalityNow deviceIds={ids} localityId={locId} />
+      </h2>
+      {open && (<>
+        <ControlBanners deviceIds={ids} localityId={locId} />
+        <LocalityChart deviceIds={ids} />
+        {locId && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>Predikce 24–48 h</h3>
+            <ForecastChart localityId={locId} />
+          </div>
+        )}
+        {locId && <TempChart localityId={locId} deviceIds={ids} />}
+        {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} adapter={d.adapter} control={d.control_enabled || []} />)}
+        {locId && <BillingTable localityId={locId} />}
+      </>)}
+    </section>
   );
 }
 
@@ -371,6 +407,9 @@ export default function Dashboard() {
   const [devices, setDevices] = useState(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(() => localStorage.getItem("ems.dash.locality") || "");
+  const [openMap, setOpenMap] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ems.dash.open") || "{}"); } catch { return {}; }
+  });
 
   useEffect(() => {
     api.devices().then(setDevices).catch((e) => setError(e.message));
@@ -385,43 +424,25 @@ export default function Dashboard() {
   const names = Object.keys(groups).sort((a, b) =>
     a === "—" ? 1 : b === "—" ? -1 : a.localeCompare(b, "cs"));
 
-  // vybraná lokalita: uložená poslední (pokud pořád existuje), jinak první
+  // vybraná lokalita: uložená poslední (pokud pořád existuje), jinak první — default rozbalená
   const current = names.includes(selected) ? selected : names[0];
-  const pick = (name) => { if (name) { setSelected(name); localStorage.setItem("ems.dash.locality", name); } };
-
-  const devs = groups[current];
-  const ids = devs.map((d) => d.device_id);
-  const locOptions = names.map((n) => ({ id: n, label: n === "—" ? "Bez lokality" : n }));
+  const isOpen = (n) => (n in openMap ? openMap[n] : (names.length === 1 || n === current));
+  const toggle = (n) => setOpenMap((m) => {
+    const x = { ...m, [n]: !(n in m ? m[n] : (names.length === 1 || n === current)) };
+    localStorage.setItem("ems.dash.open", JSON.stringify(x));
+    return x;
+  });
 
   return (
     <main>
       {names.length > 1 && (
-        <div className="panel" style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <strong style={{ fontSize: 14 }}>Lokalita</strong>
-          <div style={{ minWidth: 240, flex: "0 1 360px" }}>
-            <SearchSelect value={current} options={locOptions} allowEmpty={false}
-              placeholder="Hledat lokalitu…" onChange={pick} />
-          </div>
-          <span className="muted" style={{ fontSize: 12 }}>{names.length} lokalit k dispozici</span>
-        </div>
+        <p className="muted" style={{ fontSize: 12, margin: "0 0 10px" }}>
+          {names.length} lokalit — klikem na název lokalitu sbalíš / rozbalíš.
+        </p>
       )}
-      <section style={{ marginBottom: 26 }}>
-        <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>
-          {current === "—" ? "Bez lokality" : `📍 ${current}`}
-          <LocalityNow deviceIds={ids} localityId={devs[0].locality_id} />
-        </h2>
-        <ControlBanners deviceIds={ids} localityId={devs[0].locality_id} />
-        <LocalityChart deviceIds={ids} />
-        {devs[0].locality_id && (
-          <div className="card" style={{ marginTop: 14 }}>
-            <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>Predikce 24–48 h</h3>
-            <ForecastChart localityId={devs[0].locality_id} />
-          </div>
-        )}
-        {devs[0].locality_id && <TempChart localityId={devs[0].locality_id} deviceIds={ids} />}
-        {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} adapter={d.adapter} control={d.control_enabled || []} />)}
-        {devs[0].locality_id && <BillingTable localityId={devs[0].locality_id} />}
-      </section>
+      {names.map((n) => (
+        <LocalitySection key={n} name={n} devs={groups[n]} open={isOpen(n)} onToggle={() => toggle(n)} />
+      ))}
     </main>
   );
 }
