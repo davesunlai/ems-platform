@@ -17,7 +17,7 @@ def _clamp(x, lo, hi):
 def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
          max_charge_kwh, max_discharge_kwh, allow_grid_discharge=False,
          export_price_floor=0.0, export_limit_kwh=None, neg_price_pull=True,
-         floor_kwh=None, import_price_ceiling=None) -> list[dict]:
+         floor_kwh=None, import_price_ceiling=None, export_before_battery=False) -> list[dict]:
     n = len(ts)
     soc = soc_now_pct / 100.0 * cap_kwh
     floor_scalar = floor_pct / 100.0 * cap_kwh
@@ -54,11 +54,23 @@ def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
 
         if surplus > 0:
             room = cap_kwh - soc
-            chg = min(surplus, room, max_charge_kwh)
-            soc += chg
-            exp = min(surplus - chg, elimit)                     # strop měniče (zbytek se ořízne)
-            action = "charge_pv" if chg > 0 else ("export" if exp > 0 else "idle")
-            reason = f"přebytek FVE {surplus:.1f} kWh"
+            # Priorita „prodej před nabíjením": prodávej hned (dům → síť → baterie),
+            # ale JEN když zbývající slunce dne baterii stejně naplní (konzervativně ×0.75)
+            # a cena prodeje je nad podlahou. Jinak klasicky baterie první.
+            exp_first = (export_before_battery and p_exp[h] >= export_price_floor
+                         and future_surplus[h] * 0.75 >= room)
+            if exp_first:
+                exp = min(surplus, elimit)
+                chg = min(surplus - exp, room, max_charge_kwh)
+                soc += chg
+                action = "export" if exp > 0 else "idle"
+                reason = f"prodej před nabíjením (slunce ještě dodá ~{future_surplus[h]:.0f} kWh)"
+            else:
+                chg = min(surplus, room, max_charge_kwh)
+                soc += chg
+                exp = min(surplus - chg, elimit)                 # strop měniče (zbytek se ořízne)
+                action = "charge_pv" if chg > 0 else ("export" if exp > 0 else "idle")
+                reason = f"přebytek FVE {surplus:.1f} kWh"
             if h in cheap and soc < grid_charge_cap(h):           # dofoukni levně z gridu (s místem pro FVE)
                 extra = min(grid_charge_cap(h) - soc, max_charge_kwh - chg)
                 if extra > 0.05:

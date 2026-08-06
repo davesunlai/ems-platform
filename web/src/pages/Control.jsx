@@ -596,12 +596,14 @@ function F({ k, label, w, cfg, set }) {
   );
 }
 
-const PRIO_DEF = ["reserve", "export", "spiral", "grid_charge"];
+const PRIO_DEF = ["reserve", "battery", "export", "spiral", "grid_charge"];
 const PRIO_ITEMS = {
   safety: { icon: "🛡️", title: "Bezpečnostní podlaha", desc: "SoC min + rezerva na výpadek — pod tohle baterie nejde nikdy",
     knobs: [{ k: "soc_min_pct", label: "SoC min (%)" }, { k: "outage_reserve_pct", label: "Rezerva výpadek (%)" }] },
   reserve: { icon: "🌙", title: "Noční rezerva", desc: "dům + TČ přes noc (s marží) — večer se neprodá; nad cenový strop se z gridu nebere",
     knobs: [{ k: "reserve_margin_pct", label: "Marže rezervy (%)" }, { k: "import_price_ceiling_czk", label: "Neplánovat odběr nad (Kč)" }, { k: "tc_tuv_kwh_den", label: "TČ TUV (kWh/den)" }] },
+  battery: { icon: "🔋", title: "Nabíjení baterie z FVE", desc: "přebytek slunce do baterie — když je Prodej výš, prodává se hned a baterii dofoukne zbytek dne (jen pokud to predikce jistí)",
+    knobs: [{ k: "max_charge_kw", label: "Max nabíjení (kW)" }, { k: "capacity_kwh", label: "Kapacita (kWh)" }] },
   export: { icon: "🔻", title: "Prodej ve špičce", desc: "vybíjení do sítě jen nad cenovým prahem a nad rezervou",
     knobs: [{ k: "export_price_floor_czk", label: "Neprodávat pod (Kč)" }, { k: "grid_export_limit_kw", label: "Strop exportu (kW)" }] },
   spiral: { icon: "♨️", title: "Spirála (časovaný spotřebič)", desc: "soak levné energie do tepla, strop dle teploty nádrže (I5)",
@@ -736,7 +738,9 @@ function PlannerPanel({ locId }) {
                    open={openPrio === "safety"} onOpen={() => setOpenPrio(openPrio === "safety" ? null : "safety")} />
           {(() => {
             let arr; try { arr = JSON.parse(cfg.priority_order || "[]"); } catch { arr = []; }
-            arr = [...arr.filter((k) => PRIO_DEF.includes(k)), ...PRIO_DEF.filter((k) => !arr.includes(k))];
+            arr = arr.filter((k) => PRIO_DEF.includes(k));
+            if (!arr.includes("battery") && arr.includes("export")) arr.splice(arr.indexOf("export"), 0, "battery");
+            arr = [...arr, ...PRIO_DEF.filter((k) => !arr.includes(k))];
             return arr.map((k, i) => (
               <PrioRow key={k} item={PRIO_ITEMS[k]} idx={`${i + 2}.`} cfg={cfg} set={set}
                 open={openPrio === k} onOpen={() => setOpenPrio(openPrio === k ? null : k)}

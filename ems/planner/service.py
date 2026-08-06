@@ -93,13 +93,17 @@ async def anti_curtailment(locality_id: int, cfg: dict, spiral_on: bool) -> bool
 
 def _priorities(cfg: dict) -> dict[str, int]:
     """Pořadí priorit z UI (drag&drop). Nižší index = vyšší priorita.
-    Bezpečnostní podlaha (soc_min+výpadek) je VŽDY nad vším — není v seznamu."""
+    Bezpečnostní podlaha (soc_min+výpadek) je VŽDY nad vším — není v seznamu.
+    'battery' chybějící ve starším uloženém pořadí se vkládá PŘED export
+    (= původní chování: přebytek nejdřív do baterie, pak prodej)."""
     import json as _json
-    default = ["reserve", "export", "spiral", "grid_charge"]
+    default = ["reserve", "battery", "export", "spiral", "grid_charge"]
     try:
         order = [k for k in _json.loads(cfg.get("priority_order") or "[]") if k in default]
     except Exception:
         order = []
+    if "battery" not in order and "export" in order:
+        order.insert(order.index("export"), "battery")
     order += [k for k in default if k not in order]
     return {k: i for i, k in enumerate(order)}
 
@@ -182,7 +186,8 @@ async def run_locality(locality_id: int) -> dict:
         export_price_floor=float(cfg["export_price_floor_czk"]),
         export_limit_kwh=float(cfg["grid_export_limit_kw"]),
         floor_kwh=floor_arr,
-        import_price_ceiling=float(cfg.get("import_price_ceiling_czk") or 0) or None)
+        import_price_ceiling=float(cfg.get("import_price_ceiling_czk") or 0) or None,
+        export_before_battery=prio["export"] < prio["battery"])
 
     # Časovaný spotřebič (spirála MVP): ekonomický soak — běží, když se teplo vyplatí
     # víc než prodej/nákup, strop podle živé teploty nádrže (I5), baterie HOLD při grid soaku.
