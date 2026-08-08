@@ -90,6 +90,7 @@ export const api = {
   deleteRule: (id) => request(`/api/admin/automation/${encodeURIComponent(id)}`, { method: "DELETE" }),
   listLocalities: () => request("/api/admin/localities"),
   localityBilling: (id) => request(`/api/localities/${id}/billing`),
+  localityBillingDays: (id, month) => request(`/api/localities/${id}/billing/days?month=${month}`),
   localityOutages: (id) => request(`/api/localities/${id}/outages`),
   alerts: () => request("/api/alerts"),
   setNotifyChannels: (email, browser) => request("/api/auth/me/notify", { method: "PUT", body: { email, browser } }),

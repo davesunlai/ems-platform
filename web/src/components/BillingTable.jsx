@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { api } from "../api";
 
 function fmtKWh(v) {
@@ -7,6 +7,17 @@ function fmtKWh(v) {
 
 export default function BillingTable({ localityId }) {
   const [b, setB] = useState(null);
+  const [openMonth, setOpenMonth] = useState(null);
+  const [days, setDays] = useState({});
+  const toggleMonth = (m) => {
+    if (openMonth === m) { setOpenMonth(null); return; }
+    setOpenMonth(m);
+    if (!days[m]) {
+      api.localityBillingDays(localityId, m)
+        .then((r) => setDays((x) => ({ ...x, [m]: r.days || [] })))
+        .catch(() => setDays((x) => ({ ...x, [m]: [] })));
+    }
+  };
   useEffect(() => {
     let alive = true;
     api.localityBilling(localityId).then((r) => alive && setB(r)).catch(() => {});
@@ -69,9 +80,10 @@ export default function BillingTable({ localityId }) {
               <td style={{ textAlign: "right" }}>—</td>
             </tr>
           ) : null}
-          {b.months.map((r) => (
-            <tr key={r.month}>
-              <td>{fmtMonth(r.month)}</td>
+          {b.months.map((r) => (<Fragment key={r.month}>
+            <tr onClick={() => toggleMonth(r.month)} style={{ cursor: "pointer" }}
+                title="Klikni pro denní rozpad">
+              <td><span style={{ fontSize: 10, opacity: 0.7, marginRight: 4 }}>{openMonth === r.month ? "▾" : "▸"}</span>{fmtMonth(r.month)}</td>
               <td style={{ textAlign: "right" }}>{r.prod_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right" }}>{r.cons_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right", color: "var(--green)" }}>{r.export_kwh.toFixed(0)} kWh</td>
@@ -82,7 +94,24 @@ export default function BillingTable({ localityId }) {
                 {r.saldo_czk != null ? `${r.saldo_czk > 0 ? "+" : ""}${r.saldo_czk.toFixed(0)} Kč` : "—"}
               </td>
             </tr>
-          ))}
+            {openMonth === r.month && !days[r.month] && (
+              <tr><td colSpan="8" className="muted" style={{ fontSize: 12 }}>Načítám dny…</td></tr>
+            )}
+            {openMonth === r.month && days[r.month] && days[r.month].map((d) => (
+              <tr key={d.day} style={{ fontSize: 12, opacity: 0.92, background: "var(--bg)" }}>
+                <td style={{ paddingLeft: 22 }}>{new Date(d.day).toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric", weekday: "short" })}</td>
+                <td style={{ textAlign: "right" }} className="muted">—</td>
+                <td style={{ textAlign: "right" }} className="muted">—</td>
+                <td style={{ textAlign: "right", color: "var(--green)" }}>{d.export_kwh.toFixed(1)} kWh</td>
+                <td style={{ textAlign: "right" }}>{d.import_kwh.toFixed(1)} kWh</td>
+                <td style={{ textAlign: "right" }}>{d.import_czk.toFixed(0)} Kč</td>
+                <td style={{ textAlign: "right", color: "var(--green)" }}>{d.export_czk.toFixed(0)} Kč</td>
+                <td style={{ textAlign: "right", color: (d.saldo_czk || 0) >= 0 ? "var(--green)" : "#e06c75" }}>
+                  {`${d.saldo_czk > 0 ? "+" : ""}${d.saldo_czk.toFixed(0)} Kč`}
+                </td>
+              </tr>
+            ))}
+          </Fragment>))}
           {!b.months.length && <tr><td colSpan="8" className="muted">Zatím žádná data v tomto období.</td></tr>}
         </tbody>
         {b.months.length > 0 && (

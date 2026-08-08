@@ -14,6 +14,68 @@ from .period import current_period
 router = APIRouter(tags=["billing"])
 
 
+@router.get("/api/localities/{loc_id}/billing/days")
+async def locality_billing_days(loc_id: int, month: str,
+                                _: dict = Depends(require_permission("read"))):
+    """Denní rozpad měsíce: kWh a Kč ze sítě / do sítě dle spotu a sazebníku
+    platného V TOM ČASE (rate card valid_from → historická reprodukovatelnost)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    from ems.pricing import cost as pricing_cost
+
+    loc = await loc_db.get(loc_id)
+    if not loc:
+        raise HTTPException(status_code=404, detail="Lokalita nenalezena")
+    try:
+        mstart = datetime.strptime(month, "%Y-%m").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="month musí být YYYY-MM")
+    mend = (mstart.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+    devs = [d["id"] for d in await loc_db.devices_for_locality(loc_id)]
+    rows = await billing_db.hourly_grid_spot(devs, mstart, mend)
+    mode = loc.get("pricing_mode") or "spot"
+    ti = float(loc.get("tariff_import_czk") or 0)
+    te = float(loc.get("tariff_export_czk") or 0)
+
+    tz = ZoneInfo("Europe/Prague")
+    tariff_by_day: dict = {}
+    days: dict[str, dict] = {}
+    for r in rows:
+        h = r["h"]
+        local_day = h.astimezone(tz).date()
+        key = local_day.isoformat()
+        d = days.setdefault(key, {"day": key, "import_kwh": 0.0, "export_kwh": 0.0,
+                                  "import_czk": 0.0, "export_czk": 0.0})
+        np_kwh = float(r["np_kwh"] or 0.0)
+        if mode == "tariff":
+            pi, pe = ti, te
+        else:
+            t = tariff_by_day.get(key)
+            if t is None and key not in tariff_by_day:
+                t = await pricing_db.get_effective(loc_id, at=local_day)  # sazebník platný v ten den
+                tariff_by_day[key] = t
+            price = pricing_cost.price_czk_kwh(t, h, r["czk_mwh"])
+            pi, pe = price["import_czk"], price["export_czk"]
+        if np_kwh > 0:
+            d["import_kwh"] += np_kwh
+            d["import_czk"] += np_kwh * pi
+        elif np_kwh < 0:
+            d["export_kwh"] += -np_kwh
+            d["export_czk"] += (-np_kwh) * pe
+
+    out = []
+    for key in sorted(days):
+        d = days[key]
+        out.append({"day": d["day"],
+                    "import_kwh": round(d["import_kwh"], 1),
+                    "export_kwh": round(d["export_kwh"], 1),
+                    "import_czk": round(d["import_czk"], 2),
+                    "export_czk": round(d["export_czk"], 2),
+                    "saldo_czk": round(d["export_czk"] - d["import_czk"], 2)})
+    return {"month": month, "days": out}
+
+
 @router.get("/api/localities/{loc_id}/billing")
 async def locality_billing(loc_id: int, _: dict = Depends(require_permission("read"))):
     loc = await loc_db.get(loc_id)
