@@ -131,18 +131,18 @@ def _validate_rule(body: TimeRuleIn, require_all: bool) -> dict:
     return d
 
 
-@router.get("/api/planner/{locality_id}/time-rules")
+@router.get("/{locality_id}/time-rules")
 async def list_time_rules(locality_id: int, _: dict = Depends(require_permission("read"))):
     return await pdb.list_time_rules(locality_id)
 
 
-@router.post("/api/planner/{locality_id}/time-rules")
+@router.post("/{locality_id}/time-rules")
 async def create_time_rule(locality_id: int, body: TimeRuleIn,
                            _: dict = Depends(require_permission("control"))):
     return await pdb.create_time_rule(locality_id, _validate_rule(body, require_all=True))
 
 
-@router.put("/api/planner/{locality_id}/time-rules/{rid}")
+@router.put("/{locality_id}/time-rules/{rid}")
 async def update_time_rule(locality_id: int, rid: int, body: TimeRuleIn,
                            _: dict = Depends(require_permission("control"))):
     out = await pdb.update_time_rule(locality_id, rid, _validate_rule(body, require_all=False))
@@ -151,7 +151,7 @@ async def update_time_rule(locality_id: int, rid: int, body: TimeRuleIn,
     return out
 
 
-@router.delete("/api/planner/{locality_id}/time-rules/{rid}")
+@router.delete("/{locality_id}/time-rules/{rid}")
 async def delete_time_rule(locality_id: int, rid: int,
                            _: dict = Depends(require_permission("control"))):
     if not await pdb.delete_time_rule(locality_id, rid):
