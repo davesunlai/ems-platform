@@ -612,6 +612,84 @@ const PRIO_ITEMS = {
     knobs: [{ k: "import_price_ceiling_czk", label: "Nabíjet jen pod (Kč)" }] },
 };
 
+const TP_ACTIONS = [
+  { v: "force_discharge", l: "🔻 Vybíjet do sítě (přebytky)" },
+  { v: "force_charge", l: "⚡ Nabíjet ze sítě" },
+  { v: "stop", l: "■ Stop baterie" },
+  { v: "output_on", l: "🔌 Zapnout spotřebič" },
+  { v: "output_off", l: "🔌 Vypnout spotřebič" },
+];
+const TP_DAYS = [["1", "Po"], ["2", "Út"], ["3", "St"], ["4", "Čt"], ["5", "Pá"], ["6", "So"], ["7", "Ne"]];
+const _tpEmpty = { action: "force_discharge", target: "", time_from: "17:00", time_to: "20:00", days: "1234567", power_kw: 5, label: "" };
+
+function TimePlanBox({ locId, outputs }) {
+  const [rules, setRules] = useState([]);
+  const [f, setF] = useState(_tpEmpty);
+  const [msg, setMsg] = useState("");
+  const load = () => api.plannerTimeRules(locId).then(setRules).catch(() => {});
+  useEffect(() => { if (locId) load(); }, [locId]);
+
+  const isOut = f.action === "output_on" || f.action === "output_off";
+  const actLabel = (v) => (TP_ACTIONS.find((a) => a.v === v) || {}).l || v;
+  const outName = (t) => { const o = outputs.find((x) => String(x.id) === String(t)); return o ? o.name : `#${t}`; };
+  const add = async () => {
+    setMsg("");
+    try {
+      await api.plannerTimeRuleCreate(locId, { ...f, target: isOut ? String(f.target) : null, power_kw: Number(f.power_kw) || 5 });
+      setF(_tpEmpty); load();
+    } catch (e) { setMsg(e.message); }
+  };
+  const toggle = (r) => api.plannerTimeRuleUpdate(locId, r.id, { enabled: !r.enabled }).then(load).catch(() => {});
+  const del = (r) => api.plannerTimeRuleDelete(locId, r.id).then(load).catch(() => {});
+  const dayStr = (d) => (d === "1234567" ? "denně" : TP_DAYS.filter(([k]) => d.includes(k)).map(([, l]) => l).join(""));
+
+  return (
+    <div>
+      {rules.map((r) => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "3px 0", justifyContent: "center", flexWrap: "wrap" }}>
+          <input type="checkbox" checked={!!r.enabled} onChange={() => toggle(r)} title="zapnuto/vypnuto" />
+          <b>{r.time_from}–{r.time_to}</b>
+          <span className="muted">{dayStr(r.days || "1234567")}</span>
+          <span>{actLabel(r.action)}{(r.action === "output_on" || r.action === "output_off") ? ` · ${outName(r.target)}` : (r.action !== "stop" ? ` · ${r.power_kw} kW` : "")}</span>
+          {r.label && <span className="muted">„{r.label}"</span>}
+          <button className="btn" style={{ padding: "1px 7px", fontSize: 11 }} onClick={() => del(r)} title="smazat">✕</button>
+        </div>
+      ))}
+      {!rules.length && <div className="muted" style={{ fontSize: 12, textAlign: "center" }}>Zatím žádná časová pravidla.</div>}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", alignItems: "flex-end", marginTop: 8, paddingTop: 8, borderTop: "1px dashed var(--border)" }}>
+        <div><label style={{ fontSize: 11, display: "block" }}>Akce</label>
+          <select style={{ ..._FLD, width: 190 }} value={f.action} onChange={(e) => setF({ ...f, action: e.target.value })}>
+            {TP_ACTIONS.map((a) => <option key={a.v} value={a.v}>{a.l}</option>)}
+          </select></div>
+        {isOut && (
+          <div><label style={{ fontSize: 11, display: "block" }}>Spotřebič</label>
+            <select style={{ ..._FLD, width: 150 }} value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })}>
+              <option value="">— vyber —</option>
+              {outputs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select></div>)}
+        {!isOut && f.action !== "stop" && (
+          <div><label style={{ fontSize: 11, display: "block" }}>Výkon (kW)</label>
+            <input style={{ ..._FLD, width: 64 }} value={f.power_kw} onChange={(e) => setF({ ...f, power_kw: e.target.value })} /></div>)}
+        <div><label style={{ fontSize: 11, display: "block" }}>Od</label>
+          <input type="time" style={{ ..._FLD, width: 84 }} value={f.time_from} onChange={(e) => setF({ ...f, time_from: e.target.value })} /></div>
+        <div><label style={{ fontSize: 11, display: "block" }}>Do</label>
+          <input type="time" style={{ ..._FLD, width: 84 }} value={f.time_to} onChange={(e) => setF({ ...f, time_to: e.target.value })} /></div>
+        <div><label style={{ fontSize: 11, display: "block" }}>Dny</label>
+          <div style={{ display: "flex", gap: 2 }}>
+            {TP_DAYS.map(([k, l]) => (
+              <button key={k} className="btn" style={{ padding: "3px 5px", fontSize: 10.5, opacity: f.days.includes(k) ? 1 : 0.4 }}
+                onClick={() => setF({ ...f, days: f.days.includes(k) ? f.days.replace(k, "") || "1234567" : [...f.days, k].sort().join("") })}>{l}</button>
+            ))}
+          </div></div>
+        <div><label style={{ fontSize: 11, display: "block" }}>Popisek</label>
+          <input style={{ ..._FLD, width: 110 }} value={f.label} placeholder="volitelný" onChange={(e) => setF({ ...f, label: e.target.value })} /></div>
+        <button className="btn primary" style={{ padding: "6px 12px" }} onClick={add}>+ Přidat</button>
+      </div>
+      {msg && <p className="muted" style={{ fontSize: 11.5, textAlign: "center", marginTop: 4 }}>{msg}</p>}
+    </div>
+  );
+}
+
 function PrioRow({ item, idx, locked, open, onOpen, cfg, set, ...drag }) {
   return (
     <div {...drag} style={{ width: "min(560px, 100%)", border: "1px solid var(--border)", borderRadius: 8,
@@ -736,13 +814,21 @@ function PlannerPanel({ locId }) {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
           <PrioRow locked item={PRIO_ITEMS.safety} idx="1." cfg={cfg} set={set}
                    open={openPrio === "safety"} onOpen={() => setOpenPrio(openPrio === "safety" ? null : "safety")} />
+          <div style={{ width: "min(560px, 100%)", border: "1px dashed var(--amber, #d29922)", borderRadius: 8,
+                        background: "var(--bg)", padding: "7px 10px" }}>
+            <div style={{ textAlign: "center", fontWeight: 600, fontSize: 13 }}>2. ⏰ Časový plán 🔒</div>
+            <div className="muted" style={{ fontSize: 11.5, textAlign: "center", marginBottom: 4 }}>
+              tvoje pevné časy — vybíjení/nabíjení/stop baterie nebo spínání čehokoliv z eWeLinku; v okně přebíjí plánovač (jen podlaha je nad tím)
+            </div>
+            <TimePlanBox locId={locId} outputs={outputs} />
+          </div>
           {(() => {
             let arr; try { arr = JSON.parse(cfg.priority_order || "[]"); } catch { arr = []; }
             arr = arr.filter((k) => PRIO_DEF.includes(k));
             if (!arr.includes("battery") && arr.includes("export")) arr.splice(arr.indexOf("export"), 0, "battery");
             arr = [...arr, ...PRIO_DEF.filter((k) => !arr.includes(k))];
             return arr.map((k, i) => (
-              <PrioRow key={k} item={PRIO_ITEMS[k]} idx={`${i + 2}.`} cfg={cfg} set={set}
+              <PrioRow key={k} item={PRIO_ITEMS[k]} idx={`${i + 3}.`} cfg={cfg} set={set}
                 open={openPrio === k} onOpen={() => setOpenPrio(openPrio === k ? null : k)}
                 draggable onDragStart={() => setDragIdx(i)} onDragOver={(e) => e.preventDefault()}
                 onDrop={() => { if (dragIdx == null || dragIdx === i) return;

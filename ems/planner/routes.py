@@ -99,3 +99,61 @@ async def refresh(locality_id: int, _: dict = Depends(control)):
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("reason", "přepočet selhal"))
     return res
+
+
+class TimeRuleIn(BaseModel):
+    enabled: bool | None = True
+    label: str | None = ""
+    time_from: str | None = None
+    time_to: str | None = None
+    days: str | None = "1234567"
+    action: str | None = None
+    target: str | None = None
+    power_kw: float | None = 5.0
+
+
+def _validate_rule(body: TimeRuleIn, require_all: bool) -> dict:
+    d = body.model_dump()
+    if d.get("action") is not None and d["action"] not in pdb.TIME_RULE_ACTIONS:
+        raise HTTPException(status_code=400, detail=f"action musí být jedno z {pdb.TIME_RULE_ACTIONS}")
+    for k in ("time_from", "time_to"):
+        v = d.get(k)
+        if v is not None:
+            import re
+            if not re.fullmatch(r"[0-2][0-9]:[0-5][0-9]", v):
+                raise HTTPException(status_code=400, detail=f"{k} musí být HH:MM")
+    if d.get("days") is not None and (not d["days"] or any(c not in "1234567" for c in d["days"])):
+        raise HTTPException(status_code=400, detail="days = číslice 1–7 (Po–Ne)")
+    if require_all and (not d.get("action") or not d.get("time_from") or not d.get("time_to")):
+        raise HTTPException(status_code=400, detail="action, time_from a time_to jsou povinné")
+    if d.get("action") in ("output_on", "output_off") and require_all and not d.get("target"):
+        raise HTTPException(status_code=400, detail="u spínání spotřebiče vyber výstup (target)")
+    return d
+
+
+@router.get("/api/planner/{locality_id}/time-rules")
+async def list_time_rules(locality_id: int, _: dict = Depends(require_permission("read"))):
+    return await pdb.list_time_rules(locality_id)
+
+
+@router.post("/api/planner/{locality_id}/time-rules")
+async def create_time_rule(locality_id: int, body: TimeRuleIn,
+                           _: dict = Depends(require_permission("control"))):
+    return await pdb.create_time_rule(locality_id, _validate_rule(body, require_all=True))
+
+
+@router.put("/api/planner/{locality_id}/time-rules/{rid}")
+async def update_time_rule(locality_id: int, rid: int, body: TimeRuleIn,
+                           _: dict = Depends(require_permission("control"))):
+    out = await pdb.update_time_rule(locality_id, rid, _validate_rule(body, require_all=False))
+    if not out:
+        raise HTTPException(status_code=404, detail="Pravidlo nenalezeno")
+    return out
+
+
+@router.delete("/api/planner/{locality_id}/time-rules/{rid}")
+async def delete_time_rule(locality_id: int, rid: int,
+                           _: dict = Depends(require_permission("control"))):
+    if not await pdb.delete_time_rule(locality_id, rid):
+        raise HTTPException(status_code=404, detail="Pravidlo nenalezeno")
+    return {"ok": True}

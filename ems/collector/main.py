@@ -328,9 +328,31 @@ async def tick_planner(state: dict) -> None:
             ca = await planner_db.current_action(lid)
             if not ca:
                 continue
+            # ⏰ Časový plán (priorita 2): aktivní pravidla přebíjí plánovač
+            try:
+                t_rules = await planner_db.active_time_rules(lid)
+            except Exception:
+                t_rules = []
+            batt_rule = next((r for r in t_rules if r["action"] in ("force_charge", "force_discharge", "stop")), None)
+            out_rules = {}
+            for r in t_rules:
+                if r["action"] in ("output_on", "output_off") and r.get("target"):
+                    try:
+                        out_rules[int(r["target"])] = (r["action"] == "output_on", r.get("label") or "")
+                    except (TypeError, ValueError):
+                        pass
             act = ca["action"]
             power_reg = int(round(abs(ca.get("battery_kw") or 0) * 100))   # kW -> registr (10 W/jedn.)
-            if act == "charge_grid":
+            if batt_rule:
+                p_reg = int(round(float(batt_rule.get("power_kw") or 5) * 100))
+                lbl = batt_rule.get("label") or "časový plán"
+                if batt_rule["action"] == "force_charge":
+                    desired, cmd, params = "force_charge", "force_charge", {"power": p_reg, "source": "schedule", "reason": lbl}
+                elif batt_rule["action"] == "force_discharge":
+                    desired, cmd, params = "force_discharge", "force_discharge", {"power": p_reg, "source": "schedule", "reason": lbl}
+                else:
+                    desired, cmd, params = "idle", "stop", {"source": "schedule", "reason": lbl}
+            elif act == "charge_grid":
                 desired, cmd, params = "force_charge", "force_charge", {"power": power_reg, "source": "planner"}
             elif act == "discharge_grid":
                 desired, cmd, params = "force_discharge", "force_discharge", {"power": power_reg, "source": "planner"}
@@ -351,14 +373,16 @@ async def tick_planner(state: dict) -> None:
                         pass
                 cur = st.get("action", "idle")
                 if cur != desired:
-                    cid = await control_db.enqueue(dev, cmd, params, username="planner")
-                    await control_db.record("planner", dev, cmd,
-                                            {**params, "reason": ca.get("reason")}, True, {"queued": cid})
-                    logger.info("Planner lok %s modul %s: %s -> %s (%s)", lid, dev, cur, desired, ca.get("reason"))
+                    src = "schedule" if batt_rule else "planner"
+                    cid = await control_db.enqueue(dev, cmd, params, username=src)
+                    await control_db.record(src, dev, cmd,
+                                            {**params, "reason": params.get("reason") or ca.get("reason")}, True, {"queued": cid})
+                    logger.info("%s lok %s modul %s: %s -> %s (%s)", src, lid, dev, cur, desired,
+                                params.get("reason") or ca.get("reason"))
             # odložitelný výstup (spirála / bazén / cokoliv přes eWeLink/relé) dle plánu
             cfg = await planner_db.get_config(lid)
             sid = cfg.get("spiral_output_id")
-            if sid:
+            if sid and int(sid) not in out_rules:      # spirálu v okně časového plánu řídí plán času
                 try:
                     from ems.outputs.engine import force_output
                     from ems.outputs import db as out_db
@@ -374,6 +398,13 @@ async def tick_planner(state: dict) -> None:
                                        min_off_s=float(cfg.get("spiral_min_off_min") or 0) * 60)
                 except Exception as exc:
                     logger.debug("Planner spirála lok %s: %s", lid, exc)
+            # ⏰ časový plán: spínané výstupy (jakýkoliv eWeLink/relé, i mimo spirálu)
+            for oid, (want_on, lbl) in out_rules.items():
+                try:
+                    from ems.outputs.engine import force_output
+                    await force_output(oid, want_on, f"časový plán: {lbl or ('ON' if want_on else 'OFF')}")
+                except Exception as exc:
+                    logger.debug("Časový plán výstup %s lok %s: %s", oid, lid, exc)
     except Exception as exc:
         logger.debug("Planner výkon: %s", exc)
 

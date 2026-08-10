@@ -116,6 +116,22 @@ async def ensure_schema() -> None:
         ):
             await conn.execute(f"ALTER TABLE planner_config ADD COLUMN IF NOT EXISTS {col} {ddl}")
         await conn.execute("ALTER TABLE dispatch_schedule ADD COLUMN IF NOT EXISTS deferrable_on BOOLEAN DEFAULT FALSE")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS planner_time_rules (
+                id SERIAL PRIMARY KEY,
+                locality_id INTEGER NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                label TEXT NOT NULL DEFAULT '',
+                time_from TEXT NOT NULL,
+                time_to TEXT NOT NULL,
+                days TEXT NOT NULL DEFAULT '1234567',
+                action TEXT NOT NULL,
+                target TEXT,
+                power_kw DOUBLE PRECISION NOT NULL DEFAULT 5
+            )
+            """
+        )
 
 
 async def get_config(locality_id: int) -> dict:
@@ -209,3 +225,75 @@ async def claimed_output_ids() -> set[int]:
         rows = await conn.fetch(
             "SELECT spiral_output_id FROM planner_config WHERE enabled=TRUE AND spiral_output_id IS NOT NULL")
     return {r["spiral_output_id"] for r in rows}
+
+
+# --- ⏰ Časový plán (priorita 2 — hned pod bezpečnostní podlahou) -------------
+TIME_RULE_FIELDS = ("enabled", "label", "time_from", "time_to", "days", "action", "target", "power_kw")
+TIME_RULE_ACTIONS = ("force_charge", "force_discharge", "stop", "output_on", "output_off")
+
+
+async def list_time_rules(locality_id: int) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, " + ", ".join(TIME_RULE_FIELDS) +
+            " FROM planner_time_rules WHERE locality_id=$1 ORDER BY time_from, id", locality_id)
+    return [dict(r) for r in rows]
+
+
+async def create_time_rule(locality_id: int, data: dict) -> dict:
+    pool = await get_pool()
+    vals = [data.get(k) for k in TIME_RULE_FIELDS]
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "INSERT INTO planner_time_rules (locality_id, " + ", ".join(TIME_RULE_FIELDS) + ") "
+            "VALUES ($1, " + ", ".join(f"${i+2}" for i in range(len(TIME_RULE_FIELDS))) + ") "
+            "RETURNING id, " + ", ".join(TIME_RULE_FIELDS), locality_id, *vals)
+    return dict(row)
+
+
+async def update_time_rule(locality_id: int, rid: int, data: dict) -> dict | None:
+    cur = None
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, " + ", ".join(TIME_RULE_FIELDS) +
+            " FROM planner_time_rules WHERE locality_id=$1 AND id=$2", locality_id, rid)
+        if not row:
+            return None
+        cur = dict(row)
+        for k in TIME_RULE_FIELDS:
+            if k in data and data[k] is not None:
+                cur[k] = data[k]
+        await conn.execute(
+            "UPDATE planner_time_rules SET " +
+            ", ".join(f"{k}=${i+3}" for i, k in enumerate(TIME_RULE_FIELDS)) +
+            " WHERE locality_id=$1 AND id=$2", locality_id, rid, *[cur[k] for k in TIME_RULE_FIELDS])
+    return cur
+
+
+async def delete_time_rule(locality_id: int, rid: int) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        res = await conn.execute(
+            "DELETE FROM planner_time_rules WHERE locality_id=$1 AND id=$2", locality_id, rid)
+    return res.endswith("1")
+
+
+def _rule_active(rule: dict, hm: str, isoday: str) -> bool:
+    """Okno HH:MM–HH:MM v pražském čase; from>to = přes půlnoc. days = ISO číslice 1–7."""
+    if not rule.get("enabled"):
+        return False
+    if isoday not in (rule.get("days") or "1234567"):
+        return False
+    f, t = rule.get("time_from") or "00:00", rule.get("time_to") or "00:00"
+    return (f <= hm < t) if f <= t else (hm >= f or hm < t)
+
+
+async def active_time_rules(locality_id: int) -> list[dict]:
+    """Pravidla aktivní PRÁVĚ TEĎ (pražský čas)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Europe/Prague"))
+    hm, isoday = now.strftime("%H:%M"), str(now.isoweekday())
+    return [r for r in await list_time_rules(locality_id) if _rule_active(r, hm, isoday)]
