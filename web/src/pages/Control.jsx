@@ -620,11 +620,13 @@ const TP_ACTIONS = [
   { v: "output_off", l: "🔌 Vypnout spotřebič" },
 ];
 const TP_DAYS = [["1", "Po"], ["2", "Út"], ["3", "St"], ["4", "Čt"], ["5", "Pá"], ["6", "So"], ["7", "Ne"]];
-const _tpEmpty = { action: "force_discharge", target: "", time_from: "17:00", time_to: "20:00", days: "1234567", power_kw: 5, label: "" };
+const _tpEmpty = { action: "force_discharge", target: "", time_from: "17:00", time_to: "20:00", days: "1234567", power_kw: 5, label: "",
+                   cond_sun: "any", cond_sun_kwh: 30, cond_soc_op: "any", cond_soc_pct: 50 };
 
 function TimePlanBox({ locId, outputs }) {
   const [rules, setRules] = useState([]);
   const [f, setF] = useState(_tpEmpty);
+  const [editId, setEditId] = useState(null);
   const [msg, setMsg] = useState("");
   const load = () => api.plannerTimeRules(locId).then(setRules).catch(() => {});
   useEffect(() => { if (locId) load(); }, [locId]);
@@ -632,26 +634,45 @@ function TimePlanBox({ locId, outputs }) {
   const isOut = f.action === "output_on" || f.action === "output_off";
   const actLabel = (v) => (TP_ACTIONS.find((a) => a.v === v) || {}).l || v;
   const outName = (t) => { const o = outputs.find((x) => String(x.id) === String(t)); return o ? o.name : `#${t}`; };
-  const add = async () => {
+  const save = async () => {
     setMsg("");
+    const body = { ...f, target: isOut ? String(f.target) : null,
+                   power_kw: Number(f.power_kw) || 5,
+                   cond_sun_kwh: Number(f.cond_sun_kwh) || 30, cond_soc_pct: Number(f.cond_soc_pct) || 50 };
     try {
-      await api.plannerTimeRuleCreate(locId, { ...f, target: isOut ? String(f.target) : null, power_kw: Number(f.power_kw) || 5 });
-      setF(_tpEmpty); load();
+      if (editId) await api.plannerTimeRuleUpdate(locId, editId, body);
+      else await api.plannerTimeRuleCreate(locId, body);
+      setF(_tpEmpty); setEditId(null); load();
     } catch (e) { setMsg(e.message); }
   };
+  const edit = (r) => { setEditId(r.id); setF({ ...r, target: r.target || "", power_kw: r.power_kw ?? 5,
+    cond_sun: r.cond_sun || "any", cond_sun_kwh: r.cond_sun_kwh ?? 30,
+    cond_soc_op: r.cond_soc_op || "any", cond_soc_pct: r.cond_soc_pct ?? 50 }); };
+  const cancel = () => { setEditId(null); setF(_tpEmpty); };
   const toggle = (r) => api.plannerTimeRuleUpdate(locId, r.id, { enabled: !r.enabled }).then(load).catch(() => {});
   const del = (r) => api.plannerTimeRuleDelete(locId, r.id).then(load).catch(() => {});
   const dayStr = (d) => (d === "1234567" ? "denně" : TP_DAYS.filter(([k]) => d.includes(k)).map(([, l]) => l).join(""));
+  const condStr = (r) => {
+    const parts = [];
+    if (r.cond_sun === "sunny") parts.push(`☀️ ≥${r.cond_sun_kwh ?? 30} kWh`);
+    if (r.cond_sun === "cloudy") parts.push(`☁️ <${r.cond_sun_kwh ?? 30} kWh`);
+    if (r.cond_soc_op === "ge") parts.push(`🔋 ≥${r.cond_soc_pct ?? 50} %`);
+    if (r.cond_soc_op === "le") parts.push(`🔋 ≤${r.cond_soc_pct ?? 50} %`);
+    return parts.join(" · ");
+  };
 
   return (
     <div>
       {rules.map((r) => (
-        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "3px 0", justifyContent: "center", flexWrap: "wrap" }}>
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "3px 0", justifyContent: "center", flexWrap: "wrap",
+                                 background: editId === r.id ? "var(--panel, rgba(120,120,120,.08))" : "transparent", borderRadius: 6 }}>
           <input type="checkbox" checked={!!r.enabled} onChange={() => toggle(r)} title="zapnuto/vypnuto" />
           <b>{r.time_from}–{r.time_to}</b>
           <span className="muted">{dayStr(r.days || "1234567")}</span>
           <span>{actLabel(r.action)}{(r.action === "output_on" || r.action === "output_off") ? ` · ${outName(r.target)}` : (r.action !== "stop" ? ` · ${r.power_kw} kW` : "")}</span>
+          {condStr(r) && <span style={{ fontSize: 11.5, border: "1px solid var(--border)", borderRadius: 999, padding: "1px 7px" }}>{condStr(r)}</span>}
           {r.label && <span className="muted">„{r.label}"</span>}
+          <button className="btn" style={{ padding: "1px 7px", fontSize: 11 }} onClick={() => edit(r)} title="upravit">✎</button>
           <button className="btn" style={{ padding: "1px 7px", fontSize: 11 }} onClick={() => del(r)} title="smazat">✕</button>
         </div>
       ))}
@@ -683,7 +704,26 @@ function TimePlanBox({ locId, outputs }) {
           </div></div>
         <div><label style={{ fontSize: 11, display: "block" }}>Popisek</label>
           <input style={{ ..._FLD, width: 110 }} value={f.label} placeholder="volitelný" onChange={(e) => setF({ ...f, label: e.target.value })} /></div>
-        <button className="btn primary" style={{ padding: "6px 12px" }} onClick={add}>+ Přidat</button>
+        <div><label style={{ fontSize: 11, display: "block" }}>Podmínka počasí</label>
+          <select style={{ ..._FLD, width: 168 }} value={f.cond_sun} onChange={(e) => setF({ ...f, cond_sun: e.target.value })}>
+            <option value="any">— bez podmínky</option>
+            <option value="sunny">☀️ jen když slunečno</option>
+            <option value="cloudy">☁️ jen když NE slunečno</option>
+          </select></div>
+        {f.cond_sun !== "any" && (
+          <div><label style={{ fontSize: 11, display: "block" }} title="slunečno = predikce dnešní výroby ≥ prah">Prah (kWh/den)</label>
+            <input style={{ ..._FLD, width: 70 }} value={f.cond_sun_kwh} onChange={(e) => setF({ ...f, cond_sun_kwh: e.target.value })} /></div>)}
+        <div><label style={{ fontSize: 11, display: "block" }}>Podmínka baterie</label>
+          <select style={{ ..._FLD, width: 140 }} value={f.cond_soc_op} onChange={(e) => setF({ ...f, cond_soc_op: e.target.value })}>
+            <option value="any">— bez podmínky</option>
+            <option value="ge">🔋 SoC ≥</option>
+            <option value="le">🔋 SoC ≤</option>
+          </select></div>
+        {f.cond_soc_op !== "any" && (
+          <div><label style={{ fontSize: 11, display: "block" }}>SoC (%)</label>
+            <input style={{ ..._FLD, width: 60 }} value={f.cond_soc_pct} onChange={(e) => setF({ ...f, cond_soc_pct: e.target.value })} /></div>)}
+        <button className="btn primary" style={{ padding: "6px 12px" }} onClick={save}>{editId ? "💾 Uložit změnu" : "+ Přidat"}</button>
+        {editId && <button className="btn" style={{ padding: "6px 10px" }} onClick={cancel}>Zrušit</button>}
       </div>
       {msg && <p className="muted" style={{ fontSize: 11.5, textAlign: "center", marginTop: 4 }}>{msg}</p>}
     </div>

@@ -113,6 +113,26 @@ def _priorities(cfg: dict) -> dict[str, int]:
     return {k: i for i, k in enumerate(order)}
 
 
+async def today_pv_forecast_kwh(locality_id: int) -> float | None:
+    """Součet predikované výroby (kWh) pro DNEŠNÍ pražský den — podklad podmínky ☀️/☁️."""
+    from zoneinfo import ZoneInfo
+    try:
+        rows = await fdb.latest_pv(locality_id, "avg")
+    except Exception:
+        return None
+    if not rows:
+        return None
+    tz = ZoneInfo("Europe/Prague")
+    today = datetime.now(tz).date()
+    tot, seen = 0.0, False
+    for p in rows:
+        t = datetime.fromisoformat(p["ts"])
+        if t.astimezone(tz).date() == today:
+            tot += (p.get("pv_w") or 0) / 1000.0
+            seen = True
+    return tot if seen else None
+
+
 async def run_locality(locality_id: int) -> dict:
     cfg = await pdb.get_config(locality_id)
     pv = await fdb.latest_pv(locality_id, "avg")

@@ -132,6 +132,13 @@ async def ensure_schema() -> None:
             )
             """
         )
+        for col, ddl in (
+            ("cond_sun", "TEXT NOT NULL DEFAULT 'any'"),
+            ("cond_sun_kwh", "DOUBLE PRECISION NOT NULL DEFAULT 30"),
+            ("cond_soc_op", "TEXT NOT NULL DEFAULT 'any'"),
+            ("cond_soc_pct", "DOUBLE PRECISION NOT NULL DEFAULT 50"),
+        ):
+            await conn.execute(f"ALTER TABLE planner_time_rules ADD COLUMN IF NOT EXISTS {col} {ddl}")
 
 
 async def get_config(locality_id: int) -> dict:
@@ -228,7 +235,8 @@ async def claimed_output_ids() -> set[int]:
 
 
 # --- ⏰ Časový plán (priorita 2 — hned pod bezpečnostní podlahou) -------------
-TIME_RULE_FIELDS = ("enabled", "label", "time_from", "time_to", "days", "action", "target", "power_kw")
+TIME_RULE_FIELDS = ("enabled", "label", "time_from", "time_to", "days", "action", "target", "power_kw",
+                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct")
 TIME_RULE_ACTIONS = ("force_charge", "force_discharge", "stop", "output_on", "output_off")
 
 
@@ -297,3 +305,29 @@ async def active_time_rules(locality_id: int) -> list[dict]:
     now = datetime.now(ZoneInfo("Europe/Prague"))
     hm, isoday = now.strftime("%H:%M"), str(now.isoweekday())
     return [r for r in await list_time_rules(locality_id) if _rule_active(r, hm, isoday)]
+
+
+def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | None) -> bool:
+    """Volitelné podmínky pravidla (vyhodnocují se PRŮBĚŽNĚ během okna):
+    - cond_sun: 'sunny'/'cloudy' vs. predikce dnešní výroby (prah cond_sun_kwh);
+    - cond_soc_op: 'ge'/'le' vs. AKTUÁLNÍ SoC baterie (cond_soc_pct).
+    Chybí-li podklad (predikce/SoC), podmíněné pravidlo se NEspustí (konzervativně)."""
+    cs = rule.get("cond_sun") or "any"
+    if cs != "any":
+        if day_pv_kwh is None:
+            return False
+        thr = float(rule.get("cond_sun_kwh") or 30)
+        if cs == "sunny" and day_pv_kwh < thr:
+            return False
+        if cs == "cloudy" and day_pv_kwh >= thr:
+            return False
+    op = rule.get("cond_soc_op") or "any"
+    if op != "any":
+        if soc_pct is None:
+            return False
+        pct = float(rule.get("cond_soc_pct") or 50)
+        if op == "ge" and soc_pct < pct:
+            return False
+        if op == "le" and soc_pct > pct:
+            return False
+    return True

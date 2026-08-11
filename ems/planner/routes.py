@@ -110,6 +110,10 @@ class TimeRuleIn(BaseModel):
     action: str | None = None
     target: str | None = None
     power_kw: float | None = 5.0
+    cond_sun: str | None = None
+    cond_sun_kwh: float | None = None
+    cond_soc_op: str | None = None
+    cond_soc_pct: float | None = None
 
 
 def _validate_rule(body: TimeRuleIn, require_all: bool) -> dict:
@@ -128,6 +132,10 @@ def _validate_rule(body: TimeRuleIn, require_all: bool) -> dict:
         raise HTTPException(status_code=400, detail="action, time_from a time_to jsou povinné")
     if d.get("action") in ("output_on", "output_off") and require_all and not d.get("target"):
         raise HTTPException(status_code=400, detail="u spínání spotřebiče vyber výstup (target)")
+    if d.get("cond_sun") is not None and d["cond_sun"] not in ("any", "sunny", "cloudy"):
+        raise HTTPException(status_code=400, detail="cond_sun: any|sunny|cloudy")
+    if d.get("cond_soc_op") is not None and d["cond_soc_op"] not in ("any", "ge", "le"):
+        raise HTTPException(status_code=400, detail="cond_soc_op: any|ge|le")
     return d
 
 

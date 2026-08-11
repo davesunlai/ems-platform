@@ -331,6 +331,12 @@ async def tick_planner(state: dict) -> None:
             # ⏰ Časový plán (priorita 2): aktivní pravidla přebíjí plánovač
             try:
                 t_rules = await planner_db.active_time_rules(lid)
+                if t_rules:
+                    need_sun = any((r.get("cond_sun") or "any") != "any" for r in t_rules)
+                    need_soc = any((r.get("cond_soc_op") or "any") != "any" for r in t_rules)
+                    day_pv = await planner_service.today_pv_forecast_kwh(lid) if need_sun else None
+                    soc_now = await planner_service._soc_now(devs) if need_soc else None
+                    t_rules = [r for r in t_rules if planner_db.rule_conditions_ok(r, day_pv, soc_now)]
             except Exception:
                 t_rules = []
             batt_rule = next((r for r in t_rules if r["action"] in ("force_charge", "force_discharge", "stop")), None)
