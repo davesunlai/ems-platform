@@ -669,20 +669,26 @@ function TimePlanBox({ locId, outputs }) {
   return (
     <div>
       {rules.map((r, ri) => (
-        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 10px", justifyContent: "center", flexWrap: "wrap",
+        <div key={r.id} style={{ padding: "7px 10px",
                                  border: `1px solid ${editId === r.id ? "var(--amber, #d29922)" : "var(--border)"}`, borderRadius: 8,
                                  background: "var(--bg)", marginBottom: 6, opacity: r.enabled ? 1 : 0.55 }}>
-          <span title="pořadí dle času startu (při shodě dle pořadí zadání)"
-                style={{ fontSize: 11, fontWeight: 700, border: "1px solid var(--border)", borderRadius: 999,
-                         minWidth: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{ri + 1}</span>
-          <input type="checkbox" checked={!!r.enabled} onChange={() => toggle(r)} title="zapnuto/vypnuto" />
-          <b>{r.time_from}–{r.time_to}</b>
-          <span className="muted">{dayStr(r.days || "1234567")}</span>
-          <span>{actLabel(r.action)}{(r.action === "output_on" || r.action === "output_off") ? ` · ${outName(r.target)}` : (r.action !== "stop" ? ` · ${r.power_kw} kW` : "")}</span>
-          {condStr(r) && <span style={{ fontSize: 11.5, border: "1px solid var(--border)", borderRadius: 999, padding: "1px 7px" }}>{condStr(r)}</span>}
-          {r.label && <span className="muted">„{r.label}"</span>}
-          <button className="btn" style={{ padding: "1px 7px", fontSize: 11 }} onClick={() => edit(r)} title="upravit">✎</button>
-          <button className="btn" style={{ padding: "1px 7px", fontSize: 11 }} onClick={() => del(r)} title="smazat">✕</button>
+          {/* řádek 1: číslo + popis + ovládání */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+            <span title="pořadí dle času startu (při shodě dle pořadí zadání)"
+                  style={{ fontSize: 11, fontWeight: 700, border: "1px solid var(--border)", borderRadius: 999,
+                           minWidth: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{ri + 1}</span>
+            <b style={{ fontSize: 13 }}>{r.label || actLabel(r.action)}</b>
+            <input type="checkbox" checked={!!r.enabled} onChange={() => toggle(r)} title="zapnuto/vypnuto" />
+            <button className="btn" style={{ padding: "1px 7px", fontSize: 11 }} onClick={() => edit(r)} title="upravit">✎</button>
+            <button className="btn" style={{ padding: "1px 7px", fontSize: 11 }} onClick={() => del(r)} title="smazat">✕</button>
+          </div>
+          {/* řádek 2: data plánu — čas, dny, akce, podmínky */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, justifyContent: "center", flexWrap: "wrap", marginTop: 4 }}>
+            <b>{r.time_from}–{r.time_to}</b>
+            <span className="muted">{dayStr(r.days || "1234567")}</span>
+            <span>{actLabel(r.action)}{(r.action === "output_on" || r.action === "output_off") ? ` · ${outName(r.target)}` : (r.action !== "stop" ? ` · ${r.power_kw} kW` : "")}</span>
+            {condStr(r) && <span style={{ fontSize: 11.5, border: "1px solid var(--border)", borderRadius: 999, padding: "1px 7px" }}>{condStr(r)}</span>}
+          </div>
         </div>
       ))}
       {!rules.length && <div className="muted" style={{ fontSize: 12, textAlign: "center" }}>Zatím žádná časová pravidla.</div>}

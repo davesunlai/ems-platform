@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.61.6 — UI: pravidlo časového plánu ve dvou řádcích. Řádek 1 = číslo (kroužek) + POPIS (label; bez popisku název akce) + checkbox/✎/✕. Řádek 2 = data plánu: čas od–do, dny, akce (+kW / spotřebič), podmínkové badge. Čistě frontend.
+
 ## v0.61.5 — UI: pravidla časového plánu očíslovaná kroužkem dle pořadí startu (řazení už bylo ORDER BY time_from, id — dřívější začátek = nižší číslo, při shodném začátku dřívější zadání = nižší číslo). Čistě frontend (badge s tooltipem).
 
 ## v0.61.4 — Podmínka 🔋 baterie: zatržítko „hlídat SoC po celou dobu" (stejně jako u spotu). Default zaškrtnuto = průběžné hlídání (dosavadní chování — SoC funguje i jako stop-podlaha). Odškrtnuto = SoC se ověří JEN NA VSTUPU okna a pravidlo dojede celé okno bez ohledu na další vývoj (badge „🔋 ≥60 % (jen vstup)"). Vlastní latch sloupec latched_soc_window (nezávislý na spotovém latched_window — oba režimy lze kombinovat v jednom pravidle), persistentní v DB, klíč s datem startu okna (přes půlnoc OK). soc_cond_ok() vytažen jako čistá funkce, set_rule_latch(field) s whitelistem. Sloupce cond_soc_hold/latched_soc_window (ALTER IF NOT EXISTS).
