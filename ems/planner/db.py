@@ -141,6 +141,8 @@ async def ensure_schema() -> None:
             ("cond_spot_czk", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
             ("cond_spot_hold", "BOOLEAN NOT NULL DEFAULT TRUE"),
             ("cond_logic", "TEXT NOT NULL DEFAULT 'and'"),
+            ("cond_soc_hold", "BOOLEAN NOT NULL DEFAULT TRUE"),
+            ("latched_soc_window", "TEXT"),
             ("latched_window", "TEXT"),
         ):
             await conn.execute(f"ALTER TABLE planner_time_rules ADD COLUMN IF NOT EXISTS {col} {ddl}")
@@ -241,7 +243,7 @@ async def claimed_output_ids() -> set[int]:
 
 # --- ⏰ Časový plán (priorita 2 — hned pod bezpečnostní podlahou) -------------
 TIME_RULE_FIELDS = ("enabled", "label", "time_from", "time_to", "days", "action", "target", "power_kw",
-                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk", "cond_spot_hold", "cond_logic")
+                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk", "cond_spot_hold", "cond_soc_hold", "cond_logic")
 TIME_RULE_ACTIONS = ("force_charge", "force_discharge", "stop", "output_on", "output_off")
 
 
@@ -249,7 +251,7 @@ async def list_time_rules(locality_id: int) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, latched_window, " + ", ".join(TIME_RULE_FIELDS) +
+            "SELECT id, latched_window, latched_soc_window, " + ", ".join(TIME_RULE_FIELDS) +
             " FROM planner_time_rules WHERE locality_id=$1 ORDER BY time_from, id", locality_id)
     return [dict(r) for r in rows]
 
@@ -313,7 +315,8 @@ async def active_time_rules(locality_id: int) -> list[dict]:
 
 
 def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | None,
-                       spot_czk_kwh: float | None = None, spot_latched: bool = False) -> bool:
+                       spot_czk_kwh: float | None = None, spot_latched: bool = False,
+                       soc_latched: bool = False) -> bool:
     """Volitelné podmínky pravidla (vyhodnocují se PRŮBĚŽNĚ během okna).
     cond_logic: 'and' (default) = všechny definované musí platit; 'or' = stačí jedna.
     Chybí-li podklad (predikce/SoC/spot), daná podmínka se bere jako NEsplněná
@@ -328,17 +331,24 @@ def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | No
             results.append(day_pv_kwh >= thr if cs == "sunny" else day_pv_kwh < thr)
     op = rule.get("cond_soc_op") or "any"
     if op != "any":
-        if soc_pct is None:
-            results.append(False)
-        else:
-            pct = float(rule.get("cond_soc_pct") or 50)
-            results.append(soc_pct >= pct if op == "ge" else soc_pct <= pct)
+        results.append(True if soc_latched else soc_cond_ok(rule, soc_pct))
     sop = rule.get("cond_spot_op") or "any"
     if sop != "any":
         results.append(True if spot_latched else spot_cond_ok(rule, spot_czk_kwh))
     if not results:
         return True
     return any(results) if (rule.get("cond_logic") or "and") == "or" else all(results)
+
+
+def soc_cond_ok(rule: dict, soc_pct: float | None) -> bool:
+    """Samotná SoC podmínka (bez latch logiky)."""
+    op = rule.get("cond_soc_op") or "any"
+    if op == "any":
+        return True
+    if soc_pct is None:
+        return False
+    pct = float(rule.get("cond_soc_pct") or 50)
+    return soc_pct >= pct if op == "ge" else soc_pct <= pct
 
 
 def spot_cond_ok(rule: dict, spot_czk_kwh: float | None) -> bool:
@@ -368,7 +378,9 @@ def rule_window_key(rule: dict, now=None) -> str:
     return f"{start_day.isoformat()}|{f}"
 
 
-async def set_rule_latch(rid: int, window_key: str) -> None:
+async def set_rule_latch(rid: int, window_key: str, field: str = "latched_window") -> None:
+    if field not in ("latched_window", "latched_soc_window"):
+        raise ValueError(field)
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute("UPDATE planner_time_rules SET latched_window=$2 WHERE id=$1", rid, window_key)
+        await conn.execute(f"UPDATE planner_time_rules SET {field}=$2 WHERE id=$1", rid, window_key)

@@ -118,6 +118,7 @@ class TimeRuleIn(BaseModel):
     cond_spot_czk: float | None = None
     cond_spot_hold: bool | None = None
     cond_logic: str | None = None
+    cond_soc_hold: bool | None = None
 
 
 def _validate_rule(body: TimeRuleIn, require_all: bool) -> dict:
