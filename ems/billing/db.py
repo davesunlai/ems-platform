@@ -210,11 +210,11 @@ async def today_spot_cost(device_ids: list[str], tariff: dict | None = None) -> 
     return {"import_czk": round(imp, 2), "export_czk": round(exp, 2)}
 
 
-_HOURLY_PV_SQL = """
+_HOURLY_METRIC_SQL = """
 WITH ph AS (
     SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS p
     FROM samples
-    WHERE device_id = ANY($1::text[]) AND metric = 'pv_power'
+    WHERE device_id = ANY($1::text[]) AND metric = $4
       AND time >= $2 AND time < $3
     GROUP BY 1, device_id
 )
@@ -222,11 +222,15 @@ SELECT h, sum(p) / 1000.0 AS kwh FROM ph GROUP BY h ORDER BY h
 """
 
 
-async def hourly_pv(device_ids: list[str], start: date, end: date) -> list[dict]:
-    """Hodinová výroba FVE (kWh) — pro denní rozpad (seskupení na dny dělá volající)."""
+async def hourly_metric_kwh(device_ids: list[str], metric: str, start: date, end: date) -> list[dict]:
+    """Hodinová energie dané metriky (kWh) — pro denní rozpad (dny seskupí volající)."""
     if not device_ids:
         return []
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(_HOURLY_PV_SQL, device_ids, start, end)
+        rows = await conn.fetch(_HOURLY_METRIC_SQL, device_ids, start, end, metric)
     return [dict(r) for r in rows]
+
+
+async def hourly_pv(device_ids: list[str], start: date, end: date) -> list[dict]:
+    return await hourly_metric_kwh(device_ids, "pv_power", start, end)

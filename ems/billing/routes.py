@@ -35,6 +35,8 @@ async def locality_billing_days(loc_id: int, month: str,
     devs = [d["id"] for d in await loc_db.devices_for_locality(loc_id)]
     rows = await billing_db.hourly_grid_spot(devs, mstart, mend)
     pv_rows = await billing_db.hourly_pv(devs, mstart, mend)
+    load_rows = await billing_db.hourly_metric_kwh(devs, "load_power", mstart, mend)
+    bat_rows = await billing_db.hourly_metric_kwh(devs, "battery_power", mstart, mend)
     from ems.planner import db as planner_db
     fc_days = await planner_db.get_pv_forecast_days(loc_id, mstart, mend)
     mode = loc.get("pricing_mode") or "spot"
@@ -67,11 +69,16 @@ async def locality_billing_days(loc_id: int, month: str,
             d["export_kwh"] += -np_kwh
             d["export_czk"] += (-np_kwh) * pe
 
-    pv_days: dict[str, float] = {}
-    for r in pv_rows:
-        k = r["h"].astimezone(tz).date().isoformat()
-        pv_days[k] = pv_days.get(k, 0.0) + float(r["kwh"] or 0.0)
-    for k in pv_days:
+    def _by_day(rows):
+        out: dict[str, float] = {}
+        for r in rows:
+            k = r["h"].astimezone(tz).date().isoformat()
+            out[k] = out.get(k, 0.0) + float(r["kwh"] or 0.0)
+        return out
+    pv_days = _by_day(pv_rows)
+    load_days = _by_day(load_rows)
+    bat_days = _by_day(bat_rows)
+    for k in set(pv_days) | set(load_days):
         days.setdefault(k, {"day": k, "import_kwh": 0.0, "export_kwh": 0.0, "import_czk": 0.0, "export_czk": 0.0})
 
     out = []
@@ -80,6 +87,9 @@ async def locality_billing_days(loc_id: int, month: str,
         out.append({"day": d["day"],
                     "pv_kwh": round(pv_days.get(key, 0.0), 1),
                     "pv_forecast_kwh": round(fc_days[key], 1) if key in fc_days else None,
+                    "cons_kwh": round(
+                        load_days.get(key, 0.0) if load_days.get(key, 0.0) > 0
+                        else max(0.0, pv_days.get(key, 0.0) + d["import_kwh"] - d["export_kwh"] - bat_days.get(key, 0.0)), 1),
                     "import_kwh": round(d["import_kwh"], 1),
                     "export_kwh": round(d["export_kwh"], 1),
                     "import_czk": round(d["import_czk"], 2),

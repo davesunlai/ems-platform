@@ -104,7 +104,7 @@ export default function BillingTable({ localityId }) {
                   {d.pv_kwh != null ? `${d.pv_kwh.toFixed(0)} kWh` : "—"}
                   {d.pv_forecast_kwh != null && <span className="muted" title="predikce výroby pro ten den"> (☀️ {d.pv_forecast_kwh.toFixed(0)})</span>}
                 </td>
-                <td style={{ textAlign: "right" }} className="muted">—</td>
+                <td style={{ textAlign: "right" }}>{d.cons_kwh != null ? `${d.cons_kwh.toFixed(0)} kWh` : "—"}</td>
                 <td style={{ textAlign: "right", color: "var(--green)" }}>{d.export_kwh.toFixed(1)} kWh</td>
                 <td style={{ textAlign: "right" }}>{d.import_kwh.toFixed(1)} kWh</td>
                 <td style={{ textAlign: "right" }}>{d.import_czk.toFixed(0)} Kč</td>
