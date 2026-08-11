@@ -140,6 +140,7 @@ async def ensure_schema() -> None:
             ("cond_spot_op", "TEXT NOT NULL DEFAULT 'any'"),
             ("cond_spot_czk", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
             ("cond_spot_hold", "BOOLEAN NOT NULL DEFAULT TRUE"),
+            ("cond_logic", "TEXT NOT NULL DEFAULT 'and'"),
             ("latched_window", "TEXT"),
         ):
             await conn.execute(f"ALTER TABLE planner_time_rules ADD COLUMN IF NOT EXISTS {col} {ddl}")
@@ -240,7 +241,7 @@ async def claimed_output_ids() -> set[int]:
 
 # --- ⏰ Časový plán (priorita 2 — hned pod bezpečnostní podlahou) -------------
 TIME_RULE_FIELDS = ("enabled", "label", "time_from", "time_to", "days", "action", "target", "power_kw",
-                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk", "cond_spot_hold")
+                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk", "cond_spot_hold", "cond_logic")
 TIME_RULE_ACTIONS = ("force_charge", "force_discharge", "stop", "output_on", "output_off")
 
 
@@ -313,33 +314,31 @@ async def active_time_rules(locality_id: int) -> list[dict]:
 
 def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | None,
                        spot_czk_kwh: float | None = None, spot_latched: bool = False) -> bool:
-    """Volitelné podmínky pravidla (vyhodnocují se PRŮBĚŽNĚ během okna):
-    - cond_sun: 'sunny'/'cloudy' vs. predikce dnešní výroby (prah cond_sun_kwh);
-    - cond_soc_op: 'ge'/'le' vs. AKTUÁLNÍ SoC baterie (cond_soc_pct).
-    Chybí-li podklad (predikce/SoC), podmíněné pravidlo se NEspustí (konzervativně)."""
+    """Volitelné podmínky pravidla (vyhodnocují se PRŮBĚŽNĚ během okna).
+    cond_logic: 'and' (default) = všechny definované musí platit; 'or' = stačí jedna.
+    Chybí-li podklad (predikce/SoC/spot), daná podmínka se bere jako NEsplněná
+    (v AND blokuje celé pravidlo, v OR mohou zabrat ostatní)."""
+    results = []
     cs = rule.get("cond_sun") or "any"
     if cs != "any":
         if day_pv_kwh is None:
-            return False
-        thr = float(rule.get("cond_sun_kwh") or 30)
-        if cs == "sunny" and day_pv_kwh < thr:
-            return False
-        if cs == "cloudy" and day_pv_kwh >= thr:
-            return False
+            results.append(False)
+        else:
+            thr = float(rule.get("cond_sun_kwh") or 30)
+            results.append(day_pv_kwh >= thr if cs == "sunny" else day_pv_kwh < thr)
     op = rule.get("cond_soc_op") or "any"
     if op != "any":
         if soc_pct is None:
-            return False
-        pct = float(rule.get("cond_soc_pct") or 50)
-        if op == "ge" and soc_pct < pct:
-            return False
-        if op == "le" and soc_pct > pct:
-            return False
+            results.append(False)
+        else:
+            pct = float(rule.get("cond_soc_pct") or 50)
+            results.append(soc_pct >= pct if op == "ge" else soc_pct <= pct)
     sop = rule.get("cond_spot_op") or "any"
-    if sop != "any" and not spot_latched:            # latch = cena ověřena na vstupu okna
-        if not spot_cond_ok(rule, spot_czk_kwh):
-            return False
-    return True
+    if sop != "any":
+        results.append(True if spot_latched else spot_cond_ok(rule, spot_czk_kwh))
+    if not results:
+        return True
+    return any(results) if (rule.get("cond_logic") or "and") == "or" else all(results)
 
 
 def spot_cond_ok(rule: dict, spot_czk_kwh: float | None) -> bool:

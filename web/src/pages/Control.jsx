@@ -621,7 +621,7 @@ const TP_ACTIONS = [
 ];
 const TP_DAYS = [["1", "Po"], ["2", "Út"], ["3", "St"], ["4", "Čt"], ["5", "Pá"], ["6", "So"], ["7", "Ne"]];
 const _tpEmpty = { action: "force_discharge", target: "", time_from: "17:00", time_to: "20:00", days: "1234567", power_kw: 5, label: "",
-                   cond_sun: "any", cond_sun_kwh: 30, cond_soc_op: "any", cond_soc_pct: 50, cond_spot_op: "any", cond_spot_czk: 0, cond_spot_hold: true };
+                   cond_sun: "any", cond_sun_kwh: 30, cond_soc_op: "any", cond_soc_pct: 50, cond_spot_op: "any", cond_spot_czk: 0, cond_spot_hold: true, cond_logic: "and" };
 
 function TimePlanBox({ locId, outputs }) {
   const [rules, setRules] = useState([]);
@@ -640,7 +640,7 @@ function TimePlanBox({ locId, outputs }) {
                    power_kw: Number(f.power_kw) || 5,
                    cond_sun_kwh: Number(f.cond_sun_kwh) || 30, cond_soc_pct: Number(f.cond_soc_pct) || 50,
                    cond_spot_czk: Number.isFinite(Number(f.cond_spot_czk)) ? Number(f.cond_spot_czk) : 0,
-                   cond_spot_hold: f.cond_spot_hold !== false };
+                   cond_spot_hold: f.cond_spot_hold !== false, cond_logic: f.cond_logic === "or" ? "or" : "and" };
     try {
       if (editId) await api.plannerTimeRuleUpdate(locId, editId, body);
       else await api.plannerTimeRuleCreate(locId, body);
@@ -650,7 +650,7 @@ function TimePlanBox({ locId, outputs }) {
   const edit = (r) => { setEditId(r.id); setF({ ...r, target: r.target || "", power_kw: r.power_kw ?? 5,
     cond_sun: r.cond_sun || "any", cond_sun_kwh: r.cond_sun_kwh ?? 30,
     cond_soc_op: r.cond_soc_op || "any", cond_soc_pct: r.cond_soc_pct ?? 50,
-    cond_spot_op: r.cond_spot_op || "any", cond_spot_czk: r.cond_spot_czk ?? 0, cond_spot_hold: r.cond_spot_hold !== false }); };
+    cond_spot_op: r.cond_spot_op || "any", cond_spot_czk: r.cond_spot_czk ?? 0, cond_spot_hold: r.cond_spot_hold !== false, cond_logic: r.cond_logic === "or" ? "or" : "and" }); };
   const cancel = () => { setEditId(null); setF(_tpEmpty); };
   const toggle = (r) => api.plannerTimeRuleUpdate(locId, r.id, { enabled: !r.enabled }).then(load).catch(() => {});
   const del = (r) => api.plannerTimeRuleDelete(locId, r.id).then(load).catch(() => {});
@@ -663,7 +663,7 @@ function TimePlanBox({ locId, outputs }) {
     if (r.cond_soc_op === "le") parts.push(`🔋 ≤${r.cond_soc_pct ?? 50} %`);
     if (r.cond_spot_op === "ge") parts.push(`💰 spot ≥ ${r.cond_spot_czk ?? 0} Kč${r.cond_spot_hold === false ? " (jen vstup)" : ""}`);
     if (r.cond_spot_op === "le") parts.push(`💰 spot ≤ ${r.cond_spot_czk ?? 0} Kč${r.cond_spot_hold === false ? " (jen vstup)" : ""}`);
-    return parts.join(" · ");
+    return parts.join(r.cond_logic === "or" ? "  NEBO  " : " · ");
   };
 
   return (
@@ -736,6 +736,12 @@ function TimePlanBox({ locId, outputs }) {
         {f.cond_spot_op !== "any" && (
           <div><label style={{ fontSize: 11, display: "block" }} title="aktuální OTE spot v Kč/kWh — může být i záporný (např. -0.2)">Kč/kWh</label>
             <input style={{ ..._FLD, width: 70 }} value={f.cond_spot_czk} onChange={(e) => setF({ ...f, cond_spot_czk: e.target.value })} /></div>)}
+        {[f.cond_sun, f.cond_soc_op, f.cond_spot_op].filter((v) => v && v !== "any").length >= 2 && (
+          <div><label style={{ fontSize: 11, display: "block" }} title="Jak se podmínky spojí: všechny musí platit (A ZÁROVEŇ), nebo stačí jedna (NEBO).">Spojení podmínek</label>
+            <select style={{ ..._FLD, width: 150 }} value={f.cond_logic} onChange={(e) => setF({ ...f, cond_logic: e.target.value })}>
+              <option value="and">všechny (A ZÁROVEŇ)</option>
+              <option value="or">stačí jedna (NEBO)</option>
+            </select></div>)}
         {f.cond_spot_op !== "any" && (
           <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, paddingBottom: 6 }}
                  title="Zaškrtnuto: cena se hlídá průběžně — když během okna uteče, pravidlo se vypne. Odškrtnuto: cena se ověří jen na vstupu a pravidlo pak dojede celé okno.">

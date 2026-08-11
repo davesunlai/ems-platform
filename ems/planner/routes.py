@@ -117,6 +117,7 @@ class TimeRuleIn(BaseModel):
     cond_spot_op: str | None = None
     cond_spot_czk: float | None = None
     cond_spot_hold: bool | None = None
+    cond_logic: str | None = None
 
 
 def _validate_rule(body: TimeRuleIn, require_all: bool) -> dict:
@@ -141,6 +142,8 @@ def _validate_rule(body: TimeRuleIn, require_all: bool) -> dict:
         raise HTTPException(status_code=400, detail="cond_soc_op: any|ge|le")
     if d.get("cond_spot_op") is not None and d["cond_spot_op"] not in ("any", "ge", "le"):
         raise HTTPException(status_code=400, detail="cond_spot_op: any|ge|le")
+    if d.get("cond_logic") is not None and d["cond_logic"] not in ("and", "or"):
+        raise HTTPException(status_code=400, detail="cond_logic: and|or")
     return d
 
 
