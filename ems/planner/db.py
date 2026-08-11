@@ -137,6 +137,8 @@ async def ensure_schema() -> None:
             ("cond_sun_kwh", "DOUBLE PRECISION NOT NULL DEFAULT 30"),
             ("cond_soc_op", "TEXT NOT NULL DEFAULT 'any'"),
             ("cond_soc_pct", "DOUBLE PRECISION NOT NULL DEFAULT 50"),
+            ("cond_spot_op", "TEXT NOT NULL DEFAULT 'any'"),
+            ("cond_spot_czk", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
         ):
             await conn.execute(f"ALTER TABLE planner_time_rules ADD COLUMN IF NOT EXISTS {col} {ddl}")
 
@@ -236,7 +238,7 @@ async def claimed_output_ids() -> set[int]:
 
 # --- ⏰ Časový plán (priorita 2 — hned pod bezpečnostní podlahou) -------------
 TIME_RULE_FIELDS = ("enabled", "label", "time_from", "time_to", "days", "action", "target", "power_kw",
-                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct")
+                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk")
 TIME_RULE_ACTIONS = ("force_charge", "force_discharge", "stop", "output_on", "output_off")
 
 
@@ -307,7 +309,8 @@ async def active_time_rules(locality_id: int) -> list[dict]:
     return [r for r in await list_time_rules(locality_id) if _rule_active(r, hm, isoday)]
 
 
-def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | None) -> bool:
+def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | None,
+                       spot_czk_kwh: float | None = None) -> bool:
     """Volitelné podmínky pravidla (vyhodnocují se PRŮBĚŽNĚ během okna):
     - cond_sun: 'sunny'/'cloudy' vs. predikce dnešní výroby (prah cond_sun_kwh);
     - cond_soc_op: 'ge'/'le' vs. AKTUÁLNÍ SoC baterie (cond_soc_pct).
@@ -329,5 +332,15 @@ def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | No
         if op == "ge" and soc_pct < pct:
             return False
         if op == "le" and soc_pct > pct:
+            return False
+    sop = rule.get("cond_spot_op") or "any"
+    if sop != "any":
+        if spot_czk_kwh is None:
+            return False
+        thr = rule.get("cond_spot_czk")
+        thr = 0.0 if thr is None else float(thr)     # 0 i záporné jsou platné prahy
+        if sop == "ge" and spot_czk_kwh < thr:
+            return False
+        if sop == "le" and spot_czk_kwh > thr:
             return False
     return True
