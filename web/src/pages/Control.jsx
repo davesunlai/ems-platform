@@ -668,10 +668,13 @@ function TimePlanBox({ locId, outputs }) {
 
   return (
     <div>
-      {rules.map((r) => (
+      {rules.map((r, ri) => (
         <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 10px", justifyContent: "center", flexWrap: "wrap",
                                  border: `1px solid ${editId === r.id ? "var(--amber, #d29922)" : "var(--border)"}`, borderRadius: 8,
                                  background: "var(--bg)", marginBottom: 6, opacity: r.enabled ? 1 : 0.55 }}>
+          <span title="pořadí dle času startu (při shodě dle pořadí zadání)"
+                style={{ fontSize: 11, fontWeight: 700, border: "1px solid var(--border)", borderRadius: 999,
+                         minWidth: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{ri + 1}</span>
           <input type="checkbox" checked={!!r.enabled} onChange={() => toggle(r)} title="zapnuto/vypnuto" />
           <b>{r.time_from}–{r.time_to}</b>
           <span className="muted">{dayStr(r.days || "1234567")}</span>
