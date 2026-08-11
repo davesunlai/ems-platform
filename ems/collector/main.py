@@ -342,7 +342,18 @@ async def tick_planner(state: dict) -> None:
                         from ems.outputs.engine import _spot_price
                         sp = await _spot_price()                       # CZK/MWh (OTE, může být záporná)
                         spot_kwh = float(sp) / 1000.0 if sp is not None else None
-                    t_rules = [r for r in t_rules if planner_db.rule_conditions_ok(r, day_pv, soc_now, spot_kwh)]
+                    filtered = []
+                    for r in t_rules:
+                        latched = False
+                        if (r.get("cond_spot_op") or "any") != "any" and not r.get("cond_spot_hold", True):
+                            wk = planner_db.rule_window_key(r)
+                            latched = (r.get("latched_window") == wk)
+                            if not latched and planner_db.spot_cond_ok(r, spot_kwh):
+                                await planner_db.set_rule_latch(r["id"], wk)   # cena OK na vstupu → drž celé okno
+                                latched = True
+                        if planner_db.rule_conditions_ok(r, day_pv, soc_now, spot_kwh, spot_latched=latched):
+                            filtered.append(r)
+                    t_rules = filtered
             except Exception:
                 t_rules = []
             batt_rule = next((r for r in t_rules if r["action"] in ("force_charge", "force_discharge", "stop")), None)

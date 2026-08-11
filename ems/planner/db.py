@@ -139,6 +139,8 @@ async def ensure_schema() -> None:
             ("cond_soc_pct", "DOUBLE PRECISION NOT NULL DEFAULT 50"),
             ("cond_spot_op", "TEXT NOT NULL DEFAULT 'any'"),
             ("cond_spot_czk", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+            ("cond_spot_hold", "BOOLEAN NOT NULL DEFAULT TRUE"),
+            ("latched_window", "TEXT"),
         ):
             await conn.execute(f"ALTER TABLE planner_time_rules ADD COLUMN IF NOT EXISTS {col} {ddl}")
 
@@ -238,7 +240,7 @@ async def claimed_output_ids() -> set[int]:
 
 # --- ⏰ Časový plán (priorita 2 — hned pod bezpečnostní podlahou) -------------
 TIME_RULE_FIELDS = ("enabled", "label", "time_from", "time_to", "days", "action", "target", "power_kw",
-                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk")
+                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk", "cond_spot_hold")
 TIME_RULE_ACTIONS = ("force_charge", "force_discharge", "stop", "output_on", "output_off")
 
 
@@ -246,7 +248,7 @@ async def list_time_rules(locality_id: int) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, " + ", ".join(TIME_RULE_FIELDS) +
+            "SELECT id, latched_window, " + ", ".join(TIME_RULE_FIELDS) +
             " FROM planner_time_rules WHERE locality_id=$1 ORDER BY time_from, id", locality_id)
     return [dict(r) for r in rows]
 
@@ -310,7 +312,7 @@ async def active_time_rules(locality_id: int) -> list[dict]:
 
 
 def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | None,
-                       spot_czk_kwh: float | None = None) -> bool:
+                       spot_czk_kwh: float | None = None, spot_latched: bool = False) -> bool:
     """Volitelné podmínky pravidla (vyhodnocují se PRŮBĚŽNĚ během okna):
     - cond_sun: 'sunny'/'cloudy' vs. predikce dnešní výroby (prah cond_sun_kwh);
     - cond_soc_op: 'ge'/'le' vs. AKTUÁLNÍ SoC baterie (cond_soc_pct).
@@ -334,13 +336,40 @@ def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | No
         if op == "le" and soc_pct > pct:
             return False
     sop = rule.get("cond_spot_op") or "any"
-    if sop != "any":
-        if spot_czk_kwh is None:
-            return False
-        thr = rule.get("cond_spot_czk")
-        thr = 0.0 if thr is None else float(thr)     # 0 i záporné jsou platné prahy
-        if sop == "ge" and spot_czk_kwh < thr:
-            return False
-        if sop == "le" and spot_czk_kwh > thr:
+    if sop != "any" and not spot_latched:            # latch = cena ověřena na vstupu okna
+        if not spot_cond_ok(rule, spot_czk_kwh):
             return False
     return True
+
+
+def spot_cond_ok(rule: dict, spot_czk_kwh: float | None) -> bool:
+    """Samotná spotová podmínka (bez latch logiky)."""
+    sop = rule.get("cond_spot_op") or "any"
+    if sop == "any":
+        return True
+    if spot_czk_kwh is None:
+        return False
+    thr = rule.get("cond_spot_czk")
+    thr = 0.0 if thr is None else float(thr)
+    return spot_czk_kwh >= thr if sop == "ge" else spot_czk_kwh <= thr
+
+
+def rule_window_key(rule: dict, now=None) -> str:
+    """Identita AKTUÁLNÍHO běhu okna: 'YYYY-MM-DD|HH:MM' (datum, kdy okno začalo;
+    u oken přes půlnoc patří ranní část k včerejšímu startu)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    if now is None:
+        now = datetime.now(ZoneInfo("Europe/Prague"))
+    f, t = rule.get("time_from") or "00:00", rule.get("time_to") or "00:00"
+    hm = now.strftime("%H:%M")
+    start_day = now.date()
+    if f > t and hm < t:                    # přes půlnoc, jsme v ranní části → start včera
+        start_day = (now - timedelta(days=1)).date()
+    return f"{start_day.isoformat()}|{f}"
+
+
+async def set_rule_latch(rid: int, window_key: str) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE planner_time_rules SET latched_window=$2 WHERE id=$1", rid, window_key)
