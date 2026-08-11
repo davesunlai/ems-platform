@@ -669,8 +669,9 @@ function TimePlanBox({ locId, outputs }) {
   return (
     <div>
       {rules.map((r) => (
-        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "3px 0", justifyContent: "center", flexWrap: "wrap",
-                                 background: editId === r.id ? "var(--panel, rgba(120,120,120,.08))" : "transparent", borderRadius: 6 }}>
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 10px", justifyContent: "center", flexWrap: "wrap",
+                                 border: `1px solid ${editId === r.id ? "var(--amber, #d29922)" : "var(--border)"}`, borderRadius: 8,
+                                 background: "var(--bg)", marginBottom: 6, opacity: r.enabled ? 1 : 0.55 }}>
           <input type="checkbox" checked={!!r.enabled} onChange={() => toggle(r)} title="zapnuto/vypnuto" />
           <b>{r.time_from}–{r.time_to}</b>
           <span className="muted">{dayStr(r.days || "1234567")}</span>
