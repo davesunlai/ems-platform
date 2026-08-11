@@ -319,6 +319,7 @@ function LocalityNow({ deviceIds, localityId }) {
     <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: 10 }}>
       · spotřeba <strong style={{ color: "var(--amber, #d29922)" }}>{fmt(loadKw)} kW / {fmt(d.cons_today_kwh ?? 0)} kWh</strong>
       {" · FVE "}<strong style={{ color: "var(--green)" }}>{fmt(kw)} kW / {fmt(d.today_kwh)} kWh</strong>
+      {d.pv_forecast_kwh != null && <> · ☀️ plán <strong style={{ color: "var(--green)" }}>{fmt(d.pv_forecast_kwh)} kWh/den</strong></>}
       {d.soc != null && <> · <Icon name="battery" size={14} style={{ verticalAlign: "-2px", opacity: 0.85 }} /> <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
       {d.import_kwh != null && <> {" · "}<Icon name="tower" size={14} style={{ verticalAlign: "-2px", opacity: 0.85 }} /> ze sítě <strong style={{ color: "var(--blue)" }}>{fmt(impKw)} kW / {fmt(d.import_kwh)} kWh{d.import_czk != null ? ` / ${czk(d.import_czk)}` : ""}</strong></>}
       {d.export_kwh != null && <> · do sítě <strong style={{ color: "var(--green)" }}>{fmt(expKw)} kW / {fmt(d.export_kwh)} kWh{d.export_czk != null ? ` / ${czk(d.export_czk)}` : ""}</strong></>}

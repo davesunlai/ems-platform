@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.61.6", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.61.7", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -150,6 +150,13 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
                 tariff = await pricing_db.get_effective(loc)
                 c = await billing_db.today_spot_cost(dev_ids, tariff)
                 out["import_czk"], out["export_czk"] = c["import_czk"], c["export_czk"]
+            try:
+                from ems.planner import service as planner_service
+                fc = await planner_service.today_pv_forecast_kwh(loc)
+                if fc is not None:
+                    out["pv_forecast_kwh"] = round(fc, 1)
+            except Exception:
+                pass
     return out
 
 

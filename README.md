@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.61.7 — Dashboard: v souhrnném řádku lokality nově „☀️ plán X kWh/den" = predikovaná dnešní výroba FVE (today_pv_forecast_kwh — součet predikce pro pražský den, stejný podklad jako podmínka počasí v časovém plánu). Endpoint aggregate-now vrací pv_forecast_kwh (jen s locality id; bez predikce se pole vynechá a UI nic neukáže). Zobrazeno hned za aktuální FVE (kW / kWh dne), takže vidíš vedle sebe: kolik už se vyrobilo vs. kolik se dnes celkem čeká.
+
 ## v0.61.6 — UI: pravidlo časového plánu ve dvou řádcích. Řádek 1 = číslo (kroužek) + POPIS (label; bez popisku název akce) + checkbox/✎/✕. Řádek 2 = data plánu: čas od–do, dny, akce (+kW / spotřebič), podmínkové badge. Čistě frontend.
 
 ## v0.61.5 — UI: pravidla časového plánu očíslovaná kroužkem dle pořadí startu (řazení už bylo ORDER BY time_from, id — dřívější začátek = nižší číslo, při shodném začátku dřívější zadání = nižší číslo). Čistě frontend (badge s tooltipem).
