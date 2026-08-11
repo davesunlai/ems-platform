@@ -673,7 +673,7 @@ function TimePlanBox({ locId, outputs }) {
                                  border: `1px solid ${editId === r.id ? "var(--amber, #d29922)" : "var(--border)"}`, borderRadius: 8,
                                  background: "var(--bg)", marginBottom: 6, opacity: r.enabled ? 1 : 0.55 }}>
           {/* řádek 1: číslo + popis + ovládání */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-start" }}>
             <span title="pořadí dle času startu (při shodě dle pořadí zadání)"
                   style={{ fontSize: 11, fontWeight: 700, border: "1px solid var(--border)", borderRadius: 999,
                            minWidth: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{ri + 1}</span>
@@ -683,7 +683,7 @@ function TimePlanBox({ locId, outputs }) {
             <button className="btn" style={{ padding: "1px 7px", fontSize: 11 }} onClick={() => del(r)} title="smazat">✕</button>
           </div>
           {/* řádek 2: data plánu — čas, dny, akce, podmínky */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, justifyContent: "center", flexWrap: "wrap", marginTop: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, justifyContent: "flex-start", flexWrap: "wrap", marginTop: 4, paddingLeft: 28 }}>
             <b>{r.time_from}–{r.time_to}</b>
             <span className="muted">{dayStr(r.days || "1234567")}</span>
             <span>{actLabel(r.action)}{(r.action === "output_on" || r.action === "output_off") ? ` · ${outName(r.target)}` : (r.action !== "stop" ? ` · ${r.power_kw} kW` : "")}</span>

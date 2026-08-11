@@ -208,3 +208,25 @@ async def today_spot_cost(device_ids: list[str], tariff: dict | None = None) -> 
         else:
             exp += (-np_kwh) * price["export_czk"]
     return {"import_czk": round(imp, 2), "export_czk": round(exp, 2)}
+
+
+_HOURLY_PV_SQL = """
+WITH ph AS (
+    SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS p
+    FROM samples
+    WHERE device_id = ANY($1::text[]) AND metric = 'pv_power'
+      AND time >= $2 AND time < $3
+    GROUP BY 1, device_id
+)
+SELECT h, sum(p) / 1000.0 AS kwh FROM ph GROUP BY h ORDER BY h
+"""
+
+
+async def hourly_pv(device_ids: list[str], start: date, end: date) -> list[dict]:
+    """Hodinová výroba FVE (kWh) — pro denní rozpad (seskupení na dny dělá volající)."""
+    if not device_ids:
+        return []
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(_HOURLY_PV_SQL, device_ids, start, end)
+    return [dict(r) for r in rows]

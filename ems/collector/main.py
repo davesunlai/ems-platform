@@ -302,6 +302,9 @@ async def tick_forecast(state: dict) -> None:
         logger.warning("Forecast tick selhal: %s", exc)
 
 
+_PV_SNAP_DONE: dict[int, str] = {}
+
+
 async def tick_planner(state: dict) -> None:
     """Přepočet plánu (à 30 min) + výkon: enqueue aktuální akce při změně
     pro lokality se zapnutým plánovačem. Force jede BEZ syrového výkonu —
@@ -314,6 +317,21 @@ async def tick_planner(state: dict) -> None:
             await planner_service.run_all()
         except Exception as exc:
             logger.warning("Planner přepočet selhal: %s", exc)
+    # denní snapshot predikce výroby (predikce vs. realita v účtování)
+    try:
+        from zoneinfo import ZoneInfo as _ZI
+        from datetime import datetime as _dt
+        _today = _dt.now(_ZI("Europe/Prague")).date().isoformat()
+        for _cfg in await planner_db.all_configs():
+            _lid = _cfg["locality_id"]
+            if _PV_SNAP_DONE.get(_lid) == _today:
+                continue
+            _fc = await planner_service.today_pv_forecast_kwh(_lid)
+            if _fc is not None:
+                await planner_db.upsert_pv_forecast_day(_lid, _today, _fc)
+                _PV_SNAP_DONE[_lid] = _today
+    except Exception as exc:
+        logger.debug("PV snapshot: %s", exc)
     try:
         await planner_service.winddown()      # uvolni výstupy u lokalit s vypnutým Smart Control
     except Exception as exc:

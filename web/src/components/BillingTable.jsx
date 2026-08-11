@@ -100,7 +100,10 @@ export default function BillingTable({ localityId }) {
             {openMonth === r.month && days[r.month] && days[r.month].map((d) => (
               <tr key={d.day} style={{ fontSize: 12, opacity: 0.92, background: "var(--bg)" }}>
                 <td style={{ paddingLeft: 22 }}>{new Date(d.day).toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric", weekday: "short" })}</td>
-                <td style={{ textAlign: "right" }} className="muted">—</td>
+                <td style={{ textAlign: "right" }}>
+                  {d.pv_kwh != null ? `${d.pv_kwh.toFixed(0)} kWh` : "—"}
+                  {d.pv_forecast_kwh != null && <span className="muted" title="predikce výroby pro ten den"> (☀️ {d.pv_forecast_kwh.toFixed(0)})</span>}
+                </td>
                 <td style={{ textAlign: "right" }} className="muted">—</td>
                 <td style={{ textAlign: "right", color: "var(--green)" }}>{d.export_kwh.toFixed(1)} kWh</td>
                 <td style={{ textAlign: "right" }}>{d.import_kwh.toFixed(1)} kWh</td>

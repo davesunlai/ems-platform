@@ -132,6 +132,16 @@ async def ensure_schema() -> None:
             )
             """
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pv_forecast_daily (
+                locality_id INTEGER NOT NULL,
+                day DATE NOT NULL,
+                forecast_kwh DOUBLE PRECISION NOT NULL,
+                PRIMARY KEY (locality_id, day)
+            )
+            """
+        )
         for col, ddl in (
             ("cond_sun", "TEXT NOT NULL DEFAULT 'any'"),
             ("cond_sun_kwh", "DOUBLE PRECISION NOT NULL DEFAULT 30"),
@@ -384,3 +394,22 @@ async def set_rule_latch(rid: int, window_key: str, field: str = "latched_window
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(f"UPDATE planner_time_rules SET {field}=$2 WHERE id=$1", rid, window_key)
+
+
+# --- Denní snapshot predikce výroby (pro srovnání predikce vs. realita) ------
+async def upsert_pv_forecast_day(locality_id: int, day: str, kwh: float) -> None:
+    """První zápis dne vyhrává (snapshot ranní predikce celého dne)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO pv_forecast_daily (locality_id, day, forecast_kwh) VALUES ($1, $2, $3) "
+            "ON CONFLICT (locality_id, day) DO NOTHING", locality_id, __import__("datetime").date.fromisoformat(day), float(kwh))
+
+
+async def get_pv_forecast_days(locality_id: int, start, end) -> dict[str, float]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT day, forecast_kwh FROM pv_forecast_daily WHERE locality_id=$1 AND day >= $2 AND day < $3",
+            locality_id, start, end)
+    return {r["day"].isoformat(): float(r["forecast_kwh"]) for r in rows}
