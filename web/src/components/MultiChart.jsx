@@ -19,8 +19,11 @@ export default function MultiChart({ series, height = 240 }) {
     return n;
   });
 
+  const isPct = (s) => s.axis === "pct";
+  const hasPct = shown.some(isPct);
   const disp = (v) => v / 1000; // W → kW
-  const allVals = shown.flatMap((s) => s.points.map((p) => disp(p.value)));
+  const sval = (s, p) => (isPct(s) ? p.value : disp(p.value));
+  const allVals = shown.filter((s) => !isPct(s)).flatMap((s) => s.points.map((p) => disp(p.value)));
   let lo = Math.min(0, ...(allVals.length ? allVals : [0]));
   let hi = Math.max(0, ...(allVals.length ? allVals : [1]));
   if (hi === lo) hi = lo + 1;
@@ -30,10 +33,12 @@ export default function MultiChart({ series, height = 240 }) {
   const t0 = Math.min(...baseTs), t1 = Math.max(...baseTs);
   const tspan = t1 - t0 || 1;
 
-  const W = 760, H = height, padL = 52, padR = 12, padT = 12, padB = 26;
+  const W = 760, H = height, padL = 52, padR = hasPct ? 40 : 12, padT = 12, padB = 26;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const X = (t) => padL + ((t - t0) / tspan) * plotW;
   const Y = (v) => padT + plotH * (1 - (v - lo) / span);
+  const Yp = (v) => padT + plotH * (1 - Math.max(0, Math.min(100, v)) / 100);
+  const Ys = (s, p) => (isPct(s) ? Yp(p.value) : Y(disp(p.value)));
 
   const fmtY = (v) => (Math.abs(v) >= 100 ? Math.round(v) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
   const multiDay = tspan > 2 * 864e5;
@@ -48,8 +53,8 @@ export default function MultiChart({ series, height = 240 }) {
   const xN = 5;
   const xTicks = Array.from({ length: xN }, (_, i) => t0 + (tspan * i) / (xN - 1));
 
-  const pathFor = (pts) => pts.map((p, i) =>
-    `${i ? "L" : "M"}${X(new Date(p.time).getTime()).toFixed(1)},${Y(disp(p.value)).toFixed(1)}`).join(" ");
+  const pathFor = (s) => s.points.map((p, i) =>
+    `${i ? "L" : "M"}${X(new Date(p.time).getTime()).toFixed(1)},${Ys(s, p).toFixed(1)}`).join(" ");
 
   const nearest = (pts, t) => {
     let best = pts[0], bd = Infinity;
@@ -67,7 +72,7 @@ export default function MultiChart({ series, height = 240 }) {
   };
 
   const hx = hovT != null ? X(hovT) : 0;
-  const hoverRows = hovT != null ? shown.map((s) => ({ label: s.label, color: s.color, p: nearest(s.points, hovT) })) : [];
+  const hoverRows = hovT != null ? shown.map((s) => ({ label: s.label, color: s.color, s, p: nearest(s.points, hovT) })) : [];
 
   return (
     <div>
@@ -89,15 +94,25 @@ export default function MultiChart({ series, height = 240 }) {
                   fontSize="10" fill="var(--muted)">{fmtX(t)}</text>
           ))}
           <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="var(--border)" strokeWidth="0.8" />
+          {hasPct && (
+            <g>
+              <text x={W - 10} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
+                    transform={`rotate(90 ${W - 10} ${padT + plotH / 2})`}>SoC %</text>
+              {[0, 25, 50, 75, 100].map((v) => (
+                <text key={`p${v}`} x={W - padR + 6} y={Yp(v) + 3} textAnchor="start" fontSize="9.5" fill="var(--muted)">{v}</text>
+              ))}
+            </g>
+          )}
           {shown.map((s, i) => (
-            <path key={i} d={pathFor(s.points)} fill="none" stroke={s.color} strokeWidth="1.7" vectorEffect="non-scaling-stroke" />
+            <path key={i} d={pathFor(s)} fill="none" stroke={s.color} strokeWidth={isPct(s) ? 1.5 : 1.7}
+                  strokeDasharray={isPct(s) ? "5 4" : undefined} vectorEffect="non-scaling-stroke" />
           ))}
 
           {hovT != null && shown.length > 0 && (
             <g>
               <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} stroke="var(--muted)" strokeWidth="0.8" strokeDasharray="3 3" />
               {hoverRows.map((r, i) => (
-                <circle key={i} cx={hx} cy={Y(disp(r.p.value))} r="3" fill={r.color} stroke="var(--panel, #161b22)" strokeWidth="1.3" />
+                <circle key={i} cx={hx} cy={Ys(r.s, r.p)} r="3" fill={r.color} stroke="var(--panel, #161b22)" strokeWidth="1.3" />
               ))}
             </g>
           )}
@@ -114,7 +129,7 @@ export default function MultiChart({ series, height = 240 }) {
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ display: "inline-block", width: 9, height: 3, background: r.color }} />
                 <span className="muted">{r.label}</span>
-                <strong style={{ marginLeft: "auto", paddingLeft: 10 }}>{fmtY(disp(r.p.value))} kW</strong>
+                <strong style={{ marginLeft: "auto", paddingLeft: 10 }}>{isPct(r.s) ? `${Math.round(r.p.value)} %` : `${fmtY(disp(r.p.value))} kW`}</strong>
               </div>
             ))}
           </div>

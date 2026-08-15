@@ -288,9 +288,11 @@ async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 3
                 str(bucket_seconds), device_ids, str(start_min), str(offset),
             )
         else:
+            # SoC/procentní metriky se přes zařízení PRŮMĚRUJÍ (součet 2 baterií = nesmysl)
+            agg = "avg" if metric.endswith("_soc") or metric.endswith("_pct") or metric == "soc" else "sum"
             rows = await conn.fetch(
-                """
-                SELECT b, sum(dev_avg) AS value FROM (
+                f"""
+                SELECT b, {agg}(dev_avg) AS value FROM (
                     SELECT time_bucket(($1 || ' seconds')::interval, time) AS b,
                            device_id, avg(value) AS dev_avg
                     FROM samples
