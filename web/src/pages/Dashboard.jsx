@@ -296,6 +296,20 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
   );
 }
 
+function Stat({ icon, iconName, label, value, sub, color, title }) {
+  return (
+    <div title={title} style={{ border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)",
+                                padding: "6px 10px", minWidth: 118, flex: "0 1 auto" }}>
+      <div className="muted" style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+        {iconName ? <Icon name={iconName} size={13} style={{ opacity: 0.85 }} /> : <span>{icon}</span>}
+        {label}
+      </div>
+      <div style={{ fontWeight: 700, fontSize: 14.5, color: color || "var(--fg)" }}>{value}</div>
+      {sub && <div className="muted" style={{ fontSize: 11 }}>{sub}</div>}
+    </div>
+  );
+}
+
 function LocalityNow({ deviceIds, localityId }) {
   const [d, setD] = useState(null);
   const [ts, setTs] = useState(null);
@@ -313,23 +327,44 @@ function LocalityNow({ deviceIds, localityId }) {
   const gridW = d.grid_w ?? 0;                 // + import / − export (W)
   const impKw = gridW > 0 ? gridW / 1000 : 0;
   const expKw = gridW < 0 ? -gridW / 1000 : 0;
-  const fmt = (v, dec = 1) => (Math.abs(v) >= 10 ? v.toFixed(dec) : v.toFixed(dec));
+  const fmt = (v, dec = 1) => v.toFixed(dec);
   const czk = (v) => `${v >= 100 ? v.toFixed(0) : v.toFixed(2)} Kč`;
+  const fdays = d.pv_forecast_days || [];
+  const fLabel = ["dnes", "zítra", "pozítří"];
+  const planMain = fdays.length ? `${fmt(fdays[0].kwh, 0)} kWh` : null;
+  const planSub = fdays.slice(1).map((x, i) => `${fLabel[i + 1]} ${fmt(x.kwh, 0)}`).join(" · ");
   return (
-    <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: 10 }}>
-      · spotřeba <strong style={{ color: "var(--amber, #d29922)" }}>{fmt(loadKw)} kW / {fmt(d.cons_today_kwh ?? 0)} kWh</strong>
-      {" · FVE "}<strong style={{ color: "var(--green)" }}>{fmt(kw)} kW / {fmt(d.today_kwh)} kWh</strong>
-      {d.pv_forecast_kwh != null && <> · ☀️ plán <strong style={{ color: "var(--green)" }}>{fmt(d.pv_forecast_kwh)} kWh/den</strong></>}
-      {d.soc != null && <> · <Icon name="battery" size={14} style={{ verticalAlign: "-2px", opacity: 0.85 }} /> <strong style={{ color: "var(--blue)" }}>{Math.round(d.soc)} %</strong></>}
-      {d.import_kwh != null && <> {" · "}<Icon name="tower" size={14} style={{ verticalAlign: "-2px", opacity: 0.85 }} /> ze sítě <strong style={{ color: "var(--blue)" }}>{fmt(impKw)} kW / {fmt(d.import_kwh)} kWh{d.import_czk != null ? ` / ${czk(d.import_czk)}` : ""}</strong></>}
-      {d.export_kwh != null && <> · do sítě <strong style={{ color: "var(--green)" }}>{fmt(expKw)} kW / {fmt(d.export_kwh)} kWh{d.export_czk != null ? ` / ${czk(d.export_czk)}` : ""}</strong></>}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "stretch", margin: "8px 0 0", fontWeight: 400 }}>
+      <Stat icon="🏠" label="Spotřeba" color="var(--amber, #d29922)"
+            value={`${fmt(loadKw)} kW`} sub={`dnes ${fmt(d.cons_today_kwh ?? 0)} kWh`}
+            title="Okamžitý příkon domu · pod tím součet za dnešní den" />
+      <Stat icon="☀️" label="FVE" color="var(--green)"
+            value={`${fmt(kw)} kW`} sub={`dnes ${fmt(d.today_kwh)} kWh`}
+            title="Okamžitý výkon FVE · pod tím dnešní výroba" />
+      {planMain && (
+        <Stat icon="🔮" label="Plán FVE dnes" color="var(--green)"
+              value={planMain} sub={planSub || null}
+              title="Predikovaná výroba (ranní snapshot); zítřek/pozítří dle předpovědi" />)}
+      {d.soc != null && (
+        <Stat iconName="battery" label="Baterie" color="var(--blue)" value={`${Math.round(d.soc)} %`}
+              title="Aktuální nabití baterie" />)}
+      {d.import_kwh != null && (
+        <Stat iconName="tower" label="Ze sítě" color="var(--blue)"
+              value={`${fmt(impKw)} kW`}
+              sub={`dnes ${fmt(d.import_kwh)} kWh${d.import_czk != null ? ` · ${czk(d.import_czk)}` : ""}`}
+              title="Okamžitý odběr z distribuce · dnešní součet a cena dle sazebníku" />)}
+      {d.export_kwh != null && (
+        <Stat icon="↗️" label="Do sítě" color="var(--green)"
+              value={`${fmt(expKw)} kW`}
+              sub={`dnes ${fmt(d.export_kwh)} kWh${d.export_czk != null ? ` · ${czk(d.export_czk)}` : ""}`}
+              title="Okamžitý přetok do distribuce · dnešní součet a výnos dle sazebníku" />)}
       {ts && (
-        <span className="muted" style={{ fontSize: 11, marginLeft: 8, whiteSpace: "nowrap" }}
-              title="První číslo (kW) je okamžitý výkon, hodnoty za lomítkem (kWh, Kč) jsou součty za dnešní den.">
-          — kW = teď · kWh/Kč = dnes {ts.toLocaleDateString("cs-CZ")} · aktualizováno {ts.toLocaleTimeString("cs-CZ")}
-        </span>
+        <div className="muted" style={{ fontSize: 10.5, alignSelf: "flex-end", marginLeft: "auto", textAlign: "right", lineHeight: 1.5 }}
+             title="Velké číslo (kW) je okamžitá hodnota, řádek pod ním jsou součty za dnešní den.">
+          kW = teď · kWh/Kč = dnes {ts.toLocaleDateString("cs-CZ")}<br />aktualizováno {ts.toLocaleTimeString("cs-CZ")}
+        </div>
       )}
-    </span>
+    </div>
   );
 }
 
@@ -338,12 +373,12 @@ function LocalitySection({ name, devs, open, onToggle }) {
   const locId = devs[0].locality_id;
   return (
     <section style={{ marginBottom: open ? 26 : 10 }}>
-      <h2 style={{ margin: "0 0 12px", fontSize: 18, cursor: "pointer", userSelect: "none" }}
+      <h2 style={{ margin: "0 0 4px", fontSize: 18, cursor: "pointer", userSelect: "none" }}
           onClick={onToggle} title={open ? "Sbalit lokalitu" : "Rozbalit lokalitu"}>
         <span style={{ fontSize: 13, marginRight: 6, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>
         {name === "—" ? "Bez lokality" : `📍 ${name}`}
-        <LocalityNow deviceIds={ids} localityId={locId} />
       </h2>
+      <LocalityNow deviceIds={ids} localityId={locId} />
       {open && (<>
         <ControlBanners deviceIds={ids} localityId={locId} />
         <LocalityChart deviceIds={ids} />

@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.62.1", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.62.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -152,9 +152,10 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
                 out["import_czk"], out["export_czk"] = c["import_czk"], c["export_czk"]
             try:
                 from ems.planner import service as planner_service
-                fc = await planner_service.today_pv_forecast_kwh(loc)
-                if fc is not None:
-                    out["pv_forecast_kwh"] = round(fc, 1)
+                fdays = await planner_service.pv_forecast_days_kwh(loc)
+                if fdays:
+                    out["pv_forecast_days"] = fdays
+                    out["pv_forecast_kwh"] = fdays[0]["kwh"]   # zpětná kompat (dnešek)
             except Exception:
                 pass
     return out

@@ -133,6 +133,43 @@ async def today_pv_forecast_kwh(locality_id: int) -> float | None:
     return tot if seen else None
 
 
+async def pv_forecast_days_kwh(locality_id: int) -> list[dict]:
+    """Predikce výroby po dnech: dnes (preferuje ranní snapshot pv_forecast_daily),
+    zítra a pozítří (jen mají-li ≥ 20 hodinových bodů — neúplný den by mátl)."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    from . import db as pdb
+    tz = ZoneInfo("Europe/Prague")
+    today = datetime.now(tz).date()
+    sums: dict = {}
+    try:
+        rows = await fdb.latest_pv(locality_id, "avg")
+    except Exception:
+        rows = []
+    for p in rows or []:
+        t = datetime.fromisoformat(p["ts"]).astimezone(tz).date()
+        s = sums.setdefault(t, [0.0, 0])
+        s[0] += (p.get("pv_w") or 0) / 1000.0
+        s[1] += 1
+    try:
+        snap = await pdb.get_pv_forecast_days(locality_id, today, today + timedelta(days=1))
+    except Exception:
+        snap = {}
+    out = []
+    for i in range(3):
+        day = today + timedelta(days=i)
+        kwh = None
+        if i == 0:
+            kwh = snap.get(day.isoformat())
+            if kwh is None and day in sums:
+                kwh = sums[day][0]
+        elif day in sums and sums[day][1] >= 20:
+            kwh = sums[day][0]
+        if kwh is not None:
+            out.append({"day": day.isoformat(), "kwh": round(float(kwh), 1)})
+    return out
+
+
 async def run_locality(locality_id: int) -> dict:
     cfg = await pdb.get_config(locality_id)
     pv = await fdb.latest_pv(locality_id, "avg")

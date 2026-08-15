@@ -112,11 +112,12 @@ export default function Layout() {
   return (
     <>
       <header className="topbar">
-        <div className="brand">
+        <NavLink to="/" className="brand" title="Přejít na dashboard"
+                 style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
           <span className="dot" />
           <b>TERA EMS</b>
           <span className="hide-sm">pilot</span>
-        </div>
+        </NavLink>
         <nav className={`nav ${menuOpen ? "open" : ""}`} onClick={close}>
           <NavLink to="/" end>Dashboard</NavLink>
           {has("control") && <NavLink to="/control">Řízení</NavLink>}
