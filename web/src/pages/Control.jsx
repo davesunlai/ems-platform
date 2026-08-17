@@ -871,7 +871,13 @@ function PlannerPanel({ locId }) {
 
       {/* časovaný spotřebič */}
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>⏱️ Časovaný spotřebič</div>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>♨️ Spirála — model pro plánovač</div>
+        <p className="muted" style={{ fontSize: 11.5, margin: "0 0 6px" }}>
+          Tady se časy NEplánují — plánovač se tu dozvídá, co spirála je: příkon (energetická bilance),
+          strop nádrže dle živé teploty (T_max), denní strop, ochrana relé (min běh/klid). Přes tento model běží
+          ekonomický soak, anti-ořez i „spirála poslední" v žebříčku. Časy si vynucuješ v ⏰ Časovém plánu —
+          jeho pravidlo na stejný výstup má v okně přednost (ale nehlídá T_max ani min běh/klid).
+        </p>
         <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div><label style={{ fontSize: 12, display: "block" }}>Spotřebič (výstup)</label>
             <select style={{ ...fld, width: 190 }} value={cfg.spiral_output_id ?? ""} onChange={(e) => set("spiral_output_id", e.target.value === "" ? null : e.target.value)}>
@@ -885,7 +891,7 @@ function PlannerPanel({ locId }) {
           <F cfg={cfg} set={set} k="spiral_min_off_min" label="Min klid (min)" />
         </div>
         <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
-          Spirála soakuje, když se teplo vyplatí víc než prodej (cena ≤ hodnota tepla) nebo při přetoku, do stropu nádrže (T_max) či denního stropu. <b>Denní strop 0</b> = řídí jen teplota nádrže.
+          Kdy sepne: teplo výhodnější než prodej (cena ≤ hodnota tepla), reálný ořez (dle žebříčku), nebo anti-ořez níže. <b>Denní strop 0</b> = řídí jen teplota nádrže. „— žádný —" = plánovač spotřebič neřídí (zůstane jen ⏰ plán a ruční spínání).
         </p>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, marginTop: 8 }}>
           <input type="checkbox" checked={cfg.spiral_anti_curtail !== false} onChange={(e) => set("spiral_anti_curtail", e.target.checked)} />
