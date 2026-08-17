@@ -621,7 +621,7 @@ const TP_ACTIONS = [
 ];
 const TP_DAYS = [["1", "Po"], ["2", "Út"], ["3", "St"], ["4", "Čt"], ["5", "Pá"], ["6", "So"], ["7", "Ne"]];
 const _tpEmpty = { action: "force_discharge", target: "", time_from: "17:00", time_to: "20:00", days: "1234567", power_kw: 5, label: "",
-                   cond_sun: "any", cond_sun_kwh: 30, cond_soc_op: "any", cond_soc_pct: 50, cond_spot_op: "any", cond_spot_czk: 0, cond_spot_hold: true, cond_soc_hold: true, cond_logic: "and" };
+                   cond_sun: "any", cond_sun_kwh: 30, cond_sun_day: "today", cond_soc_op: "any", cond_soc_pct: 50, cond_spot_op: "any", cond_spot_czk: 0, cond_spot_hold: true, cond_soc_hold: true, cond_logic: "and" };
 
 function TimePlanBox({ locId, outputs }) {
   const [rules, setRules] = useState([]);
@@ -638,7 +638,7 @@ function TimePlanBox({ locId, outputs }) {
     setMsg("");
     const body = { ...f, target: isOut ? String(f.target) : null,
                    power_kw: Number(f.power_kw) || 5,
-                   cond_sun_kwh: Number(f.cond_sun_kwh) || 30, cond_soc_pct: Number(f.cond_soc_pct) || 50,
+                   cond_sun_kwh: Number(f.cond_sun_kwh) || 30, cond_sun_day: f.cond_sun_day === "tomorrow" ? "tomorrow" : "today", cond_soc_pct: Number(f.cond_soc_pct) || 50,
                    cond_spot_czk: Number.isFinite(Number(f.cond_spot_czk)) ? Number(f.cond_spot_czk) : 0,
                    cond_spot_hold: f.cond_spot_hold !== false, cond_soc_hold: f.cond_soc_hold !== false, cond_logic: f.cond_logic === "or" ? "or" : "and" };
     try {
@@ -648,7 +648,7 @@ function TimePlanBox({ locId, outputs }) {
     } catch (e) { setMsg(e.message); }
   };
   const edit = (r) => { setEditId(r.id); setF({ ...r, target: r.target || "", power_kw: r.power_kw ?? 5,
-    cond_sun: r.cond_sun || "any", cond_sun_kwh: r.cond_sun_kwh ?? 30,
+    cond_sun: r.cond_sun || "any", cond_sun_kwh: r.cond_sun_kwh ?? 30, cond_sun_day: r.cond_sun_day === "tomorrow" ? "tomorrow" : "today",
     cond_soc_op: r.cond_soc_op || "any", cond_soc_pct: r.cond_soc_pct ?? 50,
     cond_spot_op: r.cond_spot_op || "any", cond_spot_czk: r.cond_spot_czk ?? 0, cond_spot_hold: r.cond_spot_hold !== false, cond_soc_hold: r.cond_soc_hold !== false, cond_logic: r.cond_logic === "or" ? "or" : "and" }); };
   const cancel = () => { setEditId(null); setF(_tpEmpty); };
@@ -657,8 +657,9 @@ function TimePlanBox({ locId, outputs }) {
   const dayStr = (d) => (d === "1234567" ? "denně" : TP_DAYS.filter(([k]) => d.includes(k)).map(([, l]) => l).join(""));
   const condStr = (r) => {
     const parts = [];
-    if (r.cond_sun === "sunny") parts.push(`☀️ ≥${r.cond_sun_kwh ?? 30} kWh`);
-    if (r.cond_sun === "cloudy") parts.push(`☁️ <${r.cond_sun_kwh ?? 30} kWh`);
+    const sunDay = r.cond_sun_day === "tomorrow" ? " zítra" : "";
+    if (r.cond_sun === "sunny") parts.push(`☀️ ≥${r.cond_sun_kwh ?? 30} kWh${sunDay}`);
+    if (r.cond_sun === "cloudy") parts.push(`☁️ <${r.cond_sun_kwh ?? 30} kWh${sunDay}`);
     if (r.cond_soc_op === "ge") parts.push(`🔋 ≥${r.cond_soc_pct ?? 50} %${r.cond_soc_hold === false ? " (jen vstup)" : ""}`);
     if (r.cond_soc_op === "le") parts.push(`🔋 ≤${r.cond_soc_pct ?? 50} %${r.cond_soc_hold === false ? " (jen vstup)" : ""}`);
     if (r.cond_spot_op === "ge") parts.push(`💰 spot ≥ ${r.cond_spot_czk ?? 0} Kč${r.cond_spot_hold === false ? " (jen vstup)" : ""}`);
@@ -726,8 +727,14 @@ function TimePlanBox({ locId, outputs }) {
             <option value="cloudy">☁️ jen když NE slunečno</option>
           </select></div>
         {f.cond_sun !== "any" && (
-          <div><label style={{ fontSize: 11, display: "block" }} title="slunečno = predikce dnešní výroby ≥ prah">Prah (kWh/den)</label>
+          <div><label style={{ fontSize: 11, display: "block" }} title="slunečno = predikce výroby zvoleného dne ≥ prah">Prah (kWh/den)</label>
             <input style={{ ..._FLD, width: 70 }} value={f.cond_sun_kwh} onChange={(e) => setF({ ...f, cond_sun_kwh: e.target.value })} /></div>)}
+        {f.cond_sun !== "any" && (
+          <div><label style={{ fontSize: 11, display: "block" }} title="Prah se porovná s predikcí DNEŠKA, nebo ZÍTŘKA — zítřek se hodí večer (nechat baterii nabitou, když má být škaredě).">Práh pro den</label>
+            <select style={{ ..._FLD, width: 100 }} value={f.cond_sun_day} onChange={(e) => setF({ ...f, cond_sun_day: e.target.value })}>
+              <option value="today">dnes</option>
+              <option value="tomorrow">zítra</option>
+            </select></div>)}
         <div><label style={{ fontSize: 11, display: "block" }}>Podmínka baterie</label>
           <select style={{ ..._FLD, width: 140 }} value={f.cond_soc_op} onChange={(e) => setF({ ...f, cond_soc_op: e.target.value })}>
             <option value="any">— bez podmínky</option>

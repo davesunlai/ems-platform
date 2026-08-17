@@ -145,6 +145,7 @@ async def ensure_schema() -> None:
         for col, ddl in (
             ("cond_sun", "TEXT NOT NULL DEFAULT 'any'"),
             ("cond_sun_kwh", "DOUBLE PRECISION NOT NULL DEFAULT 30"),
+            ("cond_sun_day", "TEXT NOT NULL DEFAULT 'today'"),
             ("cond_soc_op", "TEXT NOT NULL DEFAULT 'any'"),
             ("cond_soc_pct", "DOUBLE PRECISION NOT NULL DEFAULT 50"),
             ("cond_spot_op", "TEXT NOT NULL DEFAULT 'any'"),
@@ -253,7 +254,7 @@ async def claimed_output_ids() -> set[int]:
 
 # --- ⏰ Časový plán (priorita 2 — hned pod bezpečnostní podlahou) -------------
 TIME_RULE_FIELDS = ("enabled", "label", "time_from", "time_to", "days", "action", "target", "power_kw",
-                    "cond_sun", "cond_sun_kwh", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk", "cond_spot_hold", "cond_soc_hold", "cond_logic")
+                    "cond_sun", "cond_sun_kwh", "cond_sun_day", "cond_soc_op", "cond_soc_pct", "cond_spot_op", "cond_spot_czk", "cond_spot_hold", "cond_soc_hold", "cond_logic")
 TIME_RULE_ACTIONS = ("force_charge", "force_discharge", "stop", "output_on", "output_off")
 
 
@@ -337,8 +338,10 @@ def rule_conditions_explain(rule: dict, day_pv_kwh: float | None, soc_pct: float
         thr = float(rule.get("cond_sun_kwh") or 30)
         ok = False if day_pv_kwh is None else (day_pv_kwh >= thr if cs == "sunny" else day_pv_kwh < thr)
         sym = "≥" if cs == "sunny" else "<"
-        conds.append({"cond": "sun", "mode": cs, "value": day_pv_kwh, "threshold": thr, "ok": ok,
-                      "text": f"☀️ predikce {_f(day_pv_kwh)} {sym} {thr:g} kWh → {'ANO' if ok else 'NE'}"})
+        day_lbl = "zítra" if (rule.get("cond_sun_day") or "today") == "tomorrow" else "dnes"
+        conds.append({"cond": "sun", "mode": cs, "day": rule.get("cond_sun_day") or "today",
+                      "value": day_pv_kwh, "threshold": thr, "ok": ok,
+                      "text": f"☀️ predikce {day_lbl} {_f(day_pv_kwh)} {sym} {thr:g} kWh → {'ANO' if ok else 'NE'}"})
     op = rule.get("cond_soc_op") or "any"
     if op != "any":
         pct = float(rule.get("cond_soc_pct") or 50)

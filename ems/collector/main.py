@@ -354,12 +354,18 @@ async def tick_planner(state: dict) -> None:
                     need_sun = any((r.get("cond_sun") or "any") != "any" for r in t_rules)
                     need_soc = any((r.get("cond_soc_op") or "any") != "any" for r in t_rules)
                     need_spot = any((r.get("cond_spot_op") or "any") != "any" for r in t_rules)
-                    day_pv = None
+                    day_pv_map = {}
                     if need_sun:
-                        # STEJNÉ číslo jako karta „Plán dnes" na dashboardu: ranní snapshot dne
-                        # (stabilní celý den), fallback živý součet — žádný rozpor UI vs. rozhodnutí
+                        # STEJNÁ čísla jako karty „Plán dnes/zítra" na dashboardu (snapshot/kompletní dny)
+                        from zoneinfo import ZoneInfo as _ZI2
+                        from datetime import datetime as _dt2, timedelta as _td2
+                        _t0 = _dt2.now(_ZI2("Europe/Prague")).date()
                         fdays = await planner_service.pv_forecast_days_kwh(lid)
-                        day_pv = fdays[0]["kwh"] if fdays else None
+                        for _e in fdays or []:
+                            if _e["day"] == _t0.isoformat():
+                                day_pv_map["today"] = _e["kwh"]
+                            elif _e["day"] == (_t0 + _td2(days=1)).isoformat():
+                                day_pv_map["tomorrow"] = _e["kwh"]
                     soc_now = await planner_service._soc_now(devs) if need_soc else None
                     spot_kwh = None
                     if need_spot:
@@ -381,7 +387,8 @@ async def tick_planner(state: dict) -> None:
                             if not soc_latched and planner_db.soc_cond_ok(r, soc_now):
                                 await planner_db.set_rule_latch(r["id"], wk, "latched_soc_window")  # SoC OK na vstupu
                                 soc_latched = True
-                        ev = planner_db.rule_conditions_explain(r, day_pv, soc_now, spot_kwh,
+                        _dp = day_pv_map.get(r.get("cond_sun_day") or "today")
+                        ev = planner_db.rule_conditions_explain(r, _dp, soc_now, spot_kwh,
                                                                 spot_latched=latched, soc_latched=soc_latched)
                         if ev["ok"]:
                             r["_cond_eval"] = ev
