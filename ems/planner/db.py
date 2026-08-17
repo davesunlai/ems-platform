@@ -324,30 +324,56 @@ async def active_time_rules(locality_id: int) -> list[dict]:
     return [r for r in await list_time_rules(locality_id) if _rule_active(r, hm, isoday)]
 
 
+def rule_conditions_explain(rule: dict, day_pv_kwh: float | None, soc_pct: float | None,
+                            spot_czk_kwh: float | None = None, spot_latched: bool = False,
+                            soc_latched: bool = False) -> dict:
+    """Vyhodnocení podmínek VČETNĚ vstupů a vzorce — pro audit povelů.
+    Vrací {"ok": bool, "logic": "and|or", "conditions": [...], "formula": "..."}."""
+    def _f(v):
+        return "?" if v is None else (f"{v:.1f}" if isinstance(v, float) else str(v))
+    conds = []
+    cs = rule.get("cond_sun") or "any"
+    if cs != "any":
+        thr = float(rule.get("cond_sun_kwh") or 30)
+        ok = False if day_pv_kwh is None else (day_pv_kwh >= thr if cs == "sunny" else day_pv_kwh < thr)
+        sym = "≥" if cs == "sunny" else "<"
+        conds.append({"cond": "sun", "mode": cs, "value": day_pv_kwh, "threshold": thr, "ok": ok,
+                      "text": f"☀️ predikce {_f(day_pv_kwh)} {sym} {thr:g} kWh → {'ANO' if ok else 'NE'}"})
+    op = rule.get("cond_soc_op") or "any"
+    if op != "any":
+        pct = float(rule.get("cond_soc_pct") or 50)
+        ok = True if soc_latched else soc_cond_ok(rule, soc_pct)
+        sym = "≥" if op == "ge" else "≤"
+        latch = " (latch: vstup OK)" if soc_latched else ""
+        conds.append({"cond": "soc", "op": op, "value": soc_pct, "threshold": pct, "ok": ok,
+                      "latched": soc_latched,
+                      "text": f"🔋 SoC {_f(soc_pct)} {sym} {pct:g} %{latch} → {'ANO' if ok else 'NE'}"})
+    sop = rule.get("cond_spot_op") or "any"
+    if sop != "any":
+        thr = rule.get("cond_spot_czk")
+        thr = 0.0 if thr is None else float(thr)
+        ok = True if spot_latched else spot_cond_ok(rule, spot_czk_kwh)
+        sym = "≥" if sop == "ge" else "≤"
+        latch = " (latch: vstup OK)" if spot_latched else ""
+        conds.append({"cond": "spot", "op": sop, "value": spot_czk_kwh, "threshold": thr, "ok": ok,
+                      "latched": spot_latched,
+                      "text": f"💰 spot {_f(spot_czk_kwh)} {sym} {thr:g} Kč/kWh{latch} → {'ANO' if ok else 'NE'}"})
+    logic = (rule.get("cond_logic") or "and")
+    if not conds:
+        overall = True
+        formula = "bez podmínek → ANO"
+    else:
+        overall = any(c["ok"] for c in conds) if logic == "or" else all(c["ok"] for c in conds)
+        joiner = " NEBO " if logic == "or" else " A ZÁROVEŇ "
+        formula = joiner.join(c["text"] for c in conds) + f" ⇒ {'SPUSTIT' if overall else 'NESPOUŠTĚT'}"
+    return {"ok": overall, "logic": logic, "conditions": conds, "formula": formula}
+
+
 def rule_conditions_ok(rule: dict, day_pv_kwh: float | None, soc_pct: float | None,
                        spot_czk_kwh: float | None = None, spot_latched: bool = False,
                        soc_latched: bool = False) -> bool:
-    """Volitelné podmínky pravidla (vyhodnocují se PRŮBĚŽNĚ během okna).
-    cond_logic: 'and' (default) = všechny definované musí platit; 'or' = stačí jedna.
-    Chybí-li podklad (predikce/SoC/spot), daná podmínka se bere jako NEsplněná
-    (v AND blokuje celé pravidlo, v OR mohou zabrat ostatní)."""
-    results = []
-    cs = rule.get("cond_sun") or "any"
-    if cs != "any":
-        if day_pv_kwh is None:
-            results.append(False)
-        else:
-            thr = float(rule.get("cond_sun_kwh") or 30)
-            results.append(day_pv_kwh >= thr if cs == "sunny" else day_pv_kwh < thr)
-    op = rule.get("cond_soc_op") or "any"
-    if op != "any":
-        results.append(True if soc_latched else soc_cond_ok(rule, soc_pct))
-    sop = rule.get("cond_spot_op") or "any"
-    if sop != "any":
-        results.append(True if spot_latched else spot_cond_ok(rule, spot_czk_kwh))
-    if not results:
-        return True
-    return any(results) if (rule.get("cond_logic") or "and") == "or" else all(results)
+    return rule_conditions_explain(rule, day_pv_kwh, soc_pct, spot_czk_kwh,
+                                   spot_latched, soc_latched)["ok"]
 
 
 def soc_cond_ok(rule: dict, soc_pct: float | None) -> bool:

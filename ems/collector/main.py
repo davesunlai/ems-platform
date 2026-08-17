@@ -353,7 +353,12 @@ async def tick_planner(state: dict) -> None:
                     need_sun = any((r.get("cond_sun") or "any") != "any" for r in t_rules)
                     need_soc = any((r.get("cond_soc_op") or "any") != "any" for r in t_rules)
                     need_spot = any((r.get("cond_spot_op") or "any") != "any" for r in t_rules)
-                    day_pv = await planner_service.today_pv_forecast_kwh(lid) if need_sun else None
+                    day_pv = None
+                    if need_sun:
+                        # STEJNÉ číslo jako karta „Plán dnes" na dashboardu: ranní snapshot dne
+                        # (stabilní celý den), fallback živý součet — žádný rozpor UI vs. rozhodnutí
+                        fdays = await planner_service.pv_forecast_days_kwh(lid)
+                        day_pv = fdays[0]["kwh"] if fdays else None
                     soc_now = await planner_service._soc_now(devs) if need_soc else None
                     spot_kwh = None
                     if need_spot:
@@ -374,9 +379,13 @@ async def tick_planner(state: dict) -> None:
                             if not soc_latched and planner_db.soc_cond_ok(r, soc_now):
                                 await planner_db.set_rule_latch(r["id"], wk, "latched_soc_window")  # SoC OK na vstupu
                                 soc_latched = True
-                        if planner_db.rule_conditions_ok(r, day_pv, soc_now, spot_kwh,
-                                                         spot_latched=latched, soc_latched=soc_latched):
+                        ev = planner_db.rule_conditions_explain(r, day_pv, soc_now, spot_kwh,
+                                                                spot_latched=latched, soc_latched=soc_latched)
+                        if ev["ok"]:
+                            r["_cond_eval"] = ev
                             filtered.append(r)
+                        elif ev["conditions"]:
+                            logger.debug("Pravidlo %s '%s' blokováno: %s", r["id"], r.get("label") or r["action"], ev["formula"])
                     t_rules = filtered
             except Exception:
                 t_rules = []
@@ -385,7 +394,10 @@ async def tick_planner(state: dict) -> None:
             for r in t_rules:
                 if r["action"] in ("output_on", "output_off") and r.get("target"):
                     try:
-                        out_rules[int(r["target"])] = (r["action"] == "output_on", r.get("label") or "")
+                        _lbl = r.get("label") or ""
+                        if r.get("_cond_eval") and r["_cond_eval"]["conditions"]:
+                            _lbl = f"{_lbl} [{r['_cond_eval']['formula']}]"
+                        out_rules[int(r["target"])] = (r["action"] == "output_on", _lbl)
                     except (TypeError, ValueError):
                         pass
             act = ca["action"]
@@ -393,12 +405,22 @@ async def tick_planner(state: dict) -> None:
             if batt_rule:
                 p_reg = int(round(float(batt_rule.get("power_kw") or 5) * 100))
                 lbl = batt_rule.get("label") or "časový plán"
+                cond_audit = None
+                if batt_rule.get("_cond_eval"):
+                    _ev = batt_rule["_cond_eval"]
+                    cond_audit = {"formula": _ev["formula"], "logic": _ev["logic"],
+                                  "inputs": {c["cond"]: {"value": c.get("value"), "threshold": c.get("threshold"),
+                                                          "ok": c["ok"], "latched": c.get("latched", False)}
+                                             for c in _ev["conditions"]},
+                                  "rule_id": batt_rule["id"], "window": f"{batt_rule['time_from']}–{batt_rule['time_to']}"}
                 if batt_rule["action"] == "force_charge":
                     desired, cmd, params = "force_charge", "force_charge", {"power": p_reg, "source": "schedule", "reason": lbl}
                 elif batt_rule["action"] == "force_discharge":
                     desired, cmd, params = "force_discharge", "force_discharge", {"power": p_reg, "source": "schedule", "reason": lbl}
                 else:
                     desired, cmd, params = "idle", "stop", {"source": "schedule", "reason": lbl}
+                if cond_audit:
+                    params["conditions"] = cond_audit
             elif act == "charge_grid":
                 desired, cmd, params = "force_charge", "force_charge", {"power": power_reg, "source": "planner"}
             elif act == "discharge_grid":
