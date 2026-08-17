@@ -347,6 +347,7 @@ async def tick_planner(state: dict) -> None:
             if not ca:
                 continue
             # ⏰ Časový plán (priorita 2): aktivní pravidla přebíjí plánovač
+            blocked_batt = []
             try:
                 t_rules = await planner_db.active_time_rules(lid)
                 if t_rules:
@@ -366,6 +367,7 @@ async def tick_planner(state: dict) -> None:
                         sp = await _spot_price()                       # CZK/MWh (OTE, může být záporná)
                         spot_kwh = float(sp) / 1000.0 if sp is not None else None
                     filtered = []
+                    blocked_batt = []
                     for r in t_rules:
                         latched = soc_latched = False
                         wk = planner_db.rule_window_key(r)
@@ -386,6 +388,9 @@ async def tick_planner(state: dict) -> None:
                             filtered.append(r)
                         elif ev["conditions"]:
                             logger.debug("Pravidlo %s '%s' blokováno: %s", r["id"], r.get("label") or r["action"], ev["formula"])
+                            if r["action"] in ("force_charge", "force_discharge", "stop"):
+                                blocked_batt.append({"rule_id": r["id"], "label": r.get("label") or r["action"],
+                                                     "window": f"{r['time_from']}–{r['time_to']}", "formula": ev["formula"]})
                     t_rules = filtered
             except Exception:
                 t_rules = []
@@ -427,6 +432,8 @@ async def tick_planner(state: dict) -> None:
                 desired, cmd, params = "force_discharge", "force_discharge", {"power": power_reg, "source": "planner"}
             else:
                 desired, cmd, params = "idle", "stop", {"source": "planner"}
+            if not batt_rule and blocked_batt:
+                params["schedule_blocked"] = blocked_batt   # proč teď neřídí časový plán (okno aktivní, podmínky NE)
             for dev in devs:
                 st = states.get(dev) or {}
                 # Ruční přebití: po manuálním povelu nech plánovač modul 30 min na pokoji
