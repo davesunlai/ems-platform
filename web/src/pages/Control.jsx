@@ -34,7 +34,7 @@ function SearchSelect({ value, options, onChange, placeholder = "— vyber —" 
 }
 
 const emptyOut = {
-  name: "", enabled: true, output_kind: "ewelink", target: "", trigger: "surplus",
+  name: "", enabled: false, output_kind: "ewelink", target: "", trigger: "surplus",
   upper_soc: 100, lower_soc: 95, surplus_kw: 1.5, soc_min: 80, spot_max: "", min_on_min: 10,
   day_start: "", day_end: "", grid_on_kw: "", grid_on_min: "", grid_on_op: "le", grid_guard_kw: "", grid_guard_min: "", grid_guard_op: "ge", guard_lock_min: "",
 };
@@ -101,7 +101,7 @@ function OutputsPanel({ locId }) {
     <div className="panel" style={{ marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontWeight: 700, fontSize: 14 }}>🔌 Spínané spotřebiče</span>
-        <span className="muted" style={{ fontSize: 12 }}>definice relé/spínačů + ruční spínání · automatiku (přebytek/SoC) už raději řeš přes ⏰ Časový plán s podmínkami — má audit a víc možností</span>
+        <span className="muted" style={{ fontSize: 12 }}>definice relé/spínačů + ruční spínání a test · spouštění řeší 🧠 plánovač (spirála) a ⏰ Časový plán — vlastní spouštěče jsou zastaralé</span>
         <button className="btn" style={{ marginLeft: "auto", padding: "5px 12px" }} onClick={() => { reset(); setOpen(!open); }}>
           {open && !editing ? "Zavřít" : "+ Přidat spotřebič"}
         </button>
@@ -117,12 +117,16 @@ function OutputsPanel({ locId }) {
               </select></div>
             <div><label style={{ fontSize: 12, display: "block" }}>Zařízení</label>
               <SearchSelect value={f.target} options={targets} onChange={(id) => setF({ ...f, target: id })} /></div>
+          </div>
+          <details style={{ marginTop: 10 }}>
+            <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>
+              ⚠️ Zastaralý vlastní spouštěč (nepoužívat — spouštění řeší 🧠 plánovač a ⏰ Časový plán)
+            </summary>
+            <div className="row" style={{ flexWrap: "wrap", gap: 12, marginTop: 8 }}>
             <div><label style={{ fontSize: 12, display: "block" }}>Spouštěč</label>
               <select value={f.trigger} onChange={(e) => setF({ ...f, trigger: e.target.value })}>
                 <option value="surplus">Přebytek FVE / levný spot</option><option value="soc">SoC hystereze</option>
               </select></div>
-          </div>
-          <div className="row" style={{ flexWrap: "wrap", gap: 12, marginTop: 10 }}>
             {f.trigger === "soc" ? (
               <>
                 <div><label style={{ fontSize: 12, display: "block" }}>Sepnout při SoC ≥ (%)</label><input value={f.upper_soc} onChange={(e) => setF({ ...f, upper_soc: e.target.value })} style={inp} /></div>
@@ -168,26 +172,23 @@ function OutputsPanel({ locId }) {
                 <div><label style={{ fontSize: 12, display: "block" }}>Min. doba sepnutí (min)</label><input value={f.min_on_min} onChange={(e) => setF({ ...f, min_on_min: e.target.value })} style={inp} /></div>
               </>
             )}
+            </div>
+          </details>
+          <div className="row" style={{ gap: 10, marginTop: 10 }}>
             <button className="btn primary" onClick={save} disabled={!f.name.trim() || !f.target}>{editing ? "Uložit změny" : "Přidat"}</button>
             {editing && <button className="btn" onClick={() => { reset(); setOpen(false); }}>Zrušit</button>}
           </div>
-          <p className="muted" style={{ fontSize: 11.5, marginTop: 8 }}>
-            {f.trigger === "surplus"
-              ? "Sepne při přebytku FVE do sítě nad práh a baterii nabité aspoň na daný SoC; volitelně i při levném/záporném spotu pod limitem. Hystereze a min. doba brání cvakání."
-              : "Sepne při horní mezi SoC, rozepne při dolní."}
-          </p>
         </div>
       )}
 
       {list.length > 0 ? (
         <table style={{ marginTop: 10 }}>
-          <thead><tr><th>Název</th><th>Cíl</th><th>Spouštěč</th><th>Stav</th><th>Aktivní</th><th>Test</th><th></th></tr></thead>
+          <thead><tr><th>Název</th><th>Cíl</th><th>Stav</th><th>Stará automatika</th><th>Test</th><th></th></tr></thead>
           <tbody>
             {list.map((o) => (
               <tr key={o.id}>
                 <td>{o.name}</td>
                 <td><span className="role">{kindLabel(o.output_kind)}</span><div className="muted" style={{ fontSize: 11, fontFamily: "var(--mono)" }}>{o.target}</div></td>
-                <td className="muted">{trigLabel(o.trigger)}</td>
                 <td><span className={o.is_on ? "badge-on" : "badge-off"}>{o.is_on ? "sepnuto" : "rozepnuto"}</span>
                   {o.off_lock_until && new Date(o.off_lock_until) > new Date() && (
                     <div style={{ fontSize: 11, marginTop: 3, color: "#d29922" }}>
@@ -196,7 +197,9 @@ function OutputsPanel({ locId }) {
                     </div>
                   )}
                 </td>
-                <td><span className={o.enabled ? "badge-on" : "badge-off"}>{o.enabled ? "ano" : "ne"}</span></td>
+                <td>{o.enabled
+                  ? <span title="Zastaralý spouštěč stále běží — doporučeno vypnout a řídit přes plánovač/⏰"><span className="badge-on">⚠ {trigLabel(o.trigger)}</span></span>
+                  : <span className="muted">—</span>}</td>
                 <td style={{ whiteSpace: "nowrap" }}>
                   <button className="btn" disabled={busy === o.id} onClick={() => test(o, true)} style={{ padding: "2px 8px", marginRight: 4 }}>zap</button>
                   <button className="btn" disabled={busy === o.id} onClick={() => test(o, false)} style={{ padding: "2px 8px" }}>vyp</button>
