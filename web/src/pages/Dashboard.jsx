@@ -296,6 +296,135 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
   );
 }
 
+
+// ⚡ Energetický tok lokality — animovaný diagram (FVE / síť / baterie / dům / spotřebiče)
+const ACT_CZ = { charge_pv: "nabíjení z FVE", charge_grid: "nabíjení ze sítě", discharge_grid: "vybíjení do sítě",
+                 discharge_load: "vybíjení do domu", idle: "self-use", export: "prodej přebytku" };
+function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx="12" fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth="1.4" />
+      <text x={x + w / 2} y={y + 30} textAnchor="middle" fontSize="24">{icon}</text>
+      <text x={x + w / 2} y={y + 48} textAnchor="middle" fontSize="11" fill="var(--muted)">{title}</text>
+      <text x={x + w / 2} y={y + 66} textAnchor="middle" fontSize="13.5" fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
+      {sub && <text x={x + w / 2} y={y + 79} textAnchor="middle" fontSize="10" fill="var(--muted)">{sub}</text>}
+    </g>
+  );
+}
+function FlowEdge({ d, kw, color, active, label, lx, ly }) {
+  const wdt = Math.min(6, 1.6 + Math.abs(kw) / 2.5);
+  return (
+    <g>
+      <path d={d} fill="none" stroke={active ? color : "var(--border)"} strokeWidth={active ? wdt : 1.2}
+            strokeLinecap="round" className={active ? "eflow-anim" : ""}
+            strokeDasharray={active ? "9 9" : "3 6"} opacity={active ? 0.95 : 0.45}
+            markerEnd={active ? `url(#efarr-${color.replace("#", "")})` : undefined} />
+      {active && <text x={lx} y={ly} textAnchor="middle" fontSize="11.5" fontWeight="700" fill={color}
+                       stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{label}</text>}
+    </g>
+  );
+}
+function EnergyFlow({ locId, deviceIds, name, onClose }) {
+  const [d, setD] = useState(null);
+  const [pl, setPl] = useState(null);
+  const [outs, setOuts] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      api.aggregateNow(deviceIds, locId).then((r) => alive && setD(r)).catch(() => {});
+      api.getPlanner(locId).then((r) => alive && setPl(r)).catch(() => {});
+      api.listOutputs().then((r) => alive && setOuts((r || []).filter((o) => o.locality_id == null || o.locality_id === locId))).catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(t); };
+  }, [locId, deviceIds.join(",")]);
+  const kw = (w) => Math.abs((w || 0) / 1000);
+  const f1 = (v) => `${v.toFixed(1)} kW`;
+  const pvKw = d ? kw(d.pv_w) : 0;
+  const batW = d?.battery_w || 0;                 // + nabíjení / − vybíjení
+  const gridW = d?.grid_w || 0;                   // + import / − export
+  const spiralId = pl?.config?.spiral_output_id != null ? Number(pl.config.spiral_output_id) : null;
+  const spiralKw = Number(pl?.config?.spiral_power_kw) || 6;
+  const cur = pl?.current;
+  const outIcon = (o) => (/oh[řr]ev|spir|boiler|vod|top/i.test(o.name) ? "♨️" : "🔌");
+  const COLORS = ["3fb950", "58a6ff", "a371f7", "d29922"];
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 90,
+                                    display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+      <div onClick={(e) => e.stopPropagation()} className="panel"
+           style={{ width: "min(820px, 100%)", maxHeight: "92vh", overflow: "auto", position: "relative", padding: 14 }}>
+        <style>{`.eflow-anim{animation:eflowdash 0.9s linear infinite}@keyframes eflowdash{to{stroke-dashoffset:-36}}`}</style>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <b style={{ fontSize: 15 }}>⚡ Energetický tok — {name}</b>
+          <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={onClose}>✕</button>
+        </div>
+        {pl?.config?.enabled && cur && (
+          <div style={{ margin: "8px 0 0", fontSize: 12.5, border: "1px dashed var(--green)", borderRadius: 999,
+                        padding: "4px 12px", display: "inline-block" }}>
+            🧠 Plánovač řídí: <b>{ACT_CZ[cur.action] || cur.action}</b>
+            {cur.deferrable_on ? " · ♨️ spirála ON" : ""} <span className="muted">— {cur.reason}</span>
+          </div>
+        )}
+        {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : (
+          <svg viewBox="0 0 760 470" style={{ width: "100%", marginTop: 8 }}>
+            <defs>
+              {COLORS.map((c) => (
+                <marker key={c} id={`efarr-${c}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill={`#${c}`} />
+                </marker>
+              ))}
+            </defs>
+            {/* FVE → dům */}
+            <FlowEdge d="M150,150 C150,200 290,205 330,222" kw={pvKw} active={pvKw > 0.05} color="#3fb950"
+                      label={f1(pvKw)} lx={215} ly={192} />
+            {/* síť ↔ dům */}
+            {gridW >= 0
+              ? <FlowEdge d="M610,150 C610,200 470,205 430,222" kw={kw(gridW)} active={kw(gridW) > 0.05} color="#58a6ff"
+                          label={f1(kw(gridW))} lx={545} ly={192} />
+              : <FlowEdge d="M430,222 C470,205 610,200 610,150" kw={kw(gridW)} active={kw(gridW) > 0.05} color="#3fb950"
+                          label={f1(kw(gridW))} lx={545} ly={192} />}
+            {/* baterie ↔ dům */}
+            {batW >= 0
+              ? <FlowEdge d="M335,268 C295,290 175,295 160,345" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
+                          label={f1(kw(batW))} lx={225} ly={305} />
+              : <FlowEdge d="M160,345 C175,295 295,290 335,268" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
+                          label={f1(kw(batW))} lx={225} ly={305} />}
+            {/* dům → spotřebiče */}
+            {outs.slice(0, 3).map((o, i) => (
+              <FlowEdge key={o.id} d={`M430,255 C480,${270 + i * 20} 540,${330 + i * 62} 585,${352 + i * 62}`}
+                        kw={o.id === spiralId ? spiralKw : 1} active={!!o.is_on} color="#d29922"
+                        label={o.id === spiralId ? f1(spiralKw) : "ON"} lx={505} ly={300 + i * 55} />
+            ))}
+            <FlowNode x={65} y={55} icon="☀️" title="FVE" value={f1(pvKw)}
+                      sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)} kWh` : null}
+                      accent={pvKw > 0.05 ? "#3fb950" : null} />
+            <FlowNode x={535} y={55} icon="🗼" title="Distribuce" value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
+                      accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
+            <FlowNode x={295} y={188} w={170} icon="🏠" title="Dům" value={f1(kw(d.load_w))}
+                      sub={`dnes ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} accent="var(--amber, #d29922)" />
+            <g>
+              <FlowNode x={65} y={345} icon="🔋" title="Baterie"
+                        value={`${d.soc != null ? Math.round(d.soc) : "?"} %`}
+                        sub={kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}
+                        accent="#a371f7" />
+              {d.soc != null && (
+                <rect x={75} y={423} width={130 * Math.max(0, Math.min(100, d.soc)) / 100} height={4} rx={2} fill="#a371f7" opacity="0.9" />)}
+            </g>
+            {outs.slice(0, 3).map((o, i) => (
+              <FlowNode key={o.id} x={585} y={330 + i * 62} w={150} h={54} icon={outIcon(o)} title={o.name}
+                        value={o.is_on ? "zapnuto" : "vypnuto"} accent={o.is_on ? "#d29922" : null} />
+            ))}
+          </svg>
+        )}
+        <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
+          Animované čáry = aktuální tok energie (tloušťka ≈ výkon), šipka = směr. Obnovuje se každých 5 s.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function Stat({ icon, iconName, label, value, sub, color, title }) {
   return (
     <div title={title} style={{ border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)",
@@ -371,13 +500,19 @@ function LocalityNow({ deviceIds, localityId }) {
 function LocalitySection({ name, devs, open, onToggle }) {
   const ids = devs.map((d) => d.device_id);
   const locId = devs[0].locality_id;
+  const [flow, setFlow] = useState(false);
   return (
     <section style={{ marginBottom: open ? 26 : 10 }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 18, cursor: "pointer", userSelect: "none" }}
           onClick={onToggle} title={open ? "Sbalit lokalitu" : "Rozbalit lokalitu"}>
         <span style={{ fontSize: 13, marginRight: 6, opacity: 0.7 }}>{open ? "▾" : "▸"}</span>
         {name === "—" ? "Bez lokality" : `📍 ${name}`}
+        {locId && (
+          <button className="btn" title="Energetický tok lokality (živý diagram)"
+                  onClick={(e) => { e.stopPropagation(); setFlow(true); }}
+                  style={{ marginLeft: 10, padding: "2px 10px", fontSize: 13, verticalAlign: "2px" }}>⚡ tok</button>)}
       </h2>
+      {flow && locId && <EnergyFlow locId={locId} deviceIds={ids} name={name} onClose={() => setFlow(false)} />}
       <LocalityNow deviceIds={ids} localityId={locId} />
       {open && (<>
         <ControlBanners deviceIds={ids} localityId={locId} />
