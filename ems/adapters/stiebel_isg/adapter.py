@@ -57,6 +57,18 @@ class StiebelIsgAdapter:
         self._last_poll = 0.0
         self._last: dict | None = None   # poslední úspěšný snapshot (pro hp_telemetry)
 
+    # --- lifecycle (volá collector.reconcile) ---------------------------
+    async def connect(self) -> None:
+        """Otevře Modbus TCP spojení (reconcile retryuje při neúspěchu)."""
+        await asyncio.to_thread(self._ensure_client)
+
+    async def close(self) -> None:
+        if self._client is not None:
+            try:
+                self._client.close()
+            finally:
+                self._client = None
+
     # --- Modbus ---------------------------------------------------------
     def _ensure_client(self):
         from pymodbus.client import ModbusTcpClient
