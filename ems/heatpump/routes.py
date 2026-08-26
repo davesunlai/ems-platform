@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ems.api.auth import read
+from ems.auth.deps import require_permission
 from ems.localities import db as loc_db
 from . import db as hp_db
 
 router = APIRouter(prefix="/api/localities", tags=["heat-pump"])
+read = require_permission("read")
 
 
 async def _hp_modules(locality_id: int) -> list[str]:
