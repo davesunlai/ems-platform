@@ -151,3 +151,27 @@ async def runs(module_ids: list[str], limit: int = 50) -> list[dict]:
         d["ended_at"] = d["ended_at"].isoformat() if d["ended_at"] else None
         out.append(d)
     return out
+
+
+async def series(module_ids: list[str], hours: int = 48) -> list[dict]:
+    """Řada pro graf: 5min buckety teplot + stav kompresoru (max v bucketu)."""
+    if not module_ids:
+        return []
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT time_bucket('5 minutes', ts) AS b,
+                   avg(t_outdoor) AS t_outdoor, avg(t_tank) AS t_tank,
+                   avg(t_buffer) AS t_buffer, avg(t_buffer_set) AS t_buffer_set,
+                   max(CASE WHEN compressor_on THEN 1 ELSE 0 END) AS comp
+            FROM hp_telemetry
+            WHERE module_id = ANY($1::text[]) AND ts > now() - ($2 || ' hours')::interval
+            GROUP BY 1 ORDER BY 1
+            """, module_ids, str(max(1, min(hours, 24 * 62))))
+    return [{"ts": r["b"].isoformat(),
+             "t_outdoor": round(r["t_outdoor"], 1) if r["t_outdoor"] is not None else None,
+             "t_tank": round(r["t_tank"], 1) if r["t_tank"] is not None else None,
+             "t_buffer": round(r["t_buffer"], 1) if r["t_buffer"] is not None else None,
+             "t_buffer_set": round(r["t_buffer_set"], 1) if r["t_buffer_set"] is not None else None,
+             "comp": int(r["comp"] or 0)} for r in rows]

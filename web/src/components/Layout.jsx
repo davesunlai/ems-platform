@@ -121,6 +121,7 @@ export default function Layout() {
         <nav className={`nav ${menuOpen ? "open" : ""}`} onClick={close}>
           <NavLink to="/" end>Dashboard</NavLink>
           {has("control") && <NavLink to="/control">Řízení</NavLink>}
+          <NavLink to="/heatpump">🌀 TČ</NavLink>
           {has("admin") && <NavLink to="/automation">SPOT</NavLink>}
           {has("admin") && <NavLink to="/ewelink">eWeLink</NavLink>}
           {has("admin") && <NavLink to="/localities">Lokality</NavLink>}

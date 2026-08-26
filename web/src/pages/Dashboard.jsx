@@ -328,12 +328,14 @@ function EnergyFlow({ locId, deviceIds, name, onClose }) {
   const [d, setD] = useState(null);
   const [pl, setPl] = useState(null);
   const [outs, setOuts] = useState([]);
+  const [hp, setHp] = useState(null);
   useEffect(() => {
     let alive = true;
     const load = () => {
       api.aggregateNow(deviceIds, locId).then((r) => alive && setD(r)).catch(() => {});
       api.getPlanner(locId).then((r) => alive && setPl(r)).catch(() => {});
       api.listOutputs().then((r) => alive && setOuts((r || []).filter((o) => o.locality_id == null || o.locality_id === locId))).catch(() => {});
+      api.hpState(locId).then((r) => alive && setHp(r.state || null)).catch(() => alive && setHp(null));
     };
     load();
     const t = setInterval(load, 5000);
@@ -390,11 +392,16 @@ function EnergyFlow({ locId, deviceIds, name, onClose }) {
                           label={f1(kw(batW))} lx={225} ly={305} />
               : <FlowEdge d="M160,345 C175,295 295,290 335,268" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
                           label={f1(kw(batW))} lx={225} ly={305} />}
+            {/* dům → TČ */}
+            {hp && (
+              <FlowEdge d="M430,250 C470,260 540,275 585,290" kw={(hp.power_est_w || 0) / 1000}
+                        active={!!hp.compressor_on} color="#39c5cf"
+                        label={`~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW`} lx={500} ly={262} />)}
             {/* dům → spotřebiče */}
-            {outs.slice(0, 3).map((o, i) => (
-              <FlowEdge key={o.id} d={`M430,255 C480,${270 + i * 20} 540,${330 + i * 62} 585,${352 + i * 62}`}
+            {outs.slice(0, 2).map((o, i) => (
+              <FlowEdge key={o.id} d={`M430,258 C480,${285 + i * 20} 540,${356 + i * 62} 585,${374 + i * 62}`}
                         kw={o.id === spiralId ? spiralKw : 1} active={!!o.is_on} color="#d29922"
-                        label={o.id === spiralId ? f1(spiralKw) : "ON"} lx={505} ly={300 + i * 55} />
+                        label={o.id === spiralId ? f1(spiralKw) : "ON"} lx={505} ly={330 + i * 55} />
             ))}
             <FlowNode x={65} y={55} icon="☀️" title="FVE" value={f1(pvKw)}
                       sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)} kWh` : null}
@@ -411,8 +418,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose }) {
               {d.soc != null && (
                 <rect x={75} y={423} width={130 * Math.max(0, Math.min(100, d.soc)) / 100} height={4} rx={2} fill="#a371f7" opacity="0.9" />)}
             </g>
-            {outs.slice(0, 3).map((o, i) => (
-              <FlowNode key={o.id} x={585} y={330 + i * 62} w={150} h={54} icon={outIcon(o)} title={o.name}
+            {hp && (
+              <FlowNode x={585} y={268} w={150} h={54} icon="🌀" title="Tepelné čerpadlo"
+                        value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
+                        sub={hp.compressor_on ? (HP_MODE_CZ[hp.hp_mode] || hp.hp_mode) : `aku ${hp.t_tank != null ? Number(hp.t_tank).toFixed(0) : "?"} °C`}
+                        accent={hp.compressor_on ? "#39c5cf" : null} />)}
+            {outs.slice(0, 2).map((o, i) => (
+              <FlowNode key={o.id} x={585} y={352 + i * 62} w={150} h={54} icon={outIcon(o)} title={o.name}
                         value={o.is_on ? "zapnuto" : "vypnuto"} accent={o.is_on ? "#d29922" : null} />
             ))}
           </svg>

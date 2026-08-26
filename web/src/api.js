@@ -74,6 +74,7 @@ export const api = {
   hpState: (locId) => request(`/api/localities/${locId}/heat-pump/state`),
   hpDaily: (locId, days = 31) => request(`/api/localities/${locId}/heat-pump/daily?days=${days}`),
   hpRuns: (locId, limit = 50) => request(`/api/localities/${locId}/heat-pump/runs?limit=${limit}`),
+  hpSeries: (locId, hours = 48) => request(`/api/localities/${locId}/heat-pump/series?hours=${hours}`),
   setPlannerConfig: (id, cfg) => request(`/api/planner/${id}/config`, { method: "PUT", body: cfg }),
   refreshPlanner: (id) => request(`/api/planner/${id}/refresh`, { method: "POST" }),
   plannerControlled: () => request(`/api/planner/controlled/devices`),
