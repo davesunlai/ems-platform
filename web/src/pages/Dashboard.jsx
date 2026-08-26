@@ -444,14 +444,27 @@ function Stat({ icon, iconName, label, value, sub, color, title }) {
 const HP_MODE_CZ = { heating: "topí", dhw: "ohřívá TUV", defrost: "odtává", idle: "klid" };
 function HeatPumpCard({ locId }) {
   const [st, setSt] = useState(undefined);   // undefined = neptáno/loading, null = lokalita bez TČ
+  const [agg, setAgg] = useState(null);      // {month_el, runtime_today_min, n_starts_today, last_start}
   useEffect(() => {
     let alive = true;
     const load = () => api.hpState(locId)
       .then((r) => alive && setSt(r.state || null))
       .catch(() => alive && setSt(null));
-    load();
+    const loadAgg = () => Promise.all([api.hpDaily(locId, 31), api.hpRuns(locId, 1)])
+      .then(([days, runs]) => {
+        if (!alive) return;
+        const now = new Date();
+        const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const todayKey = now.toLocaleDateString("sv-SE", { timeZone: "Europe/Prague" });
+        const month_el = days.filter((d) => d.day.startsWith(monthKey)).reduce((s, d) => s + (d.el_kwh || 0), 0);
+        const today = days.find((d) => d.day === todayKey);
+        setAgg({ month_el, runtime_today_min: today?.runtime_min || 0, n_starts_today: today?.n_starts || 0,
+                 last_start: runs[0]?.started_at || null });
+      }).catch(() => {});
+    load(); loadAgg();
     const t = setInterval(load, 30000);
-    return () => { alive = false; clearInterval(t); };
+    const t2 = setInterval(loadAgg, 120000);
+    return () => { alive = false; clearInterval(t); clearInterval(t2); };
   }, [locId]);
   if (!st) return null;
   const run = !!st.compressor_on;
@@ -475,6 +488,8 @@ function HeatPumpCard({ locId }) {
       <div className="muted" style={{ fontSize: 11, lineHeight: 1.6 }}>
         aku {f1(st.t_tank)} °C · buffer {f1(st.t_buffer)}/{f1(st.t_buffer_set)} °C · venku {f1(st.t_outdoor)} °C<br />
         dnes ⚡ {elToday.toFixed(0)} kWh · 🔥 {heatToday.toFixed(0)} kWh{cop != null ? ` · COP ${cop.toFixed(1)}` : ""}
+        {agg && <><br />měsíc ⚡ {agg.month_el.toFixed(0)} kWh · dnes běh {Math.floor(agg.runtime_today_min / 60)}h{String(Math.round(agg.runtime_today_min % 60)).padStart(2, "0")}m · {agg.n_starts_today}× start
+        {agg.last_start ? ` · poslední ${new Date(agg.last_start).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}` : ""}</>}
       </div>
     </div>
   );

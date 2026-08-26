@@ -71,7 +71,9 @@ async def poll_device(adapter, sink) -> None:
         if snap is not None and adapter.__class__.__name__ == "StiebelIsgAdapter" and reading.measurements:
             try:
                 from ems.heatpump import db as hp_db
+                from ems.heatpump import service as hp_service
                 await hp_db.insert(reading.device_id, snap)
+                await hp_service.on_snapshot(reading.device_id, snap)
             except Exception as exc:
                 logger.debug("hp_telemetry insert: %s", exc)
     except Exception as exc:
