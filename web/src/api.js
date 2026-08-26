@@ -71,6 +71,7 @@ export const api = {
   setSpotRule: (id, body) => request(`/api/control/spot-rule/${encodeURIComponent(id)}`, { method: "PUT", body }),
   controlStates: (ids) => request(`/api/control/states?ids=${encodeURIComponent(ids)}`),
   getPlanner: (id) => request(`/api/planner/${id}`),
+  hpState: (locId) => request(`/api/localities/${locId}/heat-pump/state`),
   setPlannerConfig: (id, cfg) => request(`/api/planner/${id}/config`, { method: "PUT", body: cfg }),
   refreshPlanner: (id) => request(`/api/planner/${id}/refresh`, { method: "POST" }),
   plannerControlled: () => request(`/api/planner/controlled/devices`),

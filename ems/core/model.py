@@ -28,6 +28,7 @@ class DeviceType(str, Enum):
     LOAD = "load"               # domácnost, nabíječka, spirály
     GRID_POINT = "grid_point"   # přípojný/měřicí bod
     HYBRID = "hybrid"           # hybridní střídač: FVE + baterie + síť (+ backup) v jednom
+    HEAT_PUMP = "heat_pump"     # tepelné čerpadlo (teplo × elektřina, vlastní sémantika)
     SENSOR = "sensor"           # čistě měřicí zařízení (teploty AKU z UVR/CMI apod.), bez řízení
 
 
@@ -70,6 +71,19 @@ class Metric(str, Enum):
     TANK_S_TOP = "tank_s_top"     # slave horní (I4)
     TANK_S_BOT = "tank_s_bot"     # slave dolní (I5) – T_max (STOP spirály)
     TEMP_AMBIENT = "temp_ambient" # technická místnost (I14) – ambient, NE buffer
+    # --- Tepelné čerpadlo (Stiebel ISG) ---
+    HP_T_OUTDOOR = "hp_t_outdoor"
+    HP_T_TANK = "hp_t_tank"                     # reg 508 = „skut. teplota akumulace"
+    HP_T_BUFFER = "hp_t_buffer"
+    HP_T_BUFFER_SET = "hp_t_buffer_set"
+    HP_PRESSURE = "hp_pressure"
+    HP_COMPRESSOR = "hp_compressor"             # 0/1
+    HP_FAULT = "hp_fault"                       # 0/1 (fault nebo error_code≠0)
+    HP_POWER_EST = "hp_power_est"               # odhad příkonu (W), ~nominál při běhu
+    HP_EL_HEATING_TODAY = "hp_el_heating_today"     # kWh (celé, ISG)
+    HP_EL_DHW_TODAY = "hp_el_dhw_today"
+    HP_HEAT_HEATING_TODAY = "hp_heat_heating_today"
+    HP_HEAT_DHW_TODAY = "hp_heat_dhw_today"
 
 
 UNIT_OF: dict[Metric, str] = {
@@ -109,6 +123,18 @@ UNIT_OF: dict[Metric, str] = {
     Metric.TANK_S_TOP: "°C",
     Metric.TANK_S_BOT: "°C",
     Metric.TEMP_AMBIENT: "°C",
+    Metric.HP_T_OUTDOOR: "°C",
+    Metric.HP_T_TANK: "°C",
+    Metric.HP_T_BUFFER: "°C",
+    Metric.HP_T_BUFFER_SET: "°C",
+    Metric.HP_PRESSURE: "bar",
+    Metric.HP_COMPRESSOR: "",
+    Metric.HP_FAULT: "",
+    Metric.HP_POWER_EST: "W",
+    Metric.HP_EL_HEATING_TODAY: "kWh",
+    Metric.HP_EL_DHW_TODAY: "kWh",
+    Metric.HP_HEAT_HEATING_TODAY: "kWh",
+    Metric.HP_HEAT_DHW_TODAY: "kWh",
 }
 
 

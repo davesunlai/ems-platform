@@ -439,6 +439,47 @@ function Stat({ icon, iconName, label, value, sub, color, title }) {
   );
 }
 
+
+// 🌀 Karta tepelného čerpadla (Stiebel ISG) — v0.64.0: stav + teploty + dnešní kWh
+const HP_MODE_CZ = { heating: "topí", dhw: "ohřívá TUV", defrost: "odtává", idle: "klid" };
+function HeatPumpCard({ locId }) {
+  const [st, setSt] = useState(undefined);   // undefined = neptáno/loading, null = lokalita bez TČ
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.hpState(locId)
+      .then((r) => alive && setSt(r.state || null))
+      .catch(() => alive && setSt(null));
+    load();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [locId]);
+  if (!st) return null;
+  const run = !!st.compressor_on;
+  const mode = HP_MODE_CZ[st.hp_mode] || st.hp_mode || "—";
+  const elToday = (st.el_heating_today_kwh ?? 0) + (st.el_dhw_today_kwh ?? 0);
+  const heatToday = (st.heat_heating_today_kwh ?? 0) + (st.heat_dhw_today_kwh ?? 0);
+  const cop = elToday > 0 ? (heatToday / elToday) : null;
+  const warn = st.fault || (st.error_code || 0) !== 0;
+  const f1 = (v) => (v == null ? "—" : Number(v).toFixed(1));
+  return (
+    <div style={{ border: `1px solid ${warn ? "#f85149" : "var(--border)"}`, borderRadius: 8, background: "var(--bg)",
+                  padding: "6px 10px", minWidth: 158, flex: "0 1 auto" }}>
+      <div className="muted" style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+        <span style={run ? { display: "inline-block", animation: "hpspin 2.2s linear infinite" } : undefined}>🌀</span>
+        Tepelné čerpadlo
+        {warn && <span title={`porucha (kód ${st.error_code})`} style={{ color: "#f85149" }}>⚠</span>}
+        {st.evu_blocked && <span title="blokace HDO/EVU">🔒</span>}
+        {run && <style>{`@keyframes hpspin{to{transform:rotate(360deg)}}`}</style>}
+      </div>
+      <div style={{ fontWeight: 700, fontSize: 14.5, color: run ? "var(--green)" : "var(--fg)" }}>{mode}</div>
+      <div className="muted" style={{ fontSize: 11, lineHeight: 1.6 }}>
+        aku {f1(st.t_tank)} °C · buffer {f1(st.t_buffer)}/{f1(st.t_buffer_set)} °C · venku {f1(st.t_outdoor)} °C<br />
+        dnes ⚡ {elToday.toFixed(0)} kWh · 🔥 {heatToday.toFixed(0)} kWh{cop != null ? ` · COP ${cop.toFixed(1)}` : ""}
+      </div>
+    </div>
+  );
+}
+
 function LocalityNow({ deviceIds, localityId }) {
   const [d, setD] = useState(null);
   const [ts, setTs] = useState(null);
@@ -487,6 +528,7 @@ function LocalityNow({ deviceIds, localityId }) {
               value={`${fmt(expKw)} kW`}
               sub={`dnes ${fmt(d.export_kwh)} kWh${d.export_czk != null ? ` · ${czk(d.export_czk)}` : ""}`}
               title="Okamžitý přetok do distribuce · dnešní součet a výnos dle sazebníku" />)}
+      {localityId && <HeatPumpCard locId={localityId} />}
       {ts && (
         <div className="muted" style={{ fontSize: 10.5, alignSelf: "flex-end", marginLeft: "auto", textAlign: "right", lineHeight: 1.5 }}
              title="Velké číslo (kW) je okamžitá hodnota, řádek pod ním jsou součty za dnešní den.">

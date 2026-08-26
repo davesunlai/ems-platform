@@ -3,8 +3,8 @@ import { api } from "../api";
 import Icon from "../components/Icon";
 import { MAX_TRACKED, METRIC_LABEL, iconFor, groupMetrics, metricsFor, controlFor } from "../metrics";
 
-const ADAPTERS = ["goodwe", "solis", "uvr_cmi", "mock"];
-const ADAPTER_LABEL = {
+const ADAPTERS = ["goodwe", "solis", "stiebel_isg", "uvr_cmi", "mock"];
+const ADAPTER_LABEL = { stiebel_isg: "Stiebel Eltron ISG (TČ)",
   goodwe: "Goodwe — FVE + baterie (UDP/Modbus)",
   solis: "Solis S6-EH3P50K-H — FVE + baterie (Modbus TCP)",
   uvr_cmi: "UVR16x2 / CMI — teploty AKU (JSON API, read-only)",
@@ -15,7 +15,7 @@ const KINDS = [
   { v: "source_write", l: "Zápisový (řízení) — fáze C" },
   { v: "logic", l: "Logika (automatizace) — fáze D" },
 ];
-const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point", "sensor"];
+const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point", "sensor", "heat_pump"];
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
 function emptyForm() {
@@ -43,6 +43,8 @@ export default function Modules() {
       else if (f.device_type === "storage") p.battery_pack = Number(f.battery_pack);
     }
     else if (f.adapter === "mock") p = { pv_peak_w: Number(f.pv_peak_w), battery_capacity_kwh: Number(f.battery_capacity_kwh) };
+    else if (f.adapter === "stiebel_isg") p = { host: f.host, port: Number(f.port || 502), device_id: Number(f.unit || 1),
+      hp_nominal_kw: Number(f.hp_nominal_kw || 3.5), nhz_kw: Number(f.nhz_kw || 0) };
     else if (f.adapter === "uvr_cmi") p = { host: f.host, user: f.cmi_user || "admin", password: f.cmi_pass, node: Number(f.cmi_node || 2) };
     if (f.hidden && f.hidden.length) p.hidden_metrics = f.hidden;
     if (f.control && f.control.length) p.control_enabled = f.control;
@@ -129,7 +131,7 @@ export default function Modules() {
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Adaptér</label>
-            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" ? 502 : a === "goodwe" ? 8899 : f.port, device_type: a === "solis" ? "hybrid" : a === "uvr_cmi" ? "sensor" : f.device_type }); }}>
+            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" || a === "stiebel_isg" ? 502 : a === "goodwe" ? 8899 : f.port, device_type: a === "solis" ? "hybrid" : a === "uvr_cmi" ? "sensor" : a === "stiebel_isg" ? "heat_pump" : f.device_type }); }}>
               {ADAPTERS.map((a) => <option key={a} value={a}>{ADAPTER_LABEL[a] || a}</option>)}
             </select>
           </div>
@@ -184,6 +186,28 @@ export default function Modules() {
                 </select>
               </div>
             )}
+          </>)}
+          {f.adapter === "stiebel_isg" && (<>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>IP brány ISG (host)</label>
+              <input value={f.host} placeholder="192.168.6.174" onChange={(e) => setF({ ...f, host: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Port</label>
+              <input value={f.port} onChange={(e) => setF({ ...f, port: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Modbus device_id</label>
+              <input value={f.unit ?? 1} onChange={(e) => setF({ ...f, unit: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Nominální příkon TČ (kW)</label>
+              <input value={f.hp_nominal_kw ?? 3.5} onChange={(e) => setF({ ...f, hp_nominal_kw: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>El. dohřev NHZ (kW, 0 = není)</label>
+              <input value={f.nhz_kw ?? 0} onChange={(e) => setF({ ...f, nhz_kw: e.target.value })} />
+            </div>
           </>)}
           {f.adapter === "uvr_cmi" && (<>
             <div className="field" style={{ marginBottom: 0 }}>

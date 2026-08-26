@@ -66,6 +66,14 @@ async def poll_device(adapter, sink) -> None:
         await sink.write(reading_to_samples(reading))
         if reading.states and hasattr(sink, "write_states"):
             await sink.write_states(reading.device_id, reading.states)
+        # heat_pump: plný snapshot do hp_telemetry (podklad karty, běhů a denních agregací)
+        snap = getattr(adapter, "_last", None)
+        if snap is not None and adapter.__class__.__name__ == "StiebelIsgAdapter" and reading.measurements:
+            try:
+                from ems.heatpump import db as hp_db
+                await hp_db.insert(reading.device_id, snap)
+            except Exception as exc:
+                logger.debug("hp_telemetry insert: %s", exc)
     except Exception as exc:
         logger.warning("Čtení '%s' selhalo: %s", getattr(adapter, "device_id", "?"), exc)
 
@@ -237,6 +245,8 @@ async def run() -> None:
         await forecast_db.ensure_schema()
         await pricing_db.ensure_schema()
         await planner_db.ensure_schema()
+        from ems.heatpump import db as hp_db
+        await hp_db.ensure_schema()
         from ems.alerts import db as alerts_db
         await alerts_db.ensure_schema()
     except Exception as exc:

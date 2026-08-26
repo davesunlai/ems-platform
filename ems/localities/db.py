@@ -250,6 +250,6 @@ async def devices_for_locality(loc_id: int) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, name FROM modules WHERE locality_id = $1 ORDER BY id", loc_id
+            "SELECT id, name, device_type FROM modules WHERE locality_id = $1 ORDER BY id", loc_id
         )
     return [dict(r) for r in rows]
