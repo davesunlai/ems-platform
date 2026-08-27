@@ -329,12 +329,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [pl, setPl] = useState(null);
   const [outs, setOuts] = useState([]);
   const [hp, setHp] = useState(null);
-  const [mob, setMob] = useState(() => window.matchMedia("(max-width: 640px)").matches);
+  const [mob, setMob] = useState(() => window.innerWidth <= 640);
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const fn = (e) => setMob(e.matches);
-    mq.addEventListener("change", fn);
-    return () => mq.removeEventListener("change", fn);
+    const upd = () => setMob(window.innerWidth <= 640);
+    upd();
+    window.addEventListener("resize", upd);
+    window.addEventListener("orientationchange", upd);
+    return () => { window.removeEventListener("resize", upd); window.removeEventListener("orientationchange", upd); };
   }, []);
   useEffect(() => {
     let alive = true;
