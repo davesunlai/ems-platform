@@ -33,6 +33,7 @@ async def ensure_schema() -> None:
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme TEXT DEFAULT 'midnight'")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_custom JSONB")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_saved JSONB")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_prefs JSONB")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_email BOOLEAN NOT NULL DEFAULT TRUE")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_browser BOOLEAN NOT NULL DEFAULT TRUE")
         await conn.execute(
@@ -71,7 +72,7 @@ async def get_user(username: str) -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, username, password_hash, role, active, email, full_name, phone, note, theme, theme_custom, theme_saved, notify_email, notify_browser FROM users WHERE username = $1",
+            "SELECT id, username, password_hash, role, active, email, full_name, phone, note, theme, theme_custom, theme_saved, notify_email, notify_browser, ui_prefs FROM users WHERE username = $1",
             username,
         )
     return dict(row) if row else None
@@ -231,3 +232,13 @@ async def delete_reset(token_hash: str) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM password_resets WHERE token_hash = $1", token_hash)
+
+
+async def set_ui_prefs(user_id: int, prefs: dict) -> None:
+    """Mělké sloučení preferencí (jsonb ||) — klienti posílají jen měněné klíče."""
+    import json as _json
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET ui_prefs = COALESCE(ui_prefs, '{}'::jsonb) || $1::jsonb WHERE id = $2",
+            _json.dumps(prefs), user_id)

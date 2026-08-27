@@ -324,7 +324,7 @@ function FlowEdge({ d, kw, color, active, label, lx, ly }) {
     </g>
   );
 }
-function EnergyFlow({ locId, deviceIds, name, onClose }) {
+function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [d, setD] = useState(null);
   const [pl, setPl] = useState(null);
   const [outs, setOuts] = useState([]);
@@ -351,15 +351,14 @@ function EnergyFlow({ locId, deviceIds, name, onClose }) {
   const cur = pl?.current;
   const outIcon = (o) => (/oh[řr]ev|spir|boiler|vod|top/i.test(o.name) ? "♨️" : "🔌");
   const COLORS = ["3fb950", "58a6ff", "a371f7", "d29922"];
-  return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 90,
-                                    display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+  const body = (
       <div onClick={(e) => e.stopPropagation()} className="panel"
-           style={{ width: "min(820px, 100%)", maxHeight: "92vh", overflow: "auto", position: "relative", padding: 14 }}>
+           style={inline ? { padding: 14, marginTop: 8 }
+                         : { width: "min(820px, 100%)", maxHeight: "92vh", overflow: "auto", position: "relative", padding: 14 }}>
         <style>{`.eflow-anim{animation:eflowdash 0.9s linear infinite}@keyframes eflowdash{to{stroke-dashoffset:-36}}`}</style>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <b style={{ fontSize: 15 }}>⚡ Energetický tok — {name}</b>
-          <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={onClose}>✕</button>
+          {!inline && <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={onClose}>✕</button>}
         </div>
         {pl?.config?.enabled && cur && (
           <div style={{ margin: "8px 0 0", fontSize: 12.5, border: "1px dashed var(--green)", borderRadius: 999,
@@ -388,9 +387,9 @@ function EnergyFlow({ locId, deviceIds, name, onClose }) {
                           label={f1(kw(gridW))} lx={545} ly={192} />}
             {/* baterie ↔ dům */}
             {batW >= 0
-              ? <FlowEdge d="M335,268 C295,290 175,295 160,345" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
+              ? <FlowEdge d="M335,268 C295,290 185,295 170,330" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
                           label={f1(kw(batW))} lx={225} ly={305} />
-              : <FlowEdge d="M160,345 C175,295 295,290 335,268" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
+              : <FlowEdge d="M170,330 C185,295 295,290 335,268" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
                           label={f1(kw(batW))} lx={225} ly={305} />}
             {/* dům → TČ */}
             {hp && (
@@ -411,12 +410,28 @@ function EnergyFlow({ locId, deviceIds, name, onClose }) {
             <FlowNode x={295} y={188} w={170} icon="🏠" title="Dům" value={f1(kw(d.load_w))}
                       sub={`dnes ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} accent="var(--amber, #d29922)" />
             <g>
-              <FlowNode x={65} y={345} icon="🔋" title="Baterie"
-                        value={`${d.soc != null ? Math.round(d.soc) : "?"} %`}
-                        sub={kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}
-                        accent="#a371f7" />
+              <rect x={45} y={330} width={200} height={124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
+              <text x={145} y={352} textAnchor="middle" fontSize="20">🔋</text>
+              <text x={145} y={368} textAnchor="middle" fontSize="11" fill="var(--muted)">Baterie celkem</text>
+              <text x={145} y={386} textAnchor="middle" fontSize="14" fontWeight="700" fill="#a371f7">
+                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}
+              </text>
               {d.soc != null && (
-                <rect x={75} y={423} width={130 * Math.max(0, Math.min(100, d.soc)) / 100} height={4} rx={2} fill="#a371f7" opacity="0.9" />)}
+                <rect x={60} y={392} width={170 * Math.max(0, Math.min(100, d.soc)) / 100} height={4} rx={2} fill="#a371f7" opacity="0.9" />)}
+              {[{ n: 1, soc: d.battery_soc_1, w: d.battery_w_1 }, { n: 2, soc: d.battery_soc_2, w: d.battery_w_2 }]
+                .filter((b) => b.soc != null).map((b, i, arr) => {
+                  const bw = 88, gap = 8, x0 = 145 - (arr.length * bw + (arr.length - 1) * gap) / 2 + i * (bw + gap);
+                  const bkw = (b.w || 0) / 1000;
+                  return (
+                    <g key={b.n}>
+                      <rect x={x0} y={402} width={bw} height={44} rx="8" fill="none" stroke="var(--border)" />
+                      <text x={x0 + bw / 2} y={418} textAnchor="middle" fontSize="10" fill="var(--muted)">B{b.n}</text>
+                      <text x={x0 + bw / 2} y={432} textAnchor="middle" fontSize="12" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %</text>
+                      <text x={x0 + bw / 2} y={443} textAnchor="middle" fontSize="9" fill="var(--muted)">
+                        {Math.abs(bkw) > 0.05 ? `${bkw > 0 ? "▲" : "▼"} ${Math.abs(bkw).toFixed(1)} kW` : "klid"}
+                      </text>
+                    </g>);
+                })}
             </g>
             {hp && (
               <FlowNode x={585} y={268} w={150} h={54} icon="🌀" title="Tepelné čerpadlo"
@@ -433,6 +448,12 @@ function EnergyFlow({ locId, deviceIds, name, onClose }) {
           Animované čáry = aktuální tok energie (tloušťka ≈ výkon), šipka = směr. Obnovuje se každých 5 s.
         </p>
       </div>
+  );
+  if (inline) return body;
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 90,
+                                    display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+      {body}
     </div>
   );
 }
@@ -570,6 +591,18 @@ function LocalitySection({ name, devs, open, onToggle }) {
   const ids = devs.map((d) => d.device_id);
   const locId = devs[0].locality_id;
   const [flow, setFlow] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    if (!locId) return;
+    api.getPrefs().then((r) => setPinned(!!(r.prefs?.flow_pinned || {})[locId])).catch(() => {});
+  }, [locId]);
+  const togglePin = (v) => {
+    setPinned(v);
+    api.getPrefs().then((r) => {
+      const fp = { ...(r.prefs?.flow_pinned || {}), [locId]: v };
+      return api.setPrefs({ flow_pinned: fp });
+    }).catch(() => {});
+  };
   return (
     <section style={{ marginBottom: open ? 26 : 10 }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 18, cursor: "pointer", userSelect: "none" }}
@@ -580,8 +613,16 @@ function LocalitySection({ name, devs, open, onToggle }) {
           <button className="btn" title="Energetický tok lokality (živý diagram)"
                   onClick={(e) => { e.stopPropagation(); setFlow(true); }}
                   style={{ marginLeft: 10, padding: "2px 10px", fontSize: 13, verticalAlign: "2px" }}>⚡ schéma toku energie</button>)}
+        {locId && (
+          <label onClick={(e) => e.stopPropagation()}
+                 title="Zobrazovat schéma trvale na dashboardu (uloženo k tvému účtu)"
+                 style={{ marginLeft: 8, fontSize: 13, verticalAlign: "2px", cursor: "pointer",
+                          display: "inline-flex", alignItems: "center", gap: 3 }}>
+            👁<input type="checkbox" checked={pinned} onChange={(e) => togglePin(e.target.checked)} />
+          </label>)}
       </h2>
-      {flow && locId && <EnergyFlow locId={locId} deviceIds={ids} name={name} onClose={() => setFlow(false)} />}
+      {flow && locId && !pinned && <EnergyFlow locId={locId} deviceIds={ids} name={name} onClose={() => setFlow(false)} />}
+      {pinned && locId && <EnergyFlow inline locId={locId} deviceIds={ids} name={name} onClose={() => {}} />}
       <LocalityNow deviceIds={ids} localityId={locId} />
       {open && (<>
         <ControlBanners deviceIds={ids} localityId={locId} />

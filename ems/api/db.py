@@ -190,6 +190,16 @@ async def aggregate_now(device_ids: list[str]) -> dict:
             "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
             "  WHERE device_id = ANY($1::text[]) AND metric='battery_power' AND time > now() - interval '5 minutes'"
             "  ORDER BY device_id, time DESC) t", device_ids)
+        async def _latest(metric: str, agg: str = "SUM"):
+            return await conn.fetchval(
+                f"SELECT {agg}(v) FROM ("
+                "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
+                "  WHERE device_id = ANY($1::text[]) AND metric=$2 AND time > now() - interval '5 minutes'"
+                "  ORDER BY device_id, time DESC) t", device_ids, metric)
+        soc1 = await _latest("battery_soc_1", "AVG")
+        soc2 = await _latest("battery_soc_2", "AVG")
+        bat1 = await _latest("battery_power_1")
+        bat2 = await _latest("battery_power_2")
         # Dnešní výroba: PŘEDNOST má energy_today (měnič si ho počítá sám -> odolné
         # proti výpadkům kolektoru). Fallback = max-min kumulativního energy_pv_total
         # za dnešek (pro adaptéry bez energy_today, např. goodwe).
@@ -250,6 +260,10 @@ async def aggregate_now(device_ids: list[str]) -> dict:
     return {"pv_w": pv_w, "soc": float(soc) if soc is not None else None,
             "today_kwh": float(kwh or 0), "load_w": load_w,
             "grid_w": grid_w, "battery_w": bat_w,
+            "battery_soc_1": round(float(soc1), 1) if soc1 is not None else None,
+            "battery_soc_2": round(float(soc2), 1) if soc2 is not None else None,
+            "battery_w_1": float(bat1) if bat1 is not None else None,
+            "battery_w_2": float(bat2) if bat2 is not None else None,
             "cons_today_kwh": round(cons_today, 1),
             "import_kwh": imp_kwh, "export_kwh": exp_kwh}
 

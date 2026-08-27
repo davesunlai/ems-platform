@@ -87,6 +87,30 @@ class ThemeBody(BaseModel):
     saved: list | None = None
 
 
+@router.get("/auth/me/prefs")
+async def get_prefs(user: dict = Depends(get_current_user)):
+    import json as _json
+    full = await db.get_user(user["username"])
+    if not full:
+        raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+    p = full.get("ui_prefs")
+    if isinstance(p, str):
+        try:
+            p = _json.loads(p)
+        except Exception:
+            p = None
+    return {"prefs": p or {}}
+
+
+@router.put("/auth/me/prefs")
+async def put_prefs(body: dict, user: dict = Depends(get_current_user)):
+    full = await db.get_user(user["username"])
+    if not full:
+        raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+    await db.set_ui_prefs(full["id"], body or {})
+    return {"ok": True}
+
+
 @router.put("/auth/me/theme")
 async def set_theme(body: ThemeBody, user: dict = Depends(get_current_user)):
     full = await db.get_user(user["username"])
