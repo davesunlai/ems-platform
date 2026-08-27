@@ -300,27 +300,27 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
 // ⚡ Energetický tok lokality — animovaný diagram (FVE / síť / baterie / dům / spotřebiče)
 const ACT_CZ = { charge_pv: "nabíjení z FVE", charge_grid: "nabíjení ze sítě", discharge_grid: "vybíjení do sítě",
                  discharge_load: "vybíjení do domu", idle: "self-use", export: "prodej přebytku" };
-function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent }) {
+function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1 }) {
   return (
     <g>
-      <rect x={x} y={y} width={w} height={h} rx="12" fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth="1.4" />
-      <text x={x + w / 2} y={y + 30} textAnchor="middle" fontSize="24">{icon}</text>
-      <text x={x + w / 2} y={y + 48} textAnchor="middle" fontSize="11" fill="var(--muted)">{title}</text>
-      <text x={x + w / 2} y={y + 66} textAnchor="middle" fontSize="13.5" fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
-      {sub && <text x={x + w / 2} y={y + 79} textAnchor="middle" fontSize="10" fill="var(--muted)">{sub}</text>}
+      <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
+      <text x={x + w / 2} y={y + 30 * m} textAnchor="middle" fontSize={24 * m}>{icon}</text>
+      <text x={x + w / 2} y={y + 48 * m} textAnchor="middle" fontSize={11 * m} fill="var(--muted)">{title}</text>
+      <text x={x + w / 2} y={y + 66 * m} textAnchor="middle" fontSize={13.5 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
+      {sub && <text x={x + w / 2} y={y + 79 * m} textAnchor="middle" fontSize={10 * m} fill="var(--muted)">{sub}</text>}
     </g>
   );
 }
-function FlowEdge({ d, kw, color, active, label, lx, ly }) {
-  const wdt = Math.min(6, 1.6 + Math.abs(kw) / 2.5);
+function FlowEdge({ d, kw, color, active, label, lx, ly, m = 1 }) {
+  const wdt = Math.min(6, 1.6 + Math.abs(kw) / 2.5) * m;
   return (
     <g>
-      <path d={d} fill="none" stroke={active ? color : "var(--border)"} strokeWidth={active ? wdt : 1.2}
+      <path d={d} fill="none" stroke={active ? color : "var(--border)"} strokeWidth={active ? wdt : 1.2 * m}
             strokeLinecap="round" className={active ? "eflow-anim" : ""}
-            strokeDasharray={active ? "9 9" : "3 6"} opacity={active ? 0.95 : 0.45}
+            strokeDasharray={active ? `${9 * m} ${9 * m}` : `${3 * m} ${6 * m}`} opacity={active ? 0.95 : 0.45}
             markerEnd={active ? `url(#efarr-${color.replace("#", "")})` : undefined} />
-      {active && <text x={lx} y={ly} textAnchor="middle" fontSize="11.5" fontWeight="700" fill={color}
-                       stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{label}</text>}
+      {active && <text x={lx} y={ly} textAnchor="middle" fontSize={11.5 * m} fontWeight="700" fill={color}
+                       stroke="var(--bg)" strokeWidth={3 * m} paintOrder="stroke">{label}</text>}
     </g>
   );
 }
@@ -329,6 +329,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [pl, setPl] = useState(null);
   const [outs, setOuts] = useState([]);
   const [hp, setHp] = useState(null);
+  const [mob, setMob] = useState(() => window.matchMedia("(max-width: 640px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const fn = (e) => setMob(e.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
   useEffect(() => {
     let alive = true;
     const load = () => {
@@ -367,7 +374,86 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {cur.deferrable_on ? " · ♨️ spirála ON" : ""} <span className="muted">— {cur.reason}</span>
           </div>
         )}
-        {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : (
+        {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
+          <svg viewBox="0 0 400 700" style={{ width: "100%", marginTop: 8 }}>
+            <defs>
+              {COLORS.map((c) => (
+                <marker key={c} id={`efarr-${c}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill={`#${c}`} />
+                </marker>
+              ))}
+            </defs>
+            {/* FVE → dům */}
+            <FlowEdge m={1.5} d="M100,138 C100,165 155,175 178,196" kw={pvKw} active={pvKw > 0.05} color="#3fb950"
+                      label={f1(pvKw)} lx={112} ly={172} />
+            {/* síť ↔ dům */}
+            {gridW >= 0
+              ? <FlowEdge m={1.5} d="M300,138 C300,165 245,175 222,196" kw={kw(gridW)} active={kw(gridW) > 0.05} color="#58a6ff"
+                          label={f1(kw(gridW))} lx={292} ly={172} />
+              : <FlowEdge m={1.5} d="M222,196 C245,175 300,165 300,138" kw={kw(gridW)} active={kw(gridW) > 0.05} color="#3fb950"
+                          label={f1(kw(gridW))} lx={292} ly={172} />}
+            {/* dům ↔ baterie */}
+            {batW >= 0
+              ? <FlowEdge m={1.5} d="M160,324 C140,336 122,342 116,354" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
+                          label={f1(kw(batW))} lx={108} ly={340} />
+              : <FlowEdge m={1.5} d="M116,354 C122,342 140,336 160,324" kw={kw(batW)} active={kw(batW) > 0.05} color="#a371f7"
+                          label={f1(kw(batW))} lx={108} ly={340} />}
+            {/* dům → TČ */}
+            {hp && (
+              <FlowEdge m={1.5} d="M245,324 C275,336 300,342 312,354" kw={(hp.power_est_w || 0) / 1000}
+                        active={!!hp.compressor_on} color="#39c5cf"
+                        label={`~${((hp.power_est_w || 0) / 1000).toFixed(1)}`} lx={300} ly={340} />)}
+            {/* dům → spotřebiče */}
+            {outs.slice(0, 2).map((o, i) => (
+              <FlowEdge key={o.id} m={1.5} d={i === 0 ? "M170,324 C120,430 90,490 100,556" : "M230,324 C285,430 305,490 300,556"}
+                        kw={o.id === spiralId ? spiralKw : 1} active={!!o.is_on} color="#d29922"
+                        label={o.id === spiralId ? f1(spiralKw) : "ON"} lx={i === 0 ? 92 : 312} ly={470} />
+            ))}
+            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon="☀️" title="FVE" value={f1(pvKw)}
+                      sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)} kWh` : null}
+                      accent={pvKw > 0.05 ? "#3fb950" : null} />
+            <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon="🗼" title="Distribuce"
+                      value={gridW >= 0 ? `${f1(kw(gridW))}` : `${f1(kw(gridW))}`}
+                      sub={gridW >= 0 ? "odběr" : "dodávka"}
+                      accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
+            <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon="🏠" title="Dům" value={f1(kw(d.load_w))}
+                      sub={`dnes ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} accent="var(--amber, #d29922)" />
+            {/* baterie — velký box s pod-boxy (mobil) */}
+            <g>
+              <rect x={10} y={354} width={230} height={176} rx="14" fill="var(--bg)" stroke="#a371f7" strokeWidth="2" />
+              <text x={125} y={388} textAnchor="middle" fontSize="30">🔋</text>
+              <text x={125} y={410} textAnchor="middle" fontSize="15" fill="var(--muted)">Baterie celkem</text>
+              <text x={125} y={434} textAnchor="middle" fontSize="19" fontWeight="700" fill="#a371f7">
+                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}
+              </text>
+              {d.soc != null && (
+                <rect x={25} y={442} width={200 * Math.max(0, Math.min(100, d.soc)) / 100} height={6} rx={3} fill="#a371f7" opacity="0.9" />)}
+              {[{ n: 1, soc: d.battery_soc_1, w: d.battery_w_1 }, { n: 2, soc: d.battery_soc_2, w: d.battery_w_2 }]
+                .filter((b) => b.soc != null).map((b, i, arr) => {
+                  const bw = 100, gap = 10, x0 = 125 - (arr.length * bw + (arr.length - 1) * gap) / 2 + i * (bw + gap);
+                  const bkw = (b.w || 0) / 1000;
+                  return (
+                    <g key={b.n}>
+                      <rect x={x0} y={456} width={bw} height={64} rx="10" fill="none" stroke="var(--border)" strokeWidth="1.5" />
+                      <text x={x0 + bw / 2} y={478} textAnchor="middle" fontSize="13" fill="var(--muted)">B{b.n}</text>
+                      <text x={x0 + bw / 2} y={498} textAnchor="middle" fontSize="17" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %</text>
+                      <text x={x0 + bw / 2} y={514} textAnchor="middle" fontSize="12" fill="var(--muted)">
+                        {Math.abs(bkw) > 0.05 ? `${bkw > 0 ? "▲" : "▼"} ${Math.abs(bkw).toFixed(1)} kW` : "klid"}
+                      </text>
+                    </g>);
+                })}
+            </g>
+            {hp && (
+              <FlowNode m={1.5} x={250} y={354} w={140} h={110} icon="🌀" title="Tep. čerpadlo"
+                        value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
+                        sub={hp.compressor_on ? (HP_MODE_CZ[hp.hp_mode] || hp.hp_mode) : `aku ${hp.t_tank != null ? Number(hp.t_tank).toFixed(0) : "?"}°`}
+                        accent={hp.compressor_on ? "#39c5cf" : null} />)}
+            {outs.slice(0, 2).map((o, i) => (
+              <FlowNode key={o.id} m={1.5} x={i === 0 ? 10 : 205} y={556} w={185} h={128} icon={outIcon(o)} title={o.name}
+                        value={o.is_on ? "zapnuto" : "vypnuto"} accent={o.is_on ? "#d29922" : null} />
+            ))}
+          </svg>
+        ) : (
           <svg viewBox="0 0 760 470" style={{ width: "100%", marginTop: 8 }}>
             <defs>
               {COLORS.map((c) => (
