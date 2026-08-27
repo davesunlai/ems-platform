@@ -579,7 +579,7 @@ function LocalitySection({ name, devs, open, onToggle }) {
         {locId && (
           <button className="btn" title="Energetický tok lokality (živý diagram)"
                   onClick={(e) => { e.stopPropagation(); setFlow(true); }}
-                  style={{ marginLeft: 10, padding: "2px 10px", fontSize: 13, verticalAlign: "2px" }}>⚡ tok</button>)}
+                  style={{ marginLeft: 10, padding: "2px 10px", fontSize: 13, verticalAlign: "2px" }}>⚡ schéma toku energie</button>)}
       </h2>
       {flow && locId && <EnergyFlow locId={locId} deviceIds={ids} name={name} onClose={() => setFlow(false)} />}
       <LocalityNow deviceIds={ids} localityId={locId} />
