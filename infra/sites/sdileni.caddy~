@@ -1,4 +1,4 @@
-sdileni.sunlai.org, sdileni.inenergie.cz {
+sdileni.sunlai.org {
 	encode gzip
 	reverse_proxy sdileni_app:80
 }
