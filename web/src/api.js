@@ -57,6 +57,7 @@ export const api = {
     request(`/api/control/${encodeURIComponent(id)}/command`, { method: "POST", body: { action, params } }),
   commandStatus: (cmdId) => request(`/api/control/command/${cmdId}`),
   listOutputs: () => request("/api/outputs"),
+  syncEwelink: () => request("/api/outputs/sync-ewelink", { method: "POST" }),
   createOutput: (o) => request("/api/outputs", { method: "POST", body: o }),
   updateOutput: (id, patch) => request(`/api/outputs/${id}`, { method: "PUT", body: patch }),
   deleteOutput: (id) => request(`/api/outputs/${id}`, { method: "DELETE" }),

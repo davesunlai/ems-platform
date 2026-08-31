@@ -330,6 +330,15 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [outs, setOuts] = useState([]);
   const [hp, setHp] = useState(null);
   const [mob, setMob] = useState(() => window.innerWidth <= 640);
+  const [ewDev, setEwDev] = useState({});     // deviceid -> {on, online, power_w} z eWeLinku
+  useEffect(() => {
+    // stav z eWeLinku (i sepnutí mimo TERA EMS): hned při otevření/F5, pak po 2 min — jen dokud je schéma vidět
+    let alive = true;
+    const sync = () => api.syncEwelink().then((r) => { if (alive && r?.devices) setEwDev(r.devices); }).catch(() => {});
+    sync();
+    const t = setInterval(sync, 120000);
+    return () => { alive = false; clearInterval(t); };
+  }, [locId]);
   useEffect(() => {
     const upd = () => setMob(window.innerWidth <= 640);
     upd();
@@ -358,6 +367,10 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const spiralKw = Number(pl?.config?.spiral_power_kw) || 6;
   const cur = pl?.current;
   const outIcon = (o) => (/oh[řr]ev|spir|boiler|vod|top/i.test(o.name) ? "♨️" : "🔌");
+  const outKw = (o) => { const p = ewDev[o.target]?.power_w; return p != null && p > 0 ? p / 1000 : (o.id === spiralId ? spiralKw : null); };
+  const outLabel = (o) => { const k = outKw(o); return k != null ? f1(k) : "ON"; };
+  const outOn = (o) => (ewDev[o.target] ? !!ewDev[o.target].on : !!o.is_on);
+  const outSub = (o) => (ewDev[o.target]?.online === false ? "offline" : null);
   const COLORS = ["3fb950", "58a6ff", "a371f7", "d29922"];
   const body = (
       <div onClick={(e) => e.stopPropagation()} className="panel"
@@ -407,8 +420,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {/* dům → spotřebiče */}
             {outs.slice(0, 2).map((o, i) => (
               <FlowEdge key={o.id} m={1.5} d={i === 0 ? "M170,324 C120,430 90,490 100,556" : "M230,324 C285,430 305,490 300,556"}
-                        kw={o.id === spiralId ? spiralKw : 1} active={!!o.is_on} color="#d29922"
-                        label={o.id === spiralId ? f1(spiralKw) : "ON"} lx={i === 0 ? 92 : 312} ly={470} />
+                        kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
+                        label={outLabel(o)} lx={i === 0 ? 92 : 312} ly={470} />
             ))}
             <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon="☀️" title="FVE" value={f1(pvKw)}
                       sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)} kWh` : null}
@@ -451,7 +464,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         accent={hp.compressor_on ? "#39c5cf" : null} />)}
             {outs.slice(0, 2).map((o, i) => (
               <FlowNode key={o.id} m={1.5} x={i === 0 ? 10 : 205} y={556} w={185} h={128} icon={outIcon(o)} title={o.name}
-                        value={o.is_on ? "zapnuto" : "vypnuto"} accent={o.is_on ? "#d29922" : null} />
+                        value={outOn(o) ? "zapnuto" : "vypnuto"} sub={outSub(o)} accent={outOn(o) ? "#d29922" : null} />
             ))}
           </svg>
         ) : (
@@ -486,8 +499,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {/* dům → spotřebiče */}
             {outs.slice(0, 2).map((o, i) => (
               <FlowEdge key={o.id} d={`M430,258 C480,${285 + i * 20} 540,${356 + i * 62} 585,${374 + i * 62}`}
-                        kw={o.id === spiralId ? spiralKw : 1} active={!!o.is_on} color="#d29922"
-                        label={o.id === spiralId ? f1(spiralKw) : "ON"} lx={505} ly={330 + i * 55} />
+                        kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
+                        label={outLabel(o)} lx={505} ly={330 + i * 55} />
             ))}
             <FlowNode x={65} y={55} icon="☀️" title="FVE" value={f1(pvKw)}
                       sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)} kWh` : null}
@@ -527,7 +540,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         accent={hp.compressor_on ? "#39c5cf" : null} />)}
             {outs.slice(0, 2).map((o, i) => (
               <FlowNode key={o.id} x={585} y={352 + i * 62} w={150} h={54} icon={outIcon(o)} title={o.name}
-                        value={o.is_on ? "zapnuto" : "vypnuto"} accent={o.is_on ? "#d29922" : null} />
+                        value={outOn(o) ? "zapnuto" : "vypnuto"} sub={outSub(o)} accent={outOn(o) ? "#d29922" : null} />
             ))}
           </svg>
         )}

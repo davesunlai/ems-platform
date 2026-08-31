@@ -77,3 +77,41 @@ async def test_output(out_id: int, body: TestBody, _: dict = Depends(require_per
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     return {"ok": True, "result": res}
+
+
+# --- Sync skutečného stavu z eWeLinku (i když bylo sepnuto mimo TERA EMS) ----
+# Serverový throttle: víc otevřených schémat sdílí jeden dotaz (min. 100 s mezi voláními).
+_SYNC_MIN_S = 100
+_sync_cache: dict = {"at": 0.0, "result": None}
+
+
+@router.post("/sync-ewelink")
+async def sync_ewelink(_: dict = Depends(require_permission("read"))) -> dict:
+    import time
+    from ems.ewelink import client as ew
+    now = time.monotonic()
+    if _sync_cache["result"] is not None and now - _sync_cache["at"] < _SYNC_MIN_S:
+        return {**_sync_cache["result"], "cached": True}
+    if not ew.configured():
+        return {"ok": False, "reason": "eWeLink není nakonfigurován", "devices": {}, "updated": []}
+    try:
+        devs = await ew.list_devices()
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc), "devices": {}, "updated": []}
+    by_id = {d["deviceid"]: d for d in devs if d.get("deviceid")}
+    updated = []
+    for o in await db.list_all():
+        if o.get("output_kind") != "ewelink":
+            continue
+        d = by_id.get(o.get("target"))
+        if not d or d.get("switch") not in ("on", "off"):
+            continue
+        real_on = d["switch"] == "on"
+        if bool(o.get("is_on")) != real_on:
+            await db.set_state(o["id"], real_on, "sync: stav z eWeLinku (sepnuto mimo TERA EMS)")
+            updated.append({"id": o["id"], "name": o["name"], "is_on": real_on})
+    result = {"ok": True, "updated": updated,
+              "devices": {did: {"on": d.get("switch") == "on", "online": d.get("online"),
+                                "power_w": d.get("power")} for did, d in by_id.items()}}
+    _sync_cache.update(at=now, result=result)
+    return {**result, "cached": False}
