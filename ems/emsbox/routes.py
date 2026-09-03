@@ -30,11 +30,8 @@ async def pair(body: PairBody) -> dict:
     return res
 
 
-@router.get("/emsbox/{box_id}/config")
-async def box_config(box_id: int, request: Request, box: dict = Depends(box_auth)):
-    """Config pull (ETag) — server je zdroj pravdy pro definici zařízení."""
-    if box_id != box["id"]:
-        raise HTTPException(status_code=403, detail="box_id nesouhlasí s tokenem")
+async def build_config(box_id: int) -> tuple[str, str]:
+    """(json body, etag) — sdílené mezi /config a povelovým kanálem (signál změny)."""
     mods = await db.modules_for_box(box_id)
     devices = []
     for m in mods:
@@ -61,6 +58,15 @@ async def box_config(box_id: int, request: Request, box: dict = Depends(box_auth
                "settings": {"heartbeat_s": 60, "config_poll_s": 300, "max_batch_rows": db.MAX_BATCH_ROWS}}
     body = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     etag = '"' + hashlib.md5(body.encode()).hexdigest() + '"'
+    return body, etag
+
+
+@router.get("/emsbox/{box_id}/config")
+async def box_config(box_id: int, request: Request, box: dict = Depends(box_auth)):
+    """Config pull (ETag) — server je zdroj pravdy pro definici zařízení."""
+    if box_id != box["id"]:
+        raise HTTPException(status_code=403, detail="box_id nesouhlasí s tokenem")
+    body, etag = await build_config(box_id)
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers={"ETag": etag})
     return Response(content=body, media_type="application/json", headers={"ETag": etag})

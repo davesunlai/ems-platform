@@ -183,9 +183,13 @@ class Agent:
         while True:
             await asyncio.sleep(5)
             try:
-                cmds = await self.link.get_commands()
+                cmds, cfg_etag = await self.link.get_commands()
             except Exception:
                 continue
+            # změna configu na serveru? (přiřazení/odebrání zařízení) → stáhni HNED, nečekej na 5min poll
+            if cfg_etag and cfg_etag != getattr(self.link, "_config_etag", None):
+                await self.refresh_config()
+                await self._reconcile()
             for c in cmds:
                 a = self.adapters.get(c["module_id"])
                 if a is None:

@@ -77,10 +77,12 @@ async def box_commands(box: dict = Depends(box_auth)) -> dict:
     (box byl offline) server rovnou zneplatní — stará force okna nesmí ožít."""
     from ems.control import db as control_db
     from ems.api.db import get_pool
+    from .routes import build_config
+    _, cfg_etag = await build_config(box["id"])
     mods = [m["id"] for m in await db.modules_for_box(box["id"])]
     cmds = await control_db.fetch_pending(mods)
     if not cmds:
-        return {"commands": []}
+        return {"commands": [], "config_etag": cfg_etag}
     pool = await get_pool()
     fresh = []
     async with pool.acquire() as conn:
@@ -92,7 +94,7 @@ async def box_commands(box: dict = Depends(box_auth)) -> dict:
                                           {"error": f"expiroval ({age_min:.0f} min) — box byl offline"})
             else:
                 fresh.append(c)
-    return {"commands": fresh}
+    return {"commands": fresh, "config_etag": cfg_etag}
 
 
 class CommandResult(BaseModel):

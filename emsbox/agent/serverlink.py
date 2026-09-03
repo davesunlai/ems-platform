@@ -77,10 +77,11 @@ class ServerLink:
                                     json=body, headers=self._headers)
         r.raise_for_status()
 
-    async def get_commands(self) -> list[dict]:
+    async def get_commands(self) -> tuple[list[dict], str | None]:
         r = await self._client.get(f"{self.server}/api/ingest/v1/commands", headers=self._headers)
         r.raise_for_status()
-        return r.json().get("commands", [])
+        j = r.json()
+        return j.get("commands", []), j.get("config_etag")
 
     async def send_command_result(self, cmd: dict, ok: bool, result: dict) -> None:
         body = {"id": cmd["id"], "module_id": cmd["module_id"], "action": cmd["action"],
