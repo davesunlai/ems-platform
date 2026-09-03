@@ -1,0 +1,13 @@
+# EMSBOX — nasazení na boxu (Pi 4 / průmyslový kus). Watchdog: systemd unit
+# `emsbox.service` = docker compose up -d; restart: unless-stopped.
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: emsbox/Dockerfile
+    restart: unless-stopped
+    network_mode: host          # LAN klienta (Modbus TCP) + později /dev/ttyUSB* pro RTU
+    volumes:
+      - emsbox-data:/data
+volumes:
+  emsbox-data:

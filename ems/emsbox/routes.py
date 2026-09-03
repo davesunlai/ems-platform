@@ -43,6 +43,7 @@ async def box_config(box_id: int, request: Request, box: dict = Depends(box_auth
             "device_uid": m["id"],
             "name": m["name"],
             "adapter": m["adapter"],
+            "device_type": m.get("device_type") or "generation",
             "transport": tp.get("transport", "modbus_tcp"),
             "params": {**(m.get("params") or {}), **{k: v for k, v in tp.items() if k != "transport"}},
             "poll_s": tp.get("poll_s", 30),
