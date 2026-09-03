@@ -54,8 +54,9 @@ def _build_adapter(dev: dict):
     transport modbus_tcp/http = beze změny; modbus_rtu přijde v další fázi."""
     from ems.collector.config import build_adapter
     from ems.core.model import Device, DeviceType
-    if dev.get("transport") == "modbus_rtu":
-        raise NotImplementedError("modbus_rtu transport přijde v další fázi (ModbusSerialClient + port lock)")
+    # modbus_rtu: transport_params nesou serial_port/baudrate/... — adaptér při
+    # serial_port automaticky použije ModbusSerialClient. Přístup na port serializuje
+    # agentní _io_lock (jeden master na sběrnici; víc zařízení na jednom portu = další fáze).
     try:
         dtype = DeviceType(dev.get("device_type") or "generation")
     except ValueError:

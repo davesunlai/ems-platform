@@ -78,6 +78,10 @@ export default function Modules() {
     setF({
       id: m.id, name: m.name || "", adapter: m.adapter, device_type: m.device_type, kind: m.kind,
       emsbox_id: m.emsbox_id ?? "",
+      transport: m.transport_params?.transport || "modbus_tcp",
+      serial_port: m.transport_params?.serial_port || "",
+      baudrate: m.transport_params?.baudrate ?? 9600, parity: m.transport_params?.parity || "N",
+      stopbits: m.transport_params?.stopbits ?? 1, bytesize: m.transport_params?.bytesize ?? 8,
       host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : 8899),
       device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1, battery_packs: p.battery_packs ?? "auto",
       cmi_user: p.user ?? "admin", cmi_pass: p.password ?? "", cmi_node: p.node ?? 2,
@@ -92,11 +96,16 @@ export default function Modules() {
     setErr("");
     try {
       const viaBox = f.emsbox_id !== "" && f.emsbox_id != null;
+      const tp = f.transport === "modbus_rtu"
+        ? { transport: "modbus_rtu", serial_port: f.serial_port || "/dev/ttyUSB0",
+            baudrate: Number(f.baudrate || 9600), parity: f.parity || "N",
+            stopbits: Number(f.stopbits || 1), bytesize: Number(f.bytesize || 8) }
+        : { transport: "modbus_tcp" };
       await api.updateModule(editing, {
         name: f.name, adapter: f.adapter, device_type: f.device_type,
         kind: f.kind, params: buildParams(),
         emsbox_id: viaBox ? Number(f.emsbox_id) : -1,
-        ...(viaBox ? { transport_params: { transport: "modbus_tcp" } } : {}),
+        ...(viaBox ? { transport_params: tp } : {}),
       });
       setEditing(null); setF(emptyForm()); load();
     } catch (e) { setErr(e.message); }
@@ -152,9 +161,38 @@ export default function Modules() {
             <select value={f.emsbox_id ?? ""} onChange={(e) => setF({ ...f, emsbox_id: e.target.value })}>
               <option value="">přímo (server)</option>
               {boxes.map((b) => (
-                <option key={b.id} value={b.id}>📦 {b.name}{b.locality_name ? ` (${b.locality_name})` : ""}</option>))}
+                <option key={b.id} value={b.id}>📦 {b.name} #{b.id}{b.locality_name ? ` (${b.locality_name})` : ""}{b.status !== "online" ? " 🔴" : ""}</option>))}
             </select>
           </div>
+          {f.emsbox_id !== "" && f.emsbox_id != null && (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Transport na boxu</label>
+              <select value={f.transport} onChange={(e) => setF({ ...f, transport: e.target.value })}>
+                <option value="modbus_tcp">Modbus TCP (LAN stick)</option>
+                <option value="modbus_rtu">Modbus RTU (RS485 kabel)</option>
+              </select>
+            </div>)}
+          {f.emsbox_id !== "" && f.emsbox_id != null && f.transport === "modbus_rtu" && (<>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Sériový port na boxu</label>
+              <input style={{ minWidth: 260 }} value={f.serial_port} placeholder="/dev/ttyUSB0 (lépe /dev/serial/by-id/…)"
+                     onChange={(e) => setF({ ...f, serial_port: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0, maxWidth: 90 }}>
+              <label>Baud</label>
+              <input value={f.baudrate} onChange={(e) => setF({ ...f, baudrate: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0, maxWidth: 70 }}>
+              <label>Parita</label>
+              <select value={f.parity} onChange={(e) => setF({ ...f, parity: e.target.value })}>
+                <option>N</option><option>E</option><option>O</option>
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 0, maxWidth: 70 }}>
+              <label>Stop</label>
+              <input value={f.stopbits} onChange={(e) => setF({ ...f, stopbits: e.target.value })} />
+            </div>
+          </>)}
         </div>
 
         <div className="row" style={{ marginTop: 12 }}>

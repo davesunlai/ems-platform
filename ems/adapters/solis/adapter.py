@@ -67,17 +67,26 @@ class SolisAdapter:
     def __init__(
         self,
         device_id: str,
-        host: str,
+        host: str = "",
         port: int = 502,
         unit: int = 1,
         device_type: str = "storage",
         battery_pack: int = 1,
         battery_packs="auto",
         timeout: float = 3.0,
+        serial_port: str | None = None,     # RS485 (Modbus RTU): /dev/serial/by-id/... — má přednost před TCP
+        baudrate: int = 9600,
+        parity: str = "N",
+        stopbits: int = 1,
+        bytesize: int = 8,
+        **_ignored,
     ) -> None:
         self.device_id = device_id
         self.host = host
         self.port = int(port)
+        self.serial_port = serial_port
+        self.baudrate, self.parity = int(baudrate), str(parity or "N").upper()[:1]
+        self.stopbits, self.bytesize = int(stopbits), int(bytesize)
         self.unit = int(unit)            # Modbus device_id / unit (jedno spojení čte vše)
         self.device_type = str(device_type)
         self.battery_pack = int(battery_pack)
@@ -90,6 +99,18 @@ class SolisAdapter:
         await asyncio.to_thread(self._connect_sync)
 
     def _connect_sync(self) -> None:
+        if self.serial_port:
+            # RS485 přímo do COM portu střídače — obchází LAN stick (jediný master na sběrnici!)
+            from pymodbus.client import ModbusSerialClient
+            self._client = ModbusSerialClient(port=self.serial_port, baudrate=self.baudrate,
+                                              parity=self.parity, stopbits=self.stopbits,
+                                              bytesize=self.bytesize, timeout=self.timeout)
+            if not self._client.connect():
+                raise RuntimeError(f"Nelze otevřít sériový port {self.serial_port}")
+            logger.info("Připojeno k Solis '%s' přes RS485 %s (%s %s%s%s, unit=%s)",
+                        self.device_id, self.serial_port, self.baudrate,
+                        self.bytesize, self.parity, self.stopbits, self.unit)
+            return
         from pymodbus.client import ModbusTcpClient  # lazy: jen pokud se solis použije
 
         self._client = ModbusTcpClient(self.host, port=self.port, timeout=self.timeout)
