@@ -47,6 +47,8 @@ class ModuleCreate(BaseModel):
 
 class ModuleUpdate(BaseModel):
     name: str | None = None
+    emsbox_id: int | None = None            # NULL/-1 = přímé čtení frantou
+    transport_params: dict | None = None    # rtu/tcp/http parametry pro EMSBOX
     kind: ModuleKind | None = None
     device_type: DeviceType | None = None
     adapter: str | None = None

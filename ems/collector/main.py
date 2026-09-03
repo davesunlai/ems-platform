@@ -249,6 +249,8 @@ async def run() -> None:
         await planner_db.ensure_schema()
         from ems.heatpump import db as hp_db
         await hp_db.ensure_schema()
+        from ems.emsbox import db as eb_db
+        await eb_db.ensure_schema()
         from ems.alerts import db as alerts_db
         await alerts_db.ensure_schema()
     except Exception as exc:
@@ -281,6 +283,7 @@ async def run() -> None:
             await tick_market_and_automation(state)
             await tick_forecast(state)
             await tick_planner(state)
+            await tick_alerts()
             await tick_force_keepalive(state)
             await tick_notify(state)
             try:
@@ -315,6 +318,21 @@ async def tick_forecast(state: dict) -> None:
 
 
 _PV_SNAP_DONE: dict[int, str] = {}
+
+
+_ALERT_LAST = {"t": 0.0}
+
+
+async def tick_alerts() -> None:
+    import time as _time
+    if _time.monotonic() - _ALERT_LAST["t"] < 60:
+        return
+    _ALERT_LAST["t"] = _time.monotonic()
+    try:
+        from ems.emsbox import alerts as eb_alerts
+        await eb_alerts.evaluate()
+    except Exception as exc:
+        logger.debug("alert evaluator: %s", exc)
 
 
 async def tick_planner(state: dict) -> None:

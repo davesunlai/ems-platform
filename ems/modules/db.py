@@ -87,7 +87,7 @@ async def list_enabled_reads() -> list[Module]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT * FROM modules WHERE enabled = TRUE AND kind = 'source_read' ORDER BY id"
+            "SELECT * FROM modules WHERE enabled = TRUE AND kind = 'source_read' AND emsbox_id IS NULL ORDER BY id"
         )
     return [_row_to_module(r) for r in rows]
 
@@ -116,6 +116,11 @@ async def update(module_id: str, patch: dict) -> Module | None:
             args.append(val); sets.append(f"{col} = ${len(args)}")
     if patch.get("params") is not None:
         args.append(json.dumps(patch["params"])); sets.append(f"params = ${len(args)}::jsonb")
+    if patch.get("transport_params") is not None:
+        args.append(json.dumps(patch["transport_params"])); sets.append(f"transport_params = ${len(args)}::jsonb")
+    if "emsbox_id" in patch and patch["emsbox_id"] is not None:
+        v = patch["emsbox_id"]
+        args.append(None if int(v) < 0 else int(v)); sets.append(f"emsbox_id = ${len(args)}")
     if not sets:
         return None
     args.append(module_id)
