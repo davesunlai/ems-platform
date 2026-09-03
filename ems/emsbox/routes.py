@@ -57,6 +57,19 @@ async def box_config(box_id: int, request: Request, box: dict = Depends(box_auth
     return Response(content=body, media_type="application/json", headers={"ETag": etag})
 
 
+@router.get("/emsboxes")
+async def all_boxes(_: dict = Depends(read)) -> list[dict]:
+    """Všechny boxy (pro výběr v Modulech)."""
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT e.id, e.name, e.status, e.locality_id, l.name AS locality_name "
+            "FROM emsbox e LEFT JOIN localities l ON l.id = e.locality_id "
+            "WHERE e.status != 'disabled' ORDER BY e.id")
+    return [dict(r) for r in rows]
+
+
 # --- uživatelské CRUD -------------------------------------------------------
 class BoxCreate(BaseModel):
     name: str = "EMSBOX"

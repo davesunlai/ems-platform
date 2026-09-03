@@ -29,7 +29,9 @@ export default function Modules() {
   const [err, setErr] = useState("");
   const [f, setF] = useState(emptyForm());
   const [editing, setEditing] = useState(null);   // id editovaného modulu, nebo null
-  const [avail, setAvail] = useState([]);          // metriky, které modul reálně posílá
+  const [avail, setAvail] = useState([]);
+  const [boxes, setBoxes] = useState([]);
+  useEffect(() => { api.emsboxAll().then(setBoxes).catch(() => {}); }, []);          // metriky, které modul reálně posílá
 
   const load = () => api.listModules().then(setMods).catch((e) => setErr(e.message));
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
@@ -75,6 +77,7 @@ export default function Modules() {
     api.latest(m.id).then((l) => setAvail(Object.keys(l.metrics || {}))).catch(() => setAvail([]));
     setF({
       id: m.id, name: m.name || "", adapter: m.adapter, device_type: m.device_type, kind: m.kind,
+      emsbox_id: m.emsbox_id ?? "",
       host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : 8899),
       device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1, battery_packs: p.battery_packs ?? "auto",
       cmi_user: p.user ?? "admin", cmi_pass: p.password ?? "", cmi_node: p.node ?? 2,
@@ -88,9 +91,12 @@ export default function Modules() {
   const save = async () => {
     setErr("");
     try {
+      const viaBox = f.emsbox_id !== "" && f.emsbox_id != null;
       await api.updateModule(editing, {
         name: f.name, adapter: f.adapter, device_type: f.device_type,
         kind: f.kind, params: buildParams(),
+        emsbox_id: viaBox ? Number(f.emsbox_id) : -1,
+        ...(viaBox ? { transport_params: { transport: "modbus_tcp" } } : {}),
       });
       setEditing(null); setF(emptyForm()); load();
     } catch (e) { setErr(e.message); }
@@ -139,6 +145,14 @@ export default function Modules() {
             <label>Typ zařízení</label>
             <select value={f.device_type} onChange={(e) => setF({ ...f, device_type: e.target.value })}>
               {DTYPES.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Připojení</label>
+            <select value={f.emsbox_id ?? ""} onChange={(e) => setF({ ...f, emsbox_id: e.target.value })}>
+              <option value="">přímo (server)</option>
+              {boxes.map((b) => (
+                <option key={b.id} value={b.id}>📦 {b.name}{b.locality_name ? ` (${b.locality_name})` : ""}</option>))}
             </select>
           </div>
         </div>

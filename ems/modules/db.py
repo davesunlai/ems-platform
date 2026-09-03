@@ -39,6 +39,9 @@ def _row_to_module(row) -> Module:
         params=json.loads(row["params"]) if isinstance(row["params"], str) else row["params"],
         region=row["region"], enabled=row["enabled"],
         locality_id=row.get("locality_id"),
+        emsbox_id=row.get("emsbox_id"),
+        transport_params=(json.loads(row["transport_params"]) if isinstance(row.get("transport_params"), str)
+                          else row.get("transport_params")),
     )
 
 
@@ -87,7 +90,7 @@ async def list_enabled_reads() -> list[Module]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT * FROM modules WHERE enabled = TRUE AND kind = 'source_read' AND emsbox_id IS NULL ORDER BY id"
+            "SELECT * FROM modules WHERE enabled = TRUE AND kind = 'source_read' ORDER BY id"
         )
     return [_row_to_module(r) for r in rows]
 

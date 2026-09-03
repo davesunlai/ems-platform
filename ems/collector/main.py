@@ -197,16 +197,29 @@ async def reconcile(active: dict, sink) -> None:
     except Exception as exc:
         logger.warning("Načtení registru modulů selhalo, ponechávám stávající: %s", exc)
         return
-    wanted_by_id = {m.id: m for m in wanted}
+    # Moduly čtené EMSBOXem: čtení dělá box, ale POVELY (planner/ruční) jedou dál
+    # přímo z franty → s control_enabled zůstávají připojené v režimu control-only.
+    # (Povelový kanál přes box = pozdější fáze; bez control_enabled se nepřipojují vůbec.)
+    wanted_by_id = {}
+    control_only_ids = set()
+    for m in wanted:
+        if getattr(m, "emsbox_id", None):
+            if (m.params or {}).get("control_enabled"):
+                wanted_by_id[m.id] = m
+                control_only_ids.add(m.id)
+        else:
+            wanted_by_id[m.id] = m
 
     # připoj nové + reconnectuj změněné
     for mid, m in wanted_by_id.items():
-        sig = _module_sig(m)
+        sig = _module_sig(m) + ("|box" if m.id in control_only_ids else "")
         cur = active.get(mid)
         if cur is None:
             try:
-                active[mid] = {"adapter": await _connect_module(m), "sig": sig}
-                logger.info("Modul připojen: %s (adaptér=%s)", mid, m.adapter)
+                active[mid] = {"adapter": await _connect_module(m), "sig": sig,
+                               "control_only": mid in control_only_ids}
+                logger.info("Modul připojen: %s (adaptér=%s%s)", mid, m.adapter,
+                            ", jen povely — čte EMSBOX" if mid in control_only_ids else "")
             except Exception as exc:
                 logger.warning("Připojení modulu '%s' selhalo (zkusím příště): %s", mid, exc)
         elif cur["sig"] != sig:
@@ -216,7 +229,8 @@ async def reconcile(active: dict, sink) -> None:
             except Exception:
                 pass
             try:
-                active[mid] = {"adapter": await _connect_module(m), "sig": sig}
+                active[mid] = {"adapter": await _connect_module(m), "sig": sig,
+                               "control_only": mid in control_only_ids}
                 logger.info("Modul přenastaven za běhu: %s (nové parametry)", mid)
             except Exception as exc:
                 del active[mid]  # spadlo -> příští cyklus zkusí jako nový
@@ -278,7 +292,8 @@ async def run() -> None:
         while not stop.is_set():
             await reconcile(active, sink)
             if active:
-                await asyncio.gather(*(poll_device(e["adapter"], sink) for e in active.values()))
+                await asyncio.gather(*(poll_device(e["adapter"], sink)
+                                       for e in active.values() if not e.get("control_only")))
                 await process_queue(active)
             await tick_market_and_automation(state)
             await tick_forecast(state)

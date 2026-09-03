@@ -58,6 +58,7 @@ export const api = {
   commandStatus: (cmdId) => request(`/api/control/command/${cmdId}`),
   listOutputs: () => request("/api/outputs"),
   syncEwelink: () => request("/api/outputs/sync-ewelink", { method: "POST" }),
+  emsboxAll: () => request("/api/emsboxes"),
   emsboxList: (locId) => request(`/api/localities/${locId}/emsboxes`),
   emsboxCreate: (locId, name) => request(`/api/localities/${locId}/emsboxes`, { method: "POST", body: { name } }),
   emsboxDelete: (boxId) => request(`/api/emsbox/${boxId}`, { method: "DELETE" }),

@@ -32,6 +32,8 @@ class Module(BaseModel):
     region: str = "CZ"
     enabled: bool = True
     locality_id: int | None = None
+    emsbox_id: int | None = None
+    transport_params: dict | None = None
 
 
 class ModuleCreate(BaseModel):
