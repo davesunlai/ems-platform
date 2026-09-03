@@ -358,17 +358,27 @@ def _sysinfo() -> dict:
                 pass
     ssid = None
     if wifi_up:
-        try:      # RPi OS legacy: wpa_supplicant.conf
-            m = re.search(r'ssid="([^"]+)"', open("/host/etc/wpa_supplicant/wpa_supplicant.conf").read())
-            ssid = m.group(1) if m else None
-        except Exception:
-            pass
-        if not ssid:  # NetworkManager (Bookworm)
-            for f in glob.glob("/host/etc/NetworkManager/system-connections/*"):
+        import subprocess
+        for iface in glob.glob("/sys/class/net/*"):
+            if not os.path.isdir(iface + "/wireless"):
+                continue
+            name = os.path.basename(iface)
+            try:  # PRIMÁRNĚ ovladač (iw) — říká, k čemu je wifi REÁLNĚ připojená
+                out = subprocess.run(["iw", "dev", name, "link"], capture_output=True,
+                                     text=True, timeout=5).stdout
+                m = re.search(r"^\s*SSID:\s*(.+)$", out, re.M)
+                if m:
+                    ssid = m.group(1).strip()
+                    break
+            except Exception:
+                pass
+        if not ssid:  # fallback: config soubory (wpa_supplicant vč. per-interface, NetworkManager)
+            for f in (glob.glob("/host/etc/wpa_supplicant/wpa_supplicant*.conf")
+                      + glob.glob("/host/etc/NetworkManager/system-connections/*")):
                 try:
-                    m = re.search(r"^ssid=(.+)$", open(f).read(), re.M)
+                    m = re.search(r'ssid="([^"]+)"', open(f).read()) or re.search(r"^ssid=(.+)$", open(f).read(), re.M)
                     if m:
-                        ssid = m.group(1).strip()
+                        ssid = m.group(1).strip().strip('"')
                         break
                 except Exception:
                     pass
