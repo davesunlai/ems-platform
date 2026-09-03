@@ -84,13 +84,13 @@ _PAGE = """<!doctype html><html lang="cs"><head><meta charset="utf-8">
 async function j(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||r.status);return r.json()}
 function esc(s){return String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 async function render(){
- let a;try{a=await j("/api/auth-state")}catch(e){document.getElementById("app").innerHTML="<div class=card><span class=bad>Agent neodpovídá</span></div>";return}
- if(!a.authed||!a.password_set){
-  document.getElementById("sub").textContent=a.password_set?"zamčeno — zadej heslo boxu":"první spuštění — nastav heslo boxu";
-  document.getElementById("app").innerHTML=`<div class="card"><b>${a.password_set?"Přihlášení":"Nastavení hesla boxu"}</b>
-   ${a.password_set?"":'<div class="muted">Heslo chrání lokální správu boxu. Zadává se jednou a nemění se.</div>'}
+ let auth;try{auth=await j("/api/auth-state")}catch(e){document.getElementById("app").innerHTML="<div class=card><span class=bad>Agent neodpovídá</span></div>";return}
+ if(!auth.authed||!auth.password_set){
+  document.getElementById("sub").textContent=auth.password_set?"zamčeno — zadej heslo boxu":"první spuštění — nastav heslo boxu";
+  document.getElementById("app").innerHTML=`<div class="card"><b>${auth.password_set?"Přihlášení":"Nastavení hesla boxu"}</b>
+   ${auth.password_set?"":'<div class="muted">Heslo chrání lokální správu boxu. Zadává se jednou a nemění se.</div>'}
    <label class="muted">Heslo</label><input id="pw" type="password">
-   <button onclick="authGo(${a.password_set})">${a.password_set?"Přihlásit":"Nastavit a pokračovat"}</button>
+   <button onclick="authGo(${auth.password_set})">${auth.password_set?"Přihlásit":"Nastavit a pokračovat"}</button>
    <div id="amsg" class="bad" style="margin-top:8px"></div></div>`;
   return;
  }
