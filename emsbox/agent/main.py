@@ -73,6 +73,8 @@ class Agent:
         self.adapters: dict[str, object] = {}
         self.dev_state: dict[str, dict] = {}     # uid -> {last_read_ts, ok, error}
         self.started = time.monotonic()
+        self.online = False
+        self.last_sync_ts: str | None = None
 
     # --- config ------------------------------------------------------------
     async def refresh_config(self) -> None:
@@ -137,11 +139,14 @@ class Agent:
                 res = await self.link.send_telemetry(batch, _now_iso())
                 self.buffer.ack([r["_id"] for r in batch])
                 backoff = 5.0
+                self.last_sync_ts = _now_iso()
+                self.online = True
                 logger.info("sync: %s řádků (accepted %s, dup %s), buffer %s",
                             len(batch), res.get("accepted"), res.get("duplicates"),
                             self.buffer.stats()["rows"])
                 await asyncio.sleep(1.0)         # max 1 batch/s
             except Exception as exc:
+                self.online = False
                 logger.warning("sync selhal (%s) — retry za %.0f s", exc, backoff)
                 await asyncio.sleep(backoff + random.uniform(0, backoff / 3))
                 backoff = min(backoff * 2, 300.0)
@@ -162,7 +167,9 @@ class Agent:
                     "devices": [{"device_uid": uid, **s} for uid, s in self.dev_state.items()]}
             try:
                 await self.link.heartbeat(body)
+                self.online = True
             except Exception as exc:
+                self.online = False
                 logger.debug("heartbeat selhal: %s", exc)
             await asyncio.sleep(int(self.cfg.get("settings", {}).get("heartbeat_s", 60)))
 
@@ -202,10 +209,70 @@ def main() -> None:
         print(f"Spárováno: box_id={res['box_id']} (credentials uloženy)")
         return
 
-    cred = load_credentials()
-    if not cred:
-        raise SystemExit("Box není spárovaný — nejdřív: python -m emsbox.agent pair --code XXXXXXXX")
-    asyncio.run(Agent(cred).run())
+    asyncio.run(run_with_ui())
+
+
+async def run_with_ui() -> None:
+    """Lokální web UI běží VŽDY (párovací wizard z mobilu); agent smyčky se
+    spouštějí/zastavují podle přítomnosti credentials — vše bez restartu."""
+    import uvicorn
+    from emsbox.localui.app import create_app
+    from .serverlink import ServerLink as SL
+
+    state: dict = {"cred": load_credentials(), "agent": None, "started": time.monotonic()}
+    tasks: dict = {"agent": None}
+
+    async def start_agent() -> None:
+        if tasks["agent"] is not None or not state["cred"]:
+            return
+        agent = Agent(state["cred"])
+        state["agent"] = agent
+        tasks["agent"] = asyncio.create_task(agent.run())
+        logger.info("agent smyčky spuštěny (box_id=%s)", state["cred"]["box_id"])
+
+    async def stop_agent() -> None:
+        t = tasks.pop("agent", None)
+        tasks["agent"] = None
+        if t:
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+        a = state.get("agent")
+        if a:
+            try:
+                await a.link.close()
+            except Exception:
+                pass
+        state["agent"] = None
+
+    async def on_pair(server: str, code: str) -> dict:
+        res = await SL.pair(server, code, _hw_info())
+        save_credentials(server, res["box_id"], res["box_token"])
+        state["cred"] = load_credentials()
+        await start_agent()
+        return {"ok": True, "box_id": res["box_id"]}
+
+    async def on_unpair() -> dict:
+        await stop_agent()
+        Path(os.environ.get("EMSBOX_CRED", "/data/credentials.json")).unlink(missing_ok=True)
+        state["cred"] = None
+        return {"ok": True}
+
+    state["on_pair"] = on_pair
+    state["on_unpair"] = on_unpair
+    app = create_app(state)
+    await start_agent()
+    port = int(os.environ.get("EMSBOX_HTTP_PORT", "80"))
+    logger.info("lokální UI: http://<ip-boxu>%s", "" if port == 80 else f":{port}")
+    server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))
+    await server.serve()
+
+
+def _hw_info() -> dict:
+    import platform
+    return {"machine": platform.machine(), "system": platform.system(), "node": platform.node()}
 
 
 if __name__ == "__main__":
