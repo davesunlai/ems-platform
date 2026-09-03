@@ -8,6 +8,7 @@ import Reset from "./pages/Reset";
 import ChangePassword from "./pages/ChangePassword";
 import Dashboard from "./pages/Dashboard";
 import HeatPump from "./pages/HeatPump";
+import Emsboxes from "./pages/Emsboxes";
 import Users from "./pages/Users";
 import Modules from "./pages/Modules";
 import Control from "./pages/Control";
@@ -28,6 +29,7 @@ export default function App() {
           <Route element={<ProtectedRoute permission="read"><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/heatpump" element={<HeatPump />} />
+            <Route path="/emsboxes" element={<Emsboxes />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/vzhled" element={<Vzhled />} />
             <Route path="/users" element={

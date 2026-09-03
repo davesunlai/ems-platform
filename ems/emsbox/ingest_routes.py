@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ems.core.model import Metric, UNIT_OF
@@ -59,10 +59,18 @@ async def ingest_telemetry(body: TelemetryBody, box: dict = Depends(box_auth)) -
     return {"ack": body.batch_id, "accepted": accepted, "duplicates": dup, "skipped": skipped}
 
 
+def _client_ip(request: Request) -> str | None:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
 @router.post("/heartbeat")
-async def ingest_heartbeat(body: dict, box: dict = Depends(box_auth)) -> dict:
+async def ingest_heartbeat(body: dict, request: Request, box: dict = Depends(box_auth)) -> dict:
     if body.get("box_id") != box["id"]:
         raise HTTPException(status_code=403, detail="box_id nesouhlasí s tokenem")
+    body["_public_ip"] = _client_ip(request)
     await db.heartbeat(box["id"], body)
     return {"ok": True}
 

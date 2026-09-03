@@ -88,6 +88,20 @@ async def ensure_schema() -> None:
                 detail JSONB
             )
             """)
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS public_ip TEXT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS private_ip TEXT")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS emsbox_announce (
+                fingerprint TEXT PRIMARY KEY,
+                private_ip TEXT,
+                public_ip TEXT,
+                agent_version TEXT,
+                hw JSONB,
+                first_seen TIMESTAMPTZ DEFAULT now(),
+                last_seen TIMESTAMPTZ DEFAULT now()
+            )
+            """)
         await conn.execute("ALTER TABLE modules ADD COLUMN IF NOT EXISTS emsbox_id INT REFERENCES emsbox(id)")
         await conn.execute("ALTER TABLE modules ADD COLUMN IF NOT EXISTS transport_params JSONB")
 
@@ -202,6 +216,40 @@ async def touch_ingest(box_id: int, accepted: int) -> None:
             "AND r.scope = 'emsbox' AND r.kind = 'offline' AND r.target_id = $1", box_id, accepted)
 
 
+async def announce(fingerprint: str, private_ip: str | None, public_ip: str | None,
+                   agent_version: str | None, hw: dict | None) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO emsbox_announce (fingerprint, private_ip, public_ip, agent_version, hw) "
+            "VALUES ($1, $2, $3, $4, $5) "
+            "ON CONFLICT (fingerprint) DO UPDATE SET private_ip=$2, public_ip=$3, "
+            "agent_version=$4, hw=$5, last_seen=now()",
+            fingerprint, private_ip, public_ip, agent_version, json.dumps(hw or {}))
+        await conn.execute("DELETE FROM emsbox_announce WHERE last_seen < now() - interval '7 days'")
+
+
+async def overview() -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        boxes = await conn.fetch(
+            "SELECT e.id, e.name, e.status, e.locality_id, l.name AS locality_name, "
+            "e.last_heartbeat, e.last_ingest, e.buffer_rows, e.clock_drift_s, e.agent_version, "
+            "e.public_ip, e.private_ip, e.created_at "
+            "FROM emsbox e LEFT JOIN localities l ON l.id = e.locality_id "
+            "WHERE e.status != 'disabled' ORDER BY e.id")
+        ann = await conn.fetch(
+            "SELECT fingerprint, private_ip, public_ip, agent_version, hw, first_seen, last_seen "
+            "FROM emsbox_announce WHERE last_seen > now() - interval '10 minutes' ORDER BY last_seen DESC")
+    def iso(d, keys):
+        for k in keys:
+            if d.get(k):
+                d[k] = d[k].isoformat()
+        return d
+    return {"boxes": [iso(dict(r), ("last_heartbeat", "last_ingest", "created_at")) for r in boxes],
+            "unpaired": [iso(dict(r), ("first_seen", "last_seen")) for r in ann]}
+
+
 async def heartbeat(box_id: int, body: dict) -> None:
     drift = None
     bt = body.get("box_time")
@@ -215,10 +263,12 @@ async def heartbeat(box_id: int, body: dict) -> None:
         await conn.execute(
             "UPDATE emsbox SET last_heartbeat = now(), buffer_rows = $2, buffer_oldest_ts = $3, "
             "clock_drift_s = $4, heartbeat_devices = $5, agent_version = $6, "
+            "private_ip = COALESCE($7, private_ip), public_ip = COALESCE($8, public_ip), "
             "status = CASE WHEN status = 'offline' THEN 'online' ELSE status END WHERE id = $1",
             box_id, body.get("buffer_rows"),
             datetime.fromisoformat(body["buffer_oldest_ts"].replace("Z", "+00:00")) if body.get("buffer_oldest_ts") else None,
-            drift, json.dumps(body.get("devices") or []), body.get("agent_version"))
+            drift, json.dumps(body.get("devices") or []), body.get("agent_version"),
+            body.get("private_ip"), body.get("_public_ip"))
 
 
 # --- boxy / alerty (uživatelské) -------------------------------------------

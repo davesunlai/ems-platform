@@ -21,6 +21,29 @@ class PairBody(BaseModel):
     hw_info: dict | None = None
 
 
+class AnnounceBody(BaseModel):
+    fingerprint: str
+    private_ip: str | None = None
+    agent_version: str | None = None
+    hw: dict | None = None
+
+
+@router.post("/emsbox/announce")
+async def announce(body: AnnounceBody, request: Request) -> dict:
+    """Public: nespárovaný box se ohlásí (otisk HW + privátní IP; veřejnou vidí server).
+    Ukládá se jen minimum, TTL úklid 7 dní, v přehledu se ukazují čerstvé (<10 min)."""
+    xff = request.headers.get("x-forwarded-for")
+    pub = xff.split(",")[0].strip() if xff else (request.client.host if request.client else None)
+    await db.announce(body.fingerprint[:128], body.private_ip, pub, body.agent_version, body.hw)
+    return {"ok": True}
+
+
+@router.get("/emsboxes/overview")
+async def emsboxes_overview(_: dict = Depends(read)) -> dict:
+    """Flotila: všechny spárované boxy (vč. IP) + nespárované ohlášené boxy."""
+    return await db.overview()
+
+
 @router.post("/emsbox/pair")
 async def pair(body: PairBody) -> dict:
     """Public + párovací kód (1 h platnost, jednorázový)."""

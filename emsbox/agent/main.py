@@ -166,6 +166,7 @@ class Agent:
             except Exception:
                 pass
             body = {"box_time": _now_iso(), "uptime_s": int(time.monotonic() - self.started),
+                    "private_ip": _private_ip(),
                     "buffer_rows": st["rows"], "buffer_oldest_ts": st["oldest_ts"],
                     "disk_free_mb": disk_free, "agent_version": AGENT_VERSION,
                     "devices": [{"device_uid": uid, **s} for uid, s in self.dev_state.items()]}
@@ -300,10 +301,28 @@ async def run_with_ui() -> None:
         state["cred"] = None
         return {"ok": True}
 
+    async def announce_loop() -> None:
+        """Nespárovaný box se hlásí serveru (přehled flotily na teraems) à 60 s."""
+        import httpx
+        server = os.environ.get("EMSBOX_SERVER", "https://teraems.com").rstrip("/")
+        fp = _fingerprint()
+        while True:
+            if not state.get("cred"):
+                try:
+                    async with httpx.AsyncClient(timeout=15.0) as c:
+                        await c.post(f"{server}/api/emsbox/announce",
+                                     json={"fingerprint": fp, "private_ip": _private_ip(),
+                                           "agent_version": AGENT_VERSION, "hw": _hw_info()})
+                except Exception:
+                    pass
+            await asyncio.sleep(60)
+
+    asyncio.get_event_loop() if False else None
     state["on_pair"] = on_pair
     state["on_unpair"] = on_unpair
     app = create_app(state)
     await start_agent()
+    asyncio.create_task(announce_loop())
     port = int(os.environ.get("EMSBOX_HTTP_PORT", "80"))
     logger.info("lokální UI: http://<ip-boxu>%s", "" if port == 80 else f":{port}")
     server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))
@@ -313,6 +332,27 @@ async def run_with_ui() -> None:
 def _hw_info() -> dict:
     import platform
     return {"machine": platform.machine(), "system": platform.system(), "node": platform.node()}
+
+
+def _private_ip() -> str | None:
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return None
+
+
+def _fingerprint() -> str:
+    try:
+        with open("/etc/machine-id") as f:
+            return "mid-" + f.read().strip()
+    except Exception:
+        import uuid
+        return "mac-" + hex(uuid.getnode())
 
 
 if __name__ == "__main__":

@@ -122,6 +122,7 @@ export default function Layout() {
           <NavLink to="/" end>Dashboard</NavLink>
           {has("control") && <NavLink to="/control">Řízení</NavLink>}
           <NavLink to="/heatpump">🌀 TČ</NavLink>
+          <NavLink to="/emsboxes">📦 EMSBOXy</NavLink>
           {has("admin") && <NavLink to="/automation">SPOT</NavLink>}
           {has("admin") && <NavLink to="/ewelink">eWeLink</NavLink>}
           {has("admin") && <NavLink to="/localities">Lokality</NavLink>}
