@@ -356,7 +356,10 @@ class SolisAdapter:
             explicit = str(self.battery_packs).isdigit()
             candidates = ([p for p in range(1, int(self.battery_packs) + 1) if p in BATTERY_PACKS]
                           if explicit else list(BATTERY_PACKS))   # "auto" -> zkus všechny
-            bdir = pack_fields(1).get("direction")   # směr 33135 platí pro celou baterii (packy paralelně)
+            # Směr je PER-PACK (33135 pro B1, 34291 pro B2)! Dřívější předpoklad „směr B1
+            # platí pro celou baterii" lhal při asymetrii packů (B1 v klidu drží směr 0=nabíjí,
+            # zatímco B2 vybíjí) — projevilo se 3.9.2026 večer: schéma hlásilo „nabíjí 4,3 kW"
+            # u reálně vybíjející baterie. Fallback na směr druhého packu jen když vlastní chybí.
             socs, powers = [], []
             for pid in candidates:
                 d = pack_fields(pid)
@@ -369,7 +372,10 @@ class SolisAdapter:
                 add(volt_m[pid], volt)
                 add(curr_m[pid], curr)
                 if volt is not None and curr is not None:
-                    p = _battery_power(volt, curr, bdir)
+                    own_dir = d.get("direction")
+                    if own_dir is None:
+                        own_dir = pack_fields(1 if pid == 2 else 2).get("direction")
+                    p = _battery_power(volt, curr, own_dir)
                     add(pow_m[pid], p)
                     powers.append(p)
                 add(soh_m[pid], d.get("soh"))
@@ -377,10 +383,36 @@ class SolisAdapter:
             if socs:
                 add(Metric.BATTERY_SOC, sum(socs) / len(socs))   # průměr (pro souhrn)
             if powers:
-                add(Metric.BATTERY_POWER, sum(powers))           # součet (pro graf/souhrn)
+                tot_p = sum(powers)
+                add(Metric.BATTERY_POWER, tot_p)                 # součet (pro graf/souhrn)
+                # Sanity guard: znaménko výkonu vs. trend SoC. Kdyby zase nějaký směrový
+                # registr lhal, ať to není potichu — jen warning, žádné tiché otáčení.
+                if socs:
+                    self._soc_guard(sum(socs) / len(socs), tot_p)
             # LOAD_POWER / BACKUP: registry pro 3f model zatím nepotvrzené (brief §9).
 
         return Reading(device_id=self.device_id, timestamp=utcnow(), measurements=measurements)
+
+    def _soc_guard(self, soc: float, power_w: float) -> None:
+        import time as _t
+        now = _t.monotonic()
+        hist = getattr(self, "_soc_hist", None)
+        if hist is None:
+            hist = self._soc_hist = []
+            self._soc_warn_ts = 0.0
+        hist.append((now, soc))
+        while hist and now - hist[0][0] > 900:
+            hist.pop(0)
+        if len(hist) < 2 or now - hist[0][0] < 600 or abs(power_w) < 800:
+            return
+        dsoc = soc - hist[0][1]
+        if (power_w > 0 and dsoc < -1.0) or (power_w < 0 and dsoc > 1.0):
+            if now - self._soc_warn_ts > 600:
+                self._soc_warn_ts = now
+                logger.warning(
+                    "Solis '%s': znaménko battery_power (%+.0f W) nesedí s trendem SoC "
+                    "(Δ %.1f %% za %.0f min) — zkontroluj směrové registry 33135/34291!",
+                    self.device_id, power_w, dsoc, (now - hist[0][0]) / 60)
 
     async def read_raw(self) -> dict:
         """Pomůcka pro ladění: přečte klíčové registry a vrátí surové hodnoty."""

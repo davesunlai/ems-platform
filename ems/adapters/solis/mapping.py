@@ -35,7 +35,8 @@ BATTERY_PACKS = {
     2: {
         "soc": (34278, "u16", 1.0),
         "voltage": (34289, "u16", 0.1),
-        "current": (34290, "s16", 0.1),   # kandidát dle briefu §10 — ověřit živě
+        "current": (34290, "s16", 0.1),   # MAGNITUDA (ověřeno živě 3.9.2026: +2.2 A při vybíjení)
+        "direction": (34291, "u16", 1.0), # 0 = nabíjení, 1 = vybíjení — OVĚŘENO živě (34291=1 při vybíjení B2)
         "soh": (34279, "u16", 1.0),
         "temp": (34282, "s16", 0.1),      # 34281 vracelo nesmysl -> alternativa 34282
     },
@@ -48,7 +49,7 @@ BLOCK_SYS1 = (33029, 30)   # 33029..33058: energie celk./dnes, PV stringy, FVE v
 BLOCK_SYS2 = (33073, 21)   # 33073..33093: 3f napětí L1-3 + teplota měniče
 BLOCK_GRID = (33130, 2)    # 33130..33131: síťový meter (S32)
 BLOCK_BAT1 = (33133, 18)   # 33133..33150: baterie 1
-BLOCK_BAT2 = (34275, 16)   # 34275..34290: baterie 2
+BLOCK_BAT2 = (34275, 17)   # 34275..34291: baterie 2 (vč. směrového registru 34291)
 
 # --- ŘÍDICÍ (holding) registry — FC03 čtení / FC06 zápis. ---
 # POZOR: scale a sémantika u 3f 50kW modelu NEPOTVRZENO (brief §11, hodnoty
