@@ -31,7 +31,9 @@ async function j(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error((await r
 function esc(s){return String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 async function render(){
  let s;try{s=await j("/api/status")}catch(e){document.getElementById("app").innerHTML="<div class=card><span class=bad>Agent neodpovídá</span></div>";return}
- document.getElementById("sub").textContent=s.paired?("spárováno se "+s.server+" · box #"+s.box_id):"nespárováno — zadej párovací kód";
+ document.getElementById("sub").textContent=s.paired
+   ?((s.box_name||"EMSBOX")+(s.locality?" · lokalita "+s.locality:"")+" · box #"+s.box_id+" · "+s.server)
+   :"nespárováno — zadej párovací kód";
  const a=document.getElementById("app");
  if(!s.paired){
   a.innerHTML=`<div class="card"><b>Párování</b>
@@ -84,6 +86,8 @@ def create_app(state: dict) -> FastAPI:
                "buffer_rows": 0, "buffer_oldest": None, "last_sync": None, "online": False, "devices": []}
         if agent is not None:
             st = agent.buffer.stats()
+            out["box_name"] = agent.cfg.get("box_name")
+            out["locality"] = (agent.cfg.get("locality") or {}).get("name")
             out.update(buffer_rows=st["rows"], buffer_oldest=st["oldest_ts"],
                        last_sync=getattr(agent, "last_sync_ts", None),
                        online=getattr(agent, "online", False))

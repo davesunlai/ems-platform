@@ -456,7 +456,7 @@ function EmsboxCard({ locId }) {
         <div key={b.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", marginBottom: 6,
                                  display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", fontSize: 12.5 }}>
           <span style={{ fontSize: 14 }}>{b.status === "online" ? "🟢" : b.status === "pairing" ? "🟡" : "🔴"}</span>
-          <b>{b.name}</b>
+          <b>{b.name}</b><span className="muted">#{b.id}</span>
           <span className="muted">heartbeat {ago(b.last_heartbeat)}</span>
           <span className="muted">ingest {ago(b.last_ingest)}</span>
           {b.buffer_rows != null && <span className="muted">buffer {b.buffer_rows} ř.{b.buffer_oldest_ts ? ` (od ${new Date(b.buffer_oldest_ts).toLocaleString("cs-CZ")})` : ""}</span>}

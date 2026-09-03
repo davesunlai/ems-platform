@@ -48,7 +48,16 @@ async def box_config(box_id: int, request: Request, box: dict = Depends(box_auth
             "params": {**(m.get("params") or {}), **{k: v for k, v in tp.items() if k != "transport"}},
             "poll_s": tp.get("poll_s", 30),
         })
-    payload = {"box_id": box_id, "devices": devices,
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT e.name, e.locality_id, l.name AS locality_name FROM emsbox e "
+            "LEFT JOIN localities l ON l.id = e.locality_id WHERE e.id = $1", box_id)
+    payload = {"box_id": box_id,
+               "box_name": row["name"] if row else None,
+               "locality": {"id": row["locality_id"], "name": row["locality_name"]} if row else None,
+               "devices": devices,
                "settings": {"heartbeat_s": 60, "config_poll_s": 300, "max_batch_rows": db.MAX_BATCH_ROWS}}
     body = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     etag = '"' + hashlib.md5(body.encode()).hexdigest() + '"'

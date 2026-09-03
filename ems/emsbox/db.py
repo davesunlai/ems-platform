@@ -120,7 +120,9 @@ async def pair(code: str, hw_info: dict | None) -> dict | None:
             row["locality_id"], row["name"], json.dumps(hw_info or {}))
         token = f"ebx{box_id}.{secret_part}"
         await conn.execute("UPDATE emsbox SET token_hash = $2 WHERE id = $1", box_id, _hash(token))
-        return {"box_id": box_id, "box_token": token, "locality_id": row["locality_id"]}
+        loc_name = await conn.fetchval("SELECT name FROM localities WHERE id = $1", row["locality_id"])
+        return {"box_id": box_id, "box_token": token, "box_name": row["name"],
+                "locality_id": row["locality_id"], "locality_name": loc_name}
 
 
 async def verify_token(token: str) -> dict | None:
