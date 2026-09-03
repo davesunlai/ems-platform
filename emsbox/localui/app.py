@@ -5,6 +5,8 @@ displej nemá). HTTPS/mDNS (caddy tls internal + avahi) přijdou v další fázi
 """
 from __future__ import annotations
 
+import glob
+import os
 import time
 
 from fastapi import FastAPI
@@ -43,13 +45,16 @@ async function render(){
    <button onclick="pair()">Spárovat</button><div id="msg" class="bad" style="margin-top:8px"></div></div>`;
   return;
  }
- const devs=(s.devices||[]).map(d=>`<div class="row"><span>${d.ok?"🟢":"🔴"} ${esc(d.name||d.device_uid)}</span>
+ const devs=(s.devices||[]).map(d=>`<div class="row"><span>${d.ok?"🟢":"🔴"} ${esc(d.name||d.device_uid)}<br><small class="muted">↳ ${esc(d.via||"?")}</small></span>
    <span class="muted">${d.last_read_ts?new Date(d.last_read_ts).toLocaleTimeString("cs-CZ"):"—"}${d.error?" · "+esc(d.error).slice(0,40):""}</span></div>`).join("")||'<div class="muted">Server zatím nepřiřadil žádné zařízení.</div>';
+ const ports=(s.serial_ports||[]).map(p=>`<div class="row"><span>${p.ok?"🟢":"🔴"} ${esc(p.device)}</span>
+   <span class="muted">${p.by_id?esc(p.by_id):"(bez by-id)"}${p.ok?"":" · nepřístupný"}</span></div>`).join("")||'<div class="muted">Žádný RS485/USB-serial adaptér nedetekován (zkontroluj --device mapping kontejneru).</div>';
  a.innerHTML=`<div class="card"><div class="row"><span>Stav</span><span class="${s.online?'ok':'bad'}">${s.online?"● online":"● offline (sbírám do bufferu)"}</span></div>
   <div class="row"><span>Buffer</span><span>${s.buffer_rows} řádků${s.buffer_oldest?" · od "+new Date(s.buffer_oldest).toLocaleString("cs-CZ"):""}</span></div>
   <div class="row"><span>Poslední sync</span><span>${s.last_sync?new Date(s.last_sync).toLocaleTimeString("cs-CZ"):"—"}</span></div>
   <div class="row"><span>Uptime</span><span>${Math.floor(s.uptime_s/3600)}h ${Math.floor(s.uptime_s%3600/60)}m</span></div></div>
  <div class="card"><b>Zařízení</b>${devs}</div>
+ <div class="card"><b>Sériové porty (RS485)</b>${ports}</div>
  <div class="card"><button class="sec" onclick="unpair()">Odpárovat box</button>
   <div class="muted" style="margin-top:6px">Zařízení se definují na teraems.com — tady je jen stav a diagnostika.</div></div>`;
 }
@@ -77,13 +82,26 @@ def create_app(state: dict) -> FastAPI:
     async def index():
         return _PAGE
 
+    def _serial_ports() -> list[dict]:
+        """Detekce RS485/USB-serial adaptérů viditelných v kontejneru."""
+        out = []
+        byid = {os.path.realpath(p): p for p in glob.glob("/dev/serial/by-id/*")}
+        for dev in sorted(set(glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*") + list(byid))):
+            real = os.path.realpath(dev)
+            if any(d["device"] == real for d in out):
+                continue
+            out.append({"device": real, "by_id": os.path.basename(byid.get(real, "")) or None,
+                        "ok": os.access(real, os.R_OK | os.W_OK)})
+        return out
+
     @app.get("/api/status")
     async def status():
         agent = state.get("agent")
         cred = state.get("cred") or {}
         out = {"paired": bool(cred), "server": cred.get("server"), "box_id": cred.get("box_id"),
                "uptime_s": int(time.monotonic() - state.get("started", time.monotonic())),
-               "buffer_rows": 0, "buffer_oldest": None, "last_sync": None, "online": False, "devices": []}
+               "buffer_rows": 0, "buffer_oldest": None, "last_sync": None, "online": False,
+               "devices": [], "serial_ports": _serial_ports()}
         if agent is not None:
             st = agent.buffer.stats()
             out["box_name"] = agent.cfg.get("box_name")
@@ -91,11 +109,20 @@ def create_app(state: dict) -> FastAPI:
             out.update(buffer_rows=st["rows"], buffer_oldest=st["oldest_ts"],
                        last_sync=getattr(agent, "last_sync_ts", None),
                        online=getattr(agent, "online", False))
-            names = {d["device_uid"]: d.get("name") for d in agent.cfg.get("devices", [])}
-            out["devices"] = [{"device_uid": uid, "name": names.get(uid, uid), **s}
+            def _via(d):
+                p = d.get("params") or {}
+                if d.get("transport") == "modbus_rtu" or p.get("serial_port"):
+                    return f"RS485 {p.get('serial_port', '?')} @{p.get('baudrate', 9600)}"
+                if d.get("transport") == "http":
+                    return "HTTP"
+                return f"TCP {p.get('host', '?')}:{p.get('port', 502)}"
+            cfgd = {d["device_uid"]: d for d in agent.cfg.get("devices", [])}
+            out["devices"] = [{"device_uid": uid, "name": cfgd.get(uid, {}).get("name", uid),
+                               "via": _via(cfgd.get(uid, {})), **s}
                               for uid, s in agent.dev_state.items()] or \
-                             [{"device_uid": d["device_uid"], "name": d.get("name"), "ok": None,
-                               "last_read_ts": None, "error": None} for d in agent.cfg.get("devices", [])]
+                             [{"device_uid": d["device_uid"], "name": d.get("name"), "via": _via(d),
+                               "ok": None, "last_read_ts": None, "error": None}
+                              for d in agent.cfg.get("devices", [])]
         return out
 
     @app.post("/api/pair")
