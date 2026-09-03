@@ -90,6 +90,12 @@ async def ensure_schema() -> None:
             """)
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS public_ip TEXT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS private_ip TEXT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS hostname TEXT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS wifi_ssid TEXT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS disk_total_mb INT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS disk_free_mb INT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS mem_total_mb INT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS mem_used_mb INT")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS emsbox_announce (
@@ -235,7 +241,8 @@ async def overview() -> dict:
         boxes = await conn.fetch(
             "SELECT e.id, e.name, e.status, e.locality_id, l.name AS locality_name, "
             "e.last_heartbeat, e.last_ingest, e.buffer_rows, e.clock_drift_s, e.agent_version, "
-            "e.public_ip, e.private_ip, e.created_at "
+            "e.public_ip, e.private_ip, e.hostname, e.wifi_ssid, "
+            "e.disk_total_mb, e.disk_free_mb, e.mem_total_mb, e.mem_used_mb, e.created_at "
             "FROM emsbox e LEFT JOIN localities l ON l.id = e.locality_id "
             "WHERE e.status != 'disabled' ORDER BY e.id")
         ann = await conn.fetch(
@@ -246,8 +253,17 @@ async def overview() -> dict:
             if d.get(k):
                 d[k] = d[k].isoformat()
         return d
+    unp = []
+    for r in ann:
+        d = iso(dict(r), ("first_seen", "last_seen"))
+        if isinstance(d.get("hw"), str):
+            try:
+                d["hw"] = json.loads(d["hw"])
+            except Exception:
+                d["hw"] = {}
+        unp.append(d)
     return {"boxes": [iso(dict(r), ("last_heartbeat", "last_ingest", "created_at")) for r in boxes],
-            "unpaired": [iso(dict(r), ("first_seen", "last_seen")) for r in ann]}
+            "unpaired": unp}
 
 
 async def heartbeat(box_id: int, body: dict) -> None:
@@ -264,11 +280,17 @@ async def heartbeat(box_id: int, body: dict) -> None:
             "UPDATE emsbox SET last_heartbeat = now(), buffer_rows = $2, buffer_oldest_ts = $3, "
             "clock_drift_s = $4, heartbeat_devices = $5, agent_version = $6, "
             "private_ip = COALESCE($7, private_ip), public_ip = COALESCE($8, public_ip), "
+            "hostname = COALESCE($9, hostname), wifi_ssid = $10, "
+            "disk_total_mb = COALESCE($11, disk_total_mb), disk_free_mb = COALESCE($12, disk_free_mb), "
+            "mem_total_mb = COALESCE($13, mem_total_mb), mem_used_mb = COALESCE($14, mem_used_mb), "
             "status = CASE WHEN status = 'offline' THEN 'online' ELSE status END WHERE id = $1",
             box_id, body.get("buffer_rows"),
             datetime.fromisoformat(body["buffer_oldest_ts"].replace("Z", "+00:00")) if body.get("buffer_oldest_ts") else None,
             drift, json.dumps(body.get("devices") or []), body.get("agent_version"),
-            body.get("private_ip"), body.get("_public_ip"))
+            body.get("private_ip"), body.get("_public_ip"),
+            body.get("hostname"), body.get("wifi_ssid"),
+            body.get("disk_total_mb"), body.get("disk_free_mb"),
+            body.get("mem_total_mb"), body.get("mem_used_mb"))
 
 
 # --- boxy / alerty (uživatelské) -------------------------------------------

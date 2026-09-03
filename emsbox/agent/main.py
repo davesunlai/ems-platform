@@ -166,7 +166,7 @@ class Agent:
             except Exception:
                 pass
             body = {"box_time": _now_iso(), "uptime_s": int(time.monotonic() - self.started),
-                    "private_ip": _private_ip(),
+                    "private_ip": _private_ip(), **_sysinfo(),
                     "buffer_rows": st["rows"], "buffer_oldest_ts": st["oldest_ts"],
                     "disk_free_mb": disk_free, "agent_version": AGENT_VERSION,
                     "devices": [{"device_uid": uid, **s} for uid, s in self.dev_state.items()]}
@@ -312,7 +312,8 @@ async def run_with_ui() -> None:
                     async with httpx.AsyncClient(timeout=15.0) as c:
                         await c.post(f"{server}/api/emsbox/announce",
                                      json={"fingerprint": fp, "private_ip": _private_ip(),
-                                           "agent_version": AGENT_VERSION, "hw": _hw_info()})
+                                           "agent_version": AGENT_VERSION,
+                                           "hw": {**_hw_info(), **_sysinfo()}})
                 except Exception:
                     pass
             await asyncio.sleep(60)
@@ -332,6 +333,62 @@ async def run_with_ui() -> None:
 def _hw_info() -> dict:
     import platform
     return {"machine": platform.machine(), "system": platform.system(), "node": platform.node()}
+
+
+def _sysinfo() -> dict:
+    """Hostname, Wi-Fi SSID (bez hesla!), disk a RAM. Hostname/SSID čteme z hostu
+    přes ro mount /etc → /host/etc (viz docker run -v /etc:/host/etc:ro)."""
+    import glob
+    import re
+    import shutil
+    out: dict = {}
+    for p in ("/host/etc/hostname", "/etc/hostname"):
+        try:
+            out["hostname"] = open(p).read().strip()
+            break
+        except Exception:
+            pass
+    # aktivní wifi? (wireless adresář + operstate up)
+    wifi_up = False
+    for iface in glob.glob("/sys/class/net/*"):
+        if os.path.isdir(iface + "/wireless"):
+            try:
+                wifi_up = wifi_up or open(iface + "/operstate").read().strip() == "up"
+            except Exception:
+                pass
+    ssid = None
+    if wifi_up:
+        try:      # RPi OS legacy: wpa_supplicant.conf
+            m = re.search(r'ssid="([^"]+)"', open("/host/etc/wpa_supplicant/wpa_supplicant.conf").read())
+            ssid = m.group(1) if m else None
+        except Exception:
+            pass
+        if not ssid:  # NetworkManager (Bookworm)
+            for f in glob.glob("/host/etc/NetworkManager/system-connections/*"):
+                try:
+                    m = re.search(r"^ssid=(.+)$", open(f).read(), re.M)
+                    if m:
+                        ssid = m.group(1).strip()
+                        break
+                except Exception:
+                    pass
+    out["wifi_ssid"] = ssid                      # None = LAN/eth (heslo se NIKDY neposílá)
+    try:
+        du = shutil.disk_usage("/data" if os.path.isdir("/data") else "/")   # volume leží na disku hostu
+        out["disk_total_mb"] = int(du.total / 1e6)
+        out["disk_free_mb"] = int(du.free / 1e6)
+    except Exception:
+        pass
+    try:
+        mi = {}
+        for ln in open("/proc/meminfo"):
+            k, v = ln.split(":", 1)
+            mi[k] = int(v.strip().split()[0])
+        out["mem_total_mb"] = mi["MemTotal"] // 1024
+        out["mem_used_mb"] = (mi["MemTotal"] - mi.get("MemAvailable", mi["MemTotal"])) // 1024
+    except Exception:
+        pass
+    return out
 
 
 def _private_ip() -> str | None:
