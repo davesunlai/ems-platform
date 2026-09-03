@@ -231,7 +231,8 @@ async def reconcile(active: dict, sink) -> None:
             try:
                 active[mid] = {"adapter": await _connect_module(m), "sig": sig,
                                "control_only": mid in control_only_ids}
-                logger.info("Modul přenastaven za běhu: %s (nové parametry)", mid)
+                logger.info("Modul přenastaven za běhu: %s%s", mid,
+                            " (jen povely — čte EMSBOX)" if mid in control_only_ids else " (nové parametry)")
             except Exception as exc:
                 del active[mid]  # spadlo -> příští cyklus zkusí jako nový
                 logger.warning("Reconnect modulu '%s' selhal (zkusím příště): %s", mid, exc)

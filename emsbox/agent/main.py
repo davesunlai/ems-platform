@@ -106,10 +106,11 @@ class Agent:
                 a = _build_adapter(dev)
                 await a.connect()
                 self.adapters[uid] = a
+                self.dev_state.pop(uid, None)
                 logger.info("zařízení připojeno: %s (%s/%s)", dev.get("name"), dev["adapter"], dev.get("transport"))
             except Exception as exc:
                 self.dev_state[uid] = {"last_read_ts": None, "ok": False, "error": str(exc)}
-                logger.warning("připojení %s selhalo (zkusím příště): %s", uid, exc)
+                logger.warning("připojení %s selhalo (retry za config tick): %s", uid, exc)
 
     # --- sběr --------------------------------------------------------------
     async def poll_once(self) -> None:
@@ -176,6 +177,7 @@ class Agent:
     async def config_loop(self) -> None:
         while True:
             await self.refresh_config()
+            await self._reconcile()     # retry zařízení, kterým minule selhalo připojení (i při 304)
             await asyncio.sleep(int(self.cfg.get("settings", {}).get("config_poll_s", 300)))
 
     async def poll_loop(self) -> None:
