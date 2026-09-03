@@ -412,10 +412,111 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
         </div>
       </div>
 
+      <EmsboxCard locId={loc.id} />
       <OutageSection loc={loc} onChange={onChange} />
       <ForecastSection loc={loc} onChange={onChange} />
       <TariffSection loc={loc} />
       <BillingSettings loc={loc} onSaved={onChange} />
+    </div>
+  );
+}
+
+
+// 📦 EMSBOX — edge gateway lokality: stav, párování, alerty
+function EmsboxCard({ locId }) {
+  const [boxes, setBoxes] = useState([]);
+  const [rules, setRules] = useState([]);
+  const [pair, setPair] = useState(null);     // {code, expires_in_min}
+  const [name, setName] = useState("EMSBOX");
+  const [nr, setNr] = useState({ scope: "emsbox", target_id: "", kind: "offline", threshold_min: 15 });
+  const [err, setErr] = useState("");
+  const load = () => {
+    api.emsboxList(locId).then(setBoxes).catch(() => {});
+    api.alertRules(locId).then(setRules).catch(() => {});
+  };
+  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [locId]);
+  const addBox = () => api.emsboxCreate(locId, name).then(setPair).catch((e) => setErr(e.message));
+  const delBox = (b) => window.confirm(`Odpojit EMSBOX „${b.name}"? Moduly se vrátí na přímé čtení.`)
+    && api.emsboxDelete(b.id).then(load).catch((e) => setErr(e.message));
+  const addRule = () => {
+    const body = { ...nr, target_id: nr.scope === "locality" ? null : Number(nr.target_id) || null,
+                   threshold_min: Number(nr.threshold_min) || 15 };
+    api.alertRuleCreate(locId, body).then(() => { setNr({ ...nr, target_id: "" }); load(); }).catch((e) => setErr(e.message));
+  };
+  const ago = (iso) => {
+    if (!iso) return "nikdy";
+    const m = Math.round((Date.now() - new Date(iso)) / 60000);
+    return m < 1 ? "právě teď" : m < 60 ? `před ${m} min` : `před ${Math.floor(m / 60)} h`;
+  };
+  const KINDS = { offline: "offline", fault: "porucha", rtc_drift: "drift hodin", buffer_high: "plný buffer" };
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>📦 EMSBOX (edge gateway)</div>
+      {boxes.map((b) => (
+        <div key={b.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", marginBottom: 6,
+                                 display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", fontSize: 12.5 }}>
+          <span style={{ fontSize: 14 }}>{b.status === "online" ? "🟢" : b.status === "pairing" ? "🟡" : "🔴"}</span>
+          <b>{b.name}</b>
+          <span className="muted">heartbeat {ago(b.last_heartbeat)}</span>
+          <span className="muted">ingest {ago(b.last_ingest)}</span>
+          {b.buffer_rows != null && <span className="muted">buffer {b.buffer_rows} ř.{b.buffer_oldest_ts ? ` (od ${new Date(b.buffer_oldest_ts).toLocaleString("cs-CZ")})` : ""}</span>}
+          {b.clock_drift_s != null && <span className="muted" style={Math.abs(b.clock_drift_s) > 60 ? { color: "#f85149" } : {}}>drift {b.clock_drift_s.toFixed(0)} s</span>}
+          {b.agent_version && <span className="muted">v{b.agent_version}</span>}
+          <button className="btn" style={{ marginLeft: "auto", padding: "1px 8px", fontSize: 11 }} onClick={() => delBox(b)}>Odpojit</button>
+        </div>
+      ))}
+      {!boxes.length && <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>Žádný EMSBOX. Box sbírá data u klienta lokálně (RS485/LAN) a dohrává je i po výpadku internetu.</p>}
+      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+        <input style={{ width: 140 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="název boxu" />
+        <button className="btn primary" style={{ padding: "4px 10px" }} onClick={addBox}>+ Přidat EMSBOX</button>
+        {pair && (
+          <span style={{ border: "1px dashed var(--green)", borderRadius: 8, padding: "4px 10px", fontSize: 13 }}>
+            Párovací kód: <b style={{ fontSize: 16, letterSpacing: 2 }}>{pair.code}</b>
+            <span className="muted"> — zadej do lokálního UI boxu do {pair.expires_in_min} min</span>
+          </span>)}
+      </div>
+      <details style={{ marginTop: 10 }}>
+        <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>🔔 Alerty ({rules.length})</summary>
+        <table style={{ marginTop: 6, fontSize: 12 }}>
+          <thead><tr><th>Rozsah</th><th>Cíl</th><th>Druh</th><th>Práh (min)</th><th>Aktivní</th><th></th></tr></thead>
+          <tbody>
+            {rules.map((r) => (
+              <tr key={r.id}>
+                <td>{r.scope}</td>
+                <td>{r.target_id ?? "—"}</td>
+                <td>{KINDS[r.kind] || r.kind}</td>
+                <td>{r.threshold_min}</td>
+                <td><input type="checkbox" checked={!!r.enabled}
+                           onChange={(e) => api.alertRuleUpdate(r.id, { enabled: e.target.checked }).then(load)} /></td>
+                <td><button className="btn" style={{ padding: "0 7px", fontSize: 11 }}
+                            onClick={() => api.alertRuleDelete(r.id).then(load)}>✕</button></td>
+              </tr>))}
+          </tbody>
+        </table>
+        <div className="row" style={{ gap: 8, marginTop: 6, alignItems: "center", fontSize: 12 }}>
+          <select value={nr.scope} onChange={(e) => setNr({ ...nr, scope: e.target.value })}>
+            <option value="locality">lokalita (všechna zařízení)</option>
+            <option value="emsbox">EMSBOX</option>
+            <option value="device">zařízení</option>
+          </select>
+          {nr.scope === "emsbox" && (
+            <select value={nr.target_id} onChange={(e) => setNr({ ...nr, target_id: e.target.value })}>
+              <option value="">— vyber box —</option>
+              {boxes.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>)}
+          {nr.scope === "device" && (
+            <input style={{ width: 130 }} placeholder="id modulu" value={nr.target_id}
+                   onChange={(e) => setNr({ ...nr, target_id: e.target.value })} />)}
+          <select value={nr.kind} onChange={(e) => setNr({ ...nr, kind: e.target.value })}>
+            {Object.entries(KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <input style={{ width: 60 }} value={nr.threshold_min} onChange={(e) => setNr({ ...nr, threshold_min: e.target.value })} title="práh (minuty)" />
+          <button className="btn" style={{ padding: "3px 9px" }} onClick={addRule}
+                  disabled={nr.scope !== "locality" && !nr.target_id}>+ Pravidlo</button>
+          <span className="muted">e-maily jdou uživatelům lokality s vyplněným e-mailem</span>
+        </div>
+      </details>
+      {err && <p className="error">{err}</p>}
     </div>
   );
 }
