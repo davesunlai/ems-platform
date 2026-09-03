@@ -65,3 +65,86 @@ async def ingest_heartbeat(body: dict, box: dict = Depends(box_auth)) -> dict:
         raise HTTPException(status_code=403, detail="box_id nesouhlasí s tokenem")
     await db.heartbeat(box["id"], body)
     return {"ok": True}
+
+
+# --- povelový kanál (varianta B): box čte i VYKONÁVÁ povely — jediný klient na střídači
+CMD_MAX_AGE_MIN = 15
+
+
+@router.get("/commands")
+async def box_commands(box: dict = Depends(box_auth)) -> dict:
+    """Čekající povely pro moduly tohoto boxu. Povely starší CMD_MAX_AGE_MIN
+    (box byl offline) server rovnou zneplatní — stará force okna nesmí ožít."""
+    from ems.control import db as control_db
+    from ems.api.db import get_pool
+    mods = [m["id"] for m in await db.modules_for_box(box["id"])]
+    cmds = await control_db.fetch_pending(mods)
+    if not cmds:
+        return {"commands": []}
+    pool = await get_pool()
+    fresh = []
+    async with pool.acquire() as conn:
+        for c in cmds:
+            age_min = await conn.fetchval(
+                "SELECT EXTRACT(EPOCH FROM (now() - created_at)) / 60 FROM control_queue WHERE id = $1", c["id"])
+            if age_min is not None and age_min > CMD_MAX_AGE_MIN:
+                await control_db.complete(c["id"], False,
+                                          {"error": f"expiroval ({age_min:.0f} min) — box byl offline"})
+            else:
+                fresh.append(c)
+    return {"commands": fresh}
+
+
+class CommandResult(BaseModel):
+    id: int
+    module_id: str
+    action: str
+    params: dict = Field(default_factory=dict)
+    username: str | None = None
+    ok: bool
+    result: dict = Field(default_factory=dict)
+
+
+@router.post("/command-result")
+async def box_command_result(body: CommandResult, box: dict = Depends(box_auth)) -> dict:
+    from ems.control import db as control_db
+    mods = {m["id"] for m in await db.modules_for_box(box["id"])}
+    if body.module_id not in mods:
+        raise HTTPException(status_code=403, detail="modul nepatří tomuto boxu")
+    await control_db.complete(body.id, body.ok, body.result)
+    if body.ok and body.action in ("force_charge", "force_discharge", "stop", "spiral"):
+        # zrcadlí process_queue: stav + notifikace operace
+        try:
+            act = "idle" if body.action == "stop" else body.action
+            await control_db.set_state(body.module_id, act, body.params,
+                                       source=(body.params or {}).get("source", "manual"),
+                                       username=body.username)
+        except Exception:
+            pass
+        try:
+            from ems.alerts import db as alerts_db
+            from ems.notify import dispatch as notify_dispatch
+            from ems.api.db import get_pool
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                loc_id = await conn.fetchval("SELECT locality_id FROM modules WHERE id = $1", body.module_id)
+            p = body.params or {}
+            pw = p.get("power")
+            label = {"force_charge": "Vynucené nabíjení", "force_discharge": "Vybíjení do sítě",
+                     "spiral": "Spirála", "stop": "Návrat do Self-Use (stop)"}[body.action]
+            src = p.get("source") or "manual"
+            parts = []
+            if body.action == "stop":
+                parts.append("řízení zastaveno")
+            elif pw is not None:
+                parts.append(f"{pw/100:.1f} kW")
+            parts.append("ručně" if src == "manual" else src)
+            if p.get("reason"):
+                parts.append(p["reason"])
+            parts.append("přes EMSBOX")
+            kind = "stop" if body.action == "stop" else body.action
+            await alerts_db.record_event(loc_id, kind, f"{label} – {body.module_id}", " · ".join(parts))
+            await notify_dispatch.notify_new_alerts()
+        except Exception as exc:
+            logger.debug("notifikace povelu přes box: %s", exc)
+    return {"ok": True}

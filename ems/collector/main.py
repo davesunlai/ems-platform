@@ -80,35 +80,7 @@ async def poll_device(adapter, sink) -> None:
         logger.warning("Čtení '%s' selhalo: %s", getattr(adapter, "device_id", "?"), exc)
 
 
-async def dispatch_command(adapter, action: str, params: dict) -> dict:
-    """Provede povel přes adaptér (drží jediné Modbus spojení). Vrací výsledek."""
-    p = params or {}
-    if action == "force_charge":
-        return await adapter.set_force(1, p.get("power"))
-    if action == "force_discharge":
-        return await adapter.set_force(2, p.get("power"))
-    if action == "stop":
-        return await adapter.set_force(0)
-    if action == "force_poke":
-        return await adapter.poke_force(int(p["mode"]))
-    if action == "set_work_mode":
-        return await adapter.set_work_mode(int(p["word"]))
-    if action == "set_charge_current":
-        return await adapter.set_charge_current(float(p["amps"]))
-    if action == "set_discharge_current":
-        return await adapter.set_discharge_current(float(p["amps"]))
-    if action == "set_soc_backup":
-        return await adapter.set_soc_backup(float(p["pct"]))
-    if action == "set_soc_force":
-        return await adapter.set_soc_force(float(p["pct"]))
-    if action == "read_controls":
-        return {"controls": await adapter.read_controls()}
-    if action == "write_holding":
-        return await adapter.write_holding(int(p["addr"]), int(p["value"]))
-    if action == "read_holding":
-        regs = await adapter.read_holding(int(p["addr"]), int(p.get("count", 1)))
-        return {"addr": int(p["addr"]), "values": regs}
-    raise ValueError(f"neznámý povel '{action}'")
+from ems.control.dispatch import dispatch_command  # sdílené s EMSBOX agentem
 
 
 async def process_queue(active: dict) -> None:
@@ -197,18 +169,10 @@ async def reconcile(active: dict, sink) -> None:
     except Exception as exc:
         logger.warning("Načtení registru modulů selhalo, ponechávám stávající: %s", exc)
         return
-    # Moduly čtené EMSBOXem: čtení dělá box, ale POVELY (planner/ruční) jedou dál
-    # přímo z franty → s control_enabled zůstávají připojené v režimu control-only.
-    # (Povelový kanál přes box = pozdější fáze; bez control_enabled se nepřipojují vůbec.)
-    wanted_by_id = {}
-    control_only_ids = set()
-    for m in wanted:
-        if getattr(m, "emsbox_id", None):
-            if (m.params or {}).get("control_enabled"):
-                wanted_by_id[m.id] = m
-                control_only_ids.add(m.id)
-        else:
-            wanted_by_id[m.id] = m
+    # Moduly za EMSBOXem franta NEPŘIPOJUJE vůbec: čtení i POVELY vykonává box
+    # (povelový kanál /api/ingest/v1/commands) — na střídači je tak jediný klient.
+    control_only_ids = set()   # ponecháno kvůli logům/sig, vždy prázdné
+    wanted_by_id = {m.id: m for m in wanted if not getattr(m, "emsbox_id", None)}
 
     # připoj nové + reconnectuj změněné
     for mid, m in wanted_by_id.items():

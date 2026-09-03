@@ -75,6 +75,7 @@ class Agent:
         self.started = time.monotonic()
         self.online = False
         self.last_sync_ts: str | None = None
+        self._io_lock = asyncio.Lock()      # serializace čtení × povelů na sdíleném Modbus spojení
 
     # --- config ------------------------------------------------------------
     async def refresh_config(self) -> None:
@@ -117,7 +118,8 @@ class Agent:
         cycle: list[tuple[str, str, dict]] = []
         for uid, a in list(self.adapters.items()):
             try:
-                reading = await a.read()
+                async with self._io_lock:
+                    reading = await a.read()
                 metrics = {m.metric.value if hasattr(m.metric, "value") else str(m.metric): m.value
                            for m in (reading.measurements or [])}
                 if metrics:
@@ -174,6 +176,37 @@ class Agent:
                 logger.debug("heartbeat selhal: %s", exc)
             await asyncio.sleep(int(self.cfg.get("settings", {}).get("heartbeat_s", 60)))
 
+    async def command_loop(self) -> None:
+        """Povelový kanál (varianta B): povely planneru/ruční vykonává BOX —
+        na střídači je jediný Modbus klient. Poll à 5 s, výsledek hned zpět."""
+        from ems.control.dispatch import dispatch_command
+        while True:
+            await asyncio.sleep(5)
+            try:
+                cmds = await self.link.get_commands()
+            except Exception:
+                continue
+            for c in cmds:
+                a = self.adapters.get(c["module_id"])
+                if a is None:
+                    try:
+                        await self.link.send_command_result(c, False, {"error": "zařízení není na boxu připojeno"})
+                    except Exception:
+                        pass
+                    continue
+                try:
+                    async with self._io_lock:
+                        res = await dispatch_command(a, c["action"], c.get("params") or {})
+                    ok, out = True, (res if isinstance(res, dict) else {"result": res})
+                    logger.info("povel #%s '%s' (%s) OK", c["id"], c["action"], c["module_id"])
+                except Exception as exc:
+                    ok, out = False, {"error": str(exc)}
+                    logger.warning("povel #%s '%s' selhal: %s", c["id"], c["action"], exc)
+                try:
+                    await self.link.send_command_result(c, ok, out)
+                except Exception as exc:
+                    logger.warning("odeslání výsledku povelu #%s selhalo: %s", c["id"], exc)
+
     async def config_loop(self) -> None:
         while True:
             await self.refresh_config()
@@ -190,7 +223,7 @@ class Agent:
         await self.refresh_config()
         await self._reconcile()
         await asyncio.gather(self.config_loop(), self.poll_loop(),
-                             self.sync_loop(), self.heartbeat_loop())
+                             self.sync_loop(), self.heartbeat_loop(), self.command_loop())
 
 
 def main() -> None:

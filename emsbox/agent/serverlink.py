@@ -76,3 +76,16 @@ class ServerLink:
         r = await self._client.post(f"{self.server}/api/ingest/v1/heartbeat",
                                     json=body, headers=self._headers)
         r.raise_for_status()
+
+    async def get_commands(self) -> list[dict]:
+        r = await self._client.get(f"{self.server}/api/ingest/v1/commands", headers=self._headers)
+        r.raise_for_status()
+        return r.json().get("commands", [])
+
+    async def send_command_result(self, cmd: dict, ok: bool, result: dict) -> None:
+        body = {"id": cmd["id"], "module_id": cmd["module_id"], "action": cmd["action"],
+                "params": cmd.get("params") or {}, "username": cmd.get("username"),
+                "ok": ok, "result": result}
+        r = await self._client.post(f"{self.server}/api/ingest/v1/command-result",
+                                    json=body, headers=self._headers)
+        r.raise_for_status()
