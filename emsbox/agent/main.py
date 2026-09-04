@@ -166,7 +166,7 @@ class Agent:
             except Exception:
                 pass
             body = {"box_time": _now_iso(), "uptime_s": int(time.monotonic() - self.started),
-                    "private_ip": _private_ip(), **_sysinfo(),
+                    "private_ip": _private_ip(), "fingerprint": _fingerprint(), **_sysinfo(),
                     "buffer_rows": st["rows"], "buffer_oldest_ts": st["oldest_ts"],
                     "disk_free_mb": disk_free, "agent_version": AGENT_VERSION,
                     "devices": [{"device_uid": uid, **s} for uid, s in self.dev_state.items()]}
@@ -308,7 +308,8 @@ async def run_with_ui() -> None:
         fp = _fingerprint()
         _warn = [-1e9]
         while True:
-            if not state.get("cred"):
+            if not state.get("cred") and not os.path.exists(
+                    os.environ.get("EMSBOX_CRED", "/data/credentials.json")):
                 try:
                     async with httpx.AsyncClient(timeout=15.0) as c:
                         r = await c.post(f"{server}/api/emsbox/announce",

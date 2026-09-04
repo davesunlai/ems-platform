@@ -83,7 +83,9 @@ _PAGE = """<!doctype html><html lang="cs"><head><meta charset="utf-8">
 <script>
 async function j(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||r.status);return r.json()}
 function esc(s){return String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+let view="main";
 async function render(force){
+ if(view!=="main")return;
  // Auto-refresh nesmí mazat rozepsané formuláře; explicitní render(true) po akci
  // (login/párování) ale projít MUSÍ — jinak stránka po odeslání zamrzne na formuláři.
  if(!force){
@@ -124,8 +126,23 @@ async function render(force){
   <div class="row"><span>Uptime</span><span>${Math.floor(s.uptime_s/3600)}h ${Math.floor(s.uptime_s%3600/60)}m</span></div></div>
  <div class="card"><b>Zařízení</b>${devs}</div>
  <div class="card"><b>Sériové porty (RS485)</b>${ports}</div>
- <div class="card"><b>🌐 Síť</b><div id="net" class="muted">načítám…</div>
-  <div id="netforms" style="display:none;margin-top:10px">
+ <div class="card"><button class="sec" onclick="openNet()">🌐 Nastavení sítě</button></div>
+ <div class="card"><button class="sec" onclick="unpair()">Odpárovat box</button>
+  <div class="muted" style="margin-top:6px">Zařízení se definují na teraems.com — tady je jen stav a diagnostika.</div></div>`;
+}
+async function authGo(isLogin){const m=document.getElementById("amsg");m.textContent="";
+ try{await j(isLogin?"/api/login":"/api/set-password",{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({password:document.getElementById("pw").value})});
+  document.getElementById("pw").value="";render(true);}
+ catch(e){m.textContent="Chyba: "+e.message}}
+function openNet(){
+ view="net";
+ document.getElementById("sub").textContent="nastavení sítě";
+ document.getElementById("app").innerHTML=`
+  <div class="card"><button class="sec" onclick="closeNet()">⬅ Zpět na stavovku</button></div>
+  <div class="card"><b>🌐 Rozhraní</b><div id="net" class="muted">načítám…</div>
+   <button class="sec" onclick="loadNet()" style="margin-top:8px">↻ Obnovit</button></div>
+  <div class="card" id="netforms" style="display:none">
    <div class="muted" style="margin-bottom:4px">Wi-Fi (LAN port zůstává vždy DHCP)</div>
    <input id="wssid" placeholder="SSID"><input id="wpw" type="password" placeholder="heslo Wi-Fi">
    <button class="sec" onclick="wifiGo()">Připojit k Wi-Fi</button>
@@ -139,15 +156,10 @@ async function render(force){
    </div>
    <button class="sec" onclick="ipGo()">Uložit IP režim</button>
    <div id="nmsg" style="margin-top:8px"></div>
-  </div></div>
- <div class="card"><button class="sec" onclick="unpair()">Odpárovat box</button>
-  <div class="muted" style="margin-top:6px">Zařízení se definují na teraems.com — tady je jen stav a diagnostika.</div></div>`;
+  </div>`;
+ loadNet();
 }
-async function authGo(isLogin){const m=document.getElementById("amsg");m.textContent="";
- try{await j(isLogin?"/api/login":"/api/set-password",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({password:document.getElementById("pw").value})});
-  document.getElementById("pw").value="";render(true);}
- catch(e){m.textContent="Chyba: "+e.message}}
+function closeNet(){view="main";render(true);}
 async function loadNet(){
  try{const n=await j("/api/network");const el=document.getElementById("net");if(!el)return;
   el.innerHTML=n.interfaces.map(i=>`<div class="row"><span>${i.wireless?"📶":"🔌"} ${esc(i.name)} ${i.up?'<span class="ok">●</span>':'<span class="bad">●</span>'}</span>
@@ -176,7 +188,7 @@ async function pair(){const m=document.getElementById("msg");m.textContent="";
  catch(e){m.className="bad";m.textContent="Chyba: "+e.message}}
 async function unpair(){if(!confirm("Opravdu odpárovat? Box přestane posílat data."))return;
  await j("/api/unpair",{method:"POST"});render(true);}
-render();loadNet();setInterval(()=>render(false),5000);setInterval(loadNet,20000);
+render();setInterval(()=>render(false),5000);
 </script></body></html>"""
 
 
