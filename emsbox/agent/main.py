@@ -306,24 +306,27 @@ async def run_with_ui() -> None:
         import httpx
         server = os.environ.get("EMSBOX_SERVER", "https://teraems.com").rstrip("/")
         fp = _fingerprint()
+        _warn = [-1e9]
         while True:
             if not state.get("cred"):
                 try:
                     async with httpx.AsyncClient(timeout=15.0) as c:
-                        await c.post(f"{server}/api/emsbox/announce",
-                                     json={"fingerprint": fp, "private_ip": _private_ip(),
-                                           "agent_version": AGENT_VERSION,
-                                           "hw": {**_hw_info(), **_sysinfo()}})
-                except Exception:
-                    pass
+                        r = await c.post(f"{server}/api/emsbox/announce",
+                                         json={"fingerprint": fp, "private_ip": _private_ip(),
+                                               "agent_version": AGENT_VERSION,
+                                               "hw": {**_hw_info(), **_sysinfo()}})
+                        r.raise_for_status()
+                except Exception as exc:
+                    if time.monotonic() - _warn[0] > 600:
+                        _warn[0] = time.monotonic()
+                        logger.warning("announce na %s selhal: %s", server, exc)
             await asyncio.sleep(60)
 
-    asyncio.get_event_loop() if False else None
     state["on_pair"] = on_pair
     state["on_unpair"] = on_unpair
     app = create_app(state)
     await start_agent()
-    asyncio.create_task(announce_loop())
+    state["_announce_task"] = asyncio.create_task(announce_loop())   # referenci DRŽET — bez ní task sebere GC
     port = int(os.environ.get("EMSBOX_HTTP_PORT", "80"))
     logger.info("lokální UI: http://<ip-boxu>%s", "" if port == 80 else f":{port}")
     server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))
