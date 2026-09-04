@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.72.6 — hotfix lokálního UI: po odeslání hesla/párování stránka „nereagovala". Guard z v0.72.4 (nepřepisovat rozepsané formuláře) blokoval i explicitní překreslení po úspěšné akci — heslo se uložilo, ale UI zůstalo viset na formuláři. Oprava: render(force) — akce volají render(true) (a čistí pole), auto-refresh tick jede s render(false) a guard respektuje. Kontroly: node --check + přítomnost force volání. Jen rebuild image na boxu.
+
 ## v0.72.5 — KONEC pomalých buildů webu (10 min → ~15 s). Příčina: release proces bumpoval verzi ve web/package.json → Docker COPY vrstva se změnila → npm cache vrstva se zahodila → plná instalace při KAŽDÉM deployi; navíc package-lock.json verzi nebumpoval → `npm ci` padal na nesouladu name/version a Dockerfile fallbackoval na ještě pomalejší `npm install`. Oprava: verze ve web/package.json ZMRAŽENA na 0.0.0 (UI ji nikde nepoužívá — verze aplikace žije v pyproject.toml/ems/__init__.py a servíruje ji API), lock srovnán, release proces web/package.json už NIKDY nemění. npm vrstva se od teď přebuilduje jen při skutečné změně závislostí. První build po této verzi je naposledy pomalý (package.json se mění na 0.0.0), pak už trvale rychlé.
 
 ## v0.72.4 — hotfix lokálního UI: auto-refresh (render à 5 s) přepisoval formuláře uprostřed psaní — heslo i párovací kód „mizely". Guard: render se přeskočí, dokud má fokus INPUT/SELECT/TEXTAREA nebo je v #app rozepsané jakékoli pole; po odeslání formuláře refresh normálně pokračuje. Jen rebuild image na boxu.
