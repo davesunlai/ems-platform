@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.72.8 — hotfix _sysinfo na boxech s Wi-Fi: kolize jmen — čtení `iw dev <if> link` přepisovalo proměnnou `out` (výsledný dict) stdout stringem → `'str' object does not support item assignment` → padal announce I heartbeat (sdílejí _sysinfo); sandbox bez wifi rozhraní větev nikdy netestoval. Proměnná přejmenována (iw_out) + regres test s mockovaným wifi prostředím (glob/isdir/open/subprocess) vynucuje wifi větev a ověřuje ssid. Jen rebuild image na boxu.
+
 ## v0.72.7 — hotfix announce: asyncio.create_task bez držené reference → garbage collector smyčku tiše zabil (box se po startu párkrát ohlásil a pak zmizel z přehledu nespárovaných). Task referenci drží state["_announce_task"]; selhání announce se nově loguje warningem (throttle 10 min) místo tichého pass. Ve frontě navazuje: box při opakovaném 401 heartbeatu (server ho odpojil) sám zahodí credentials a přejde do párovacího/announce režimu — zatím ruční. Jen rebuild image na boxu.
 
 ## v0.72.6 — hotfix lokálního UI: po odeslání hesla/párování stránka „nereagovala". Guard z v0.72.4 (nepřepisovat rozepsané formuláře) blokoval i explicitní překreslení po úspěšné akci — heslo se uložilo, ale UI zůstalo viset na formuláři. Oprava: render(force) — akce volají render(true) (a čistí pole), auto-refresh tick jede s render(false) a guard respektuje. Kontroly: node --check + přítomnost force volání. Jen rebuild image na boxu.

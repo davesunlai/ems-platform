@@ -367,9 +367,9 @@ def _sysinfo() -> dict:
                 continue
             name = os.path.basename(iface)
             try:  # PRIMÁRNĚ ovladač (iw) — říká, k čemu je wifi REÁLNĚ připojená
-                out = subprocess.run(["iw", "dev", name, "link"], capture_output=True,
-                                     text=True, timeout=5).stdout
-                m = re.search(r"^\s*SSID:\s*(.+)$", out, re.M)
+                iw_out = subprocess.run(["iw", "dev", name, "link"], capture_output=True,
+                                        text=True, timeout=5).stdout
+                m = re.search(r"^\s*SSID:\s*(.+)$", iw_out, re.M)
                 if m:
                     ssid = m.group(1).strip()
                     break
