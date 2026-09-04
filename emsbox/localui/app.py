@@ -84,6 +84,11 @@ _PAGE = """<!doctype html><html lang="cs"><head><meta charset="utf-8">
 async function j(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||r.status);return r.json()}
 function esc(s){return String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 async function render(){
+ // Nepřepisuj stránku, dokud uživatel píše (fokus v poli) nebo má cokoliv rozepsáno —
+ // jinak auto-refresh à 5 s maže heslo/párovací kód uprostřed psaní.
+ const ae=document.activeElement;
+ if(ae&&["INPUT","SELECT","TEXTAREA"].includes(ae.tagName))return;
+ if([...document.querySelectorAll("#app input")].some(i=>i.value))return;
  let auth;try{auth=await j("/api/auth-state")}catch(e){document.getElementById("app").innerHTML="<div class=card><span class=bad>Agent neodpovídá</span></div>";return}
  if(!auth.authed||!auth.password_set){
   document.getElementById("sub").textContent=auth.password_set?"zamčeno — zadej heslo boxu":"první spuštění — nastav heslo boxu";
