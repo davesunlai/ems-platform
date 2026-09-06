@@ -389,6 +389,7 @@ export default function Modules() {
                 </td>
                 <td><span className={m.enabled ? "badge-on" : "badge-off"}>{m.enabled ? "zapnutý" : "vypnutý"}</span></td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <a className="btn" href={`/diagnostics/${m.id}`} title="Diagnostika modulu" style={{ marginRight: 8, textDecoration: "none" }}>🔬</a>
                   <button className="btn" onClick={() => startEdit(m)} style={{ marginRight: 8 }}>Upravit</button>
                   <button className="btn" onClick={() => toggle(m)} style={{ marginRight: 8 }}>{m.enabled ? "Vypnout" : "Zapnout"}</button>
                   <button className="btn danger" onClick={() => remove(m.id)}>Smazat</button>
