@@ -9,6 +9,7 @@ import ChangePassword from "./pages/ChangePassword";
 import Dashboard from "./pages/Dashboard";
 import HeatPump from "./pages/HeatPump";
 import Emsboxes from "./pages/Emsboxes";
+import ModuleDiag from "./pages/ModuleDiag";
 import Users from "./pages/Users";
 import Modules from "./pages/Modules";
 import Control from "./pages/Control";
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/heatpump" element={<HeatPump />} />
             <Route path="/emsboxes" element={<Emsboxes />} />
+            <Route path="/diagnostics/:id" element={<ModuleDiag />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/vzhled" element={<Vzhled />} />
             <Route path="/users" element={

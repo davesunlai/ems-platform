@@ -63,6 +63,7 @@ export const api = {
   syncEwelink: () => request("/api/outputs/sync-ewelink", { method: "POST" }),
   emsboxAll: () => request("/api/emsboxes"),
   emsboxOverview: () => request("/api/emsboxes/overview"),
+  moduleDiagnostics: (id, hours = 24) => request(`/api/modules/${id}/diagnostics?hours=${hours}`),
   emsboxList: (locId) => request(`/api/localities/${locId}/emsboxes`),
   emsboxCreate: (locId, name) => request(`/api/localities/${locId}/emsboxes`, { method: "POST", body: { name } }),
   emsboxDelete: (boxId) => request(`/api/emsbox/${boxId}`, { method: "DELETE" }),

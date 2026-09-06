@@ -432,6 +432,7 @@ function SolisControl({ mod }) {
     <div className="panel" style={{ marginBottom: 14 }}>
       <h3 style={{ marginBottom: 2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         {mod.id} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· Solis</span>
+        <a href={`/diagnostics/${mod.id}`} title="Diagnostika modulu" style={{ fontSize: 13, textDecoration: "none" }}>🔬</a>
         {(() => {
           const B = {
             idle: { t: "Self-Use", bg: "var(--blue)" },
