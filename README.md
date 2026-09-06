@@ -4,6 +4,8 @@ Univerzální energy management napříč energetickým portfoliem — sledován
 
 Tento repozitář začíná **pilotem jedné domácnosti** (FVE 26 kWp, baterie 52 kWh, dvě Goodwe měniče), ale architektura je od začátku připravená na škálování (viz `docs/architecture.md`).
 
+## v0.75.3 — diagnostický povel read_input (Solis „mikroskop"). Nový povel čte INPUT registry (33xxx: stavy, alarmy, BMS proudové limity) přes povelový kanál — umožňuje DIFF metodu: sejmout bloky ve stavu „vybíjí naplno" vs. „škrtí" a rozdílové registry pojmenují interní limiter měniče (dnešní případ: force 43135=2 drží, poke OK à 4 min s readbacky, a výkon přesto eroduje 9→2→0 kW ≈ dům−2÷4 kW → limiter uvnitř). Dispatch +read_input, adaptér read_input (to_thread, chybové stavy). Bonus: 43129 (force discharge power) doplněn do CONTROL_REGISTERS — v read_controls dosud chyběl. Test: dispatch→adapter routing s fake klientem. Nasazení: franta build api+collector, BOX rebuild (sdílený dispatch/adaptér!).
+
 ## v0.75.2 — hotfix diagnostiky: 404 na /diagnostics stránce. Router modulů má prefix /api/admin → endpoint vznikl na /api/admin/modules/{id}/diagnostics, ale frontend volal /api/modules/... Ověřeno ASGI testem (404 vs. 401). Oprava cesty v api.js. Pozn. z ladění: app.routes obsahuje _IncludedRouter obaly bez .path — kontrola registrace přes app.routes je nespolehlivá, používat ASGI request.
 
 ## v0.75.1 — doplněn odkaz 🔬 Diagnostika na stránce Moduly (patch v0.75.0 se tiše nechytil — replace bez assertu; string tlačítka měl jiný style atribut). „Not Found" na /diagnostics/... při nasazené v0.75.0 = stará JS cache prohlížeče (SPA routa je nová) → Ctrl+Shift+R. Ponaučení do procesu: každý str.replace v JSX končí assertem.

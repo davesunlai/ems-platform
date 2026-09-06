@@ -66,6 +66,7 @@ CTRL_SOC_FORCE = 43030              # SOC práh force
 
 # Řídicí registry pro write-probe (přečtení aktuálního stavu, FC03).
 CONTROL_REGISTERS = [
+    ("force_discharge_power", 43129),   # doplněno 6.9.: v read_controls chyběl —右 při vyšetřování škrcení
     ("Pracovní režim     ", CTRL_WORK_MODE),
     ("Force 0/1/2        ", CTRL_FORCE),
     ("Force výkon        ", CTRL_FORCE_POWER),

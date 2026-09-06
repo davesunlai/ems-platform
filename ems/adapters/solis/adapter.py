@@ -216,6 +216,18 @@ class SolisAdapter:
             return self._read_holding(addr, count)
         return await asyncio.to_thread(_run)
 
+    async def read_input(self, addr: int, count: int = 1) -> list:
+        """Přečte input registry (33xxx: stavy, alarmy, BMS limity) — diagnostický
+        „mikroskop": diff bloků mezi zdravým a škrceným stavem odhalí interní limiter."""
+        def _run() -> list:
+            if self._client is None or not getattr(self._client, "connected", False):
+                self._connect_sync()
+            r = self._client.read_input_registers(addr, count=count, device_id=self.unit)
+            if r.isError():
+                raise RuntimeError(f"read_input {addr}+{count}: {r}")
+            return list(r.registers)
+        return await asyncio.to_thread(_run)
+
     async def set_force(self, mode: int, power: int | None = None) -> dict:
         """Hlavní řídicí páka: 0 = off, 1 = nucené nabíjení, 2 = nucené vybíjení.
 

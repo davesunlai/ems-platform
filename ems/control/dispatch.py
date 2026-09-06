@@ -27,6 +27,9 @@ async def dispatch_command(adapter, action: str, params: dict) -> dict:
         return {"controls": await adapter.read_controls()}
     if action == "write_holding":
         return await adapter.write_holding(int(p["addr"]), int(p["value"]))
+    if action == "read_input":
+        regs = await adapter.read_input(int(p["addr"]), int(p.get("count", 1)))
+        return {"addr": int(p["addr"]), "values": regs}
     if action == "read_holding":
         regs = await adapter.read_holding(int(p["addr"]), int(p.get("count", 1)))
         return {"addr": int(p["addr"]), "values": regs}
