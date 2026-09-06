@@ -21,6 +21,7 @@ async function request(path, { method = "GET", body } = {}) {
   if (!res.ok) {
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch (e) {}
+    if (typeof detail !== "string") detail = JSON.stringify(detail);
     throw new Error(detail);
   }
   if (res.status === 204) return null;
@@ -54,7 +55,7 @@ export const api = {
   deleteModule: (id) => request(`/api/admin/modules/${encodeURIComponent(id)}`, { method: "DELETE" }),
   controlModules: () => request("/api/control/modules"),
   setControlSources: (id, body) => request(`/api/control/modules/${id}/control-sources`,
-    { method: "PUT", body: JSON.stringify(body) }),
+    { method: "PUT", body }),
   enqueueCommand: (id, action, params = {}) =>
     request(`/api/control/${encodeURIComponent(id)}/command`, { method: "POST", body: { action, params } }),
   commandStatus: (cmdId) => request(`/api/control/command/${cmdId}`),
