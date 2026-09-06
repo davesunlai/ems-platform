@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import ExportBtn from "./ExportBtn";
+import { exportRowsXlsx, mergeSeriesRows } from "../utils/exportXlsx";
 
 // I3/I2/I1 master H/S/D, I4/I5 slave H/D, I14 ambient
 const TANKS = [
@@ -94,6 +96,11 @@ export default function TempChart({ localityId, deviceIds }) {
           ))}
         </div>
       </div>
+      <div style={{ position: "relative" }}>
+      <ExportBtn onClick={() => exportRowsXlsx("teploty-aku", mergeSeriesRows(
+        [...TANKS, AMBIENT].filter((t) => series[t.k]?.length)
+          .map((t) => ({ col: `${t.label} (°C)`,
+                         points: series[t.k].map((p) => ({ t: p.t, v: Math.round(p.v * 10) / 10 })) }))))} />
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }} onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
         {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
           const y = padT + plotH * (1 - f);
@@ -116,6 +123,7 @@ export default function TempChart({ localityId, deviceIds }) {
         {ticks.map((t, i) => <text key={i} x={X(t)} y={H - 8} textAnchor="middle" fontSize="9" fill="var(--muted,#8b949e)">{fmtX(t)}</text>)}
         {hov && <line x1={X(hov.t)} y1={padT} x2={X(hov.t)} y2={padT + plotH} stroke="#fff" strokeWidth="0.5" opacity="0.4" />}
       </svg>
+      </div>
       {hov && (
         <div className="muted" style={{ fontSize: 11.5, display: "flex", gap: 10, flexWrap: "wrap" }}>
           <span>{new Date(hov.t).toLocaleString("cs-CZ", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>

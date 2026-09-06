@@ -3,8 +3,10 @@
 // Hover: svislá čára u kurzoru + bublina s hodnotou viditelných řad.
 // Klik na popisek v legendě řadu skryje/zobrazí (přepočte i osu Y).
 import { useState } from "react";
+import ExportBtn from "./ExportBtn";
+import { exportRowsXlsx, mergeSeriesRows } from "../utils/exportXlsx";
 
-export default function MultiChart({ series, height = 240 }) {
+export default function MultiChart({ series, height = 240, name = "graf" }) {
   const [hovT, setHovT] = useState(null);
   const [hovY, setHovY] = useState(0.15);
   const [hidden, setHidden] = useState(() => new Set());
@@ -77,6 +79,10 @@ export default function MultiChart({ series, height = 240 }) {
   return (
     <div>
       <div style={{ position: "relative" }} onMouseMove={onMove} onMouseLeave={() => setHovT(null)}>
+        <ExportBtn onClick={() => exportRowsXlsx(name, mergeSeriesRows(shown.map((sr) => ({
+          col: `${sr.label} (${isPct(sr) ? "%" : "kW"})`,
+          points: sr.points.map((p) => ({ t: p.time, v: Math.round(sval(sr, p) * 1000) / 1000 })),
+        }))))} />
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
           <text x={14} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
                 transform={`rotate(-90 14 ${padT + plotH / 2})`}>kW</text>

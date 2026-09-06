@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import ExportBtn from "./ExportBtn";
+import { exportRowsXlsx } from "../utils/exportXlsx";
 
 const GREEN = "#3fb950";
 const RED = "#e06c75";
@@ -92,6 +94,9 @@ export default function SpotCurve({ rules = [] }) {
     <>
       {controls}
       <div style={{ position: "relative" }} onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
+      <ExportBtn onClick={() => exportRowsXlsx("spot-ceny", slots.map((sl) => ({
+        "Čas od": new Date(sl.start).toLocaleString("cs-CZ"),
+        "Cena (Kč/MWh)": Math.round(sl.price) })))} />
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
         <text x={13} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
               transform={`rotate(-90 13 ${padT + plotH / 2})`}>Kč/MWh</text>

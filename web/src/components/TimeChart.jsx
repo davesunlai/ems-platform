@@ -2,8 +2,10 @@
 // Bez externích knihoven. Hodnoty ve W se zobrazují jako kW.
 // Hover: svislá čára u kurzoru + bublina s časem a hodnotou.
 import { useState } from "react";
+import ExportBtn from "./ExportBtn";
+import { exportRowsXlsx } from "../utils/exportXlsx";
 
-export default function TimeChart({ points, color = "#3fb950", unit = "", height = 220 }) {
+export default function TimeChart({ points, color = "#3fb950", unit = "", height = 220, name = "prubeh", label = "Hodnota" }) {
   const [hov, setHov] = useState(null);
   if (!points || points.length < 2)
     return <div className="muted" style={{ fontSize: 12, padding: "20px 0" }}>Sbírám data…</div>;
@@ -66,6 +68,9 @@ export default function TimeChart({ points, color = "#3fb950", unit = "", height
 
   return (
     <div style={{ position: "relative" }} onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
+      <ExportBtn onClick={() => exportRowsXlsx(name, points.map((p) => ({
+        "Čas": new Date(p.time).toLocaleString("cs-CZ"),
+        [`${label} (${dispUnit || "–"})`]: Math.round(disp(p.value) * 1000) / 1000 })))} />
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
         <defs>
           <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">

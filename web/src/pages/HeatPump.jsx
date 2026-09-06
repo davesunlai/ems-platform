@@ -1,6 +1,8 @@
 // 🌀 Stránka Tepelné čerpadlo: graf teplot s podbarvením běhů, denní sloupce el+COP, historie spínání.
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import ExportBtn from "./../components/ExportBtn";
+import { exportRowsXlsx } from "../utils/exportXlsx";
 
 const MODE_CZ = { heating: "topení", dhw: "TUV", defrost: "odtávání", cooling: "chlazení", nhz: "dohřev" };
 const MODE_COLOR = { heating: "#3fb950", dhw: "#58a6ff", defrost: "#d29922", cooling: "#39c5cf", nhz: "#f85149" };
@@ -25,6 +27,10 @@ function TempChart({ rows, runs }) {
   const nearest = hov != null ? rows.reduce((b, r) => Math.abs(new Date(r.ts) - hov) < Math.abs(new Date(b.ts) - hov) ? r : b, rows[0]) : null;
   return (
     <div style={{ position: "relative" }}>
+      <ExportBtn onClick={() => exportRowsXlsx("tc-teploty", rows.map((r) => ({
+        "Čas": new Date(r.ts).toLocaleString("cs-CZ"),
+        "Nádrž TUV (°C)": r.t_tank, "Topná voda (°C)": r.t_buffer,
+        "Topná voda cíl (°C)": r.t_buffer_set, "Venkovní (°C)": r.t_outdoor })))} />
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}
            onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect();
              const fx = (e.clientX - r.left) / r.width * W;
@@ -86,6 +92,10 @@ function DailyBars({ days }) {
   const Yel = (v) => padT + plotH * (1 - v / maxEl);
   const Ycop = (v) => padT + plotH * (1 - v / maxCop);
   return (
+    <div style={{ position: "relative" }}>
+    <ExportBtn onClick={() => exportRowsXlsx("tc-denni", days.map((d) => ({
+      "Den": d.day, "Elektřina topení (kWh)": d.el_heating_kwh, "Elektřina TUV (kWh)": d.el_dhw_kwh,
+      "Elektřina celkem (kWh)": d.el_kwh, "COP": d.cop })))} />
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}>
       {[0.5, 1].map((f) => (
         <g key={f}><line x1={padL} x2={W - padR} y1={Yel(maxEl * f)} y2={Yel(maxEl * f)} stroke="var(--border)" strokeDasharray="2 4" />
@@ -106,6 +116,7 @@ function DailyBars({ days }) {
           </g>);
       })}
     </svg>
+    </div>
   );
 }
 

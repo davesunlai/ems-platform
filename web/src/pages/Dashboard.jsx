@@ -288,7 +288,8 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
                   onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1} title="delší okno (až 30 dní)">+</button>
         </div>
         {hist.length >= 2
-          ? <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color={CHART_COLOR[chartMetric] || "#3fb950"} />
+          ? <TimeChart points={hist} unit={metrics[chartMetric]?.unit} color={CHART_COLOR[chartMetric] || "#3fb950"}
+                       name={`${id}-${chartMetric}`} label={chartMetric} />
           : <p className="muted" style={{ fontSize: 13, padding: "24px 0", textAlign: "center" }}>Pro tuto veličinu zatím není dost dat v tomto okně.</p>}
       </div>
       )}
@@ -780,7 +781,7 @@ function LocalityChart({ deviceIds }) {
                 onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1}>+</button>
       </div>
       {!data ? <p className="muted" style={{ fontSize: 12 }}>Načítám…</p>
-             : <MultiChart series={series} />}
+             : <MultiChart series={series} name="teraems-prehled" />}
     </div>
   );
 }

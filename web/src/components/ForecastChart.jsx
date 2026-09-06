@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import ExportBtn from "./ExportBtn";
+import { exportRowsXlsx, mergeSeriesRows } from "../utils/exportXlsx";
 
 const PV = "#3fb950", BAND = "rgba(63,185,80,0.16)", LOAD = "#e3b341", SPOT = "#58a6ff";
 
@@ -93,6 +95,15 @@ export default function ForecastChart({ localityId }) {
         {plan && plan.length > 0 && <span style={{ color: "#e06c73" }}>▮ vybíjení do sítě</span>}
         {plan && plan.some((p) => p.deferrable_on) && <span style={{ color: "#f0883e" }}>▮ spirála</span>}
       </div>
+      <div style={{ position: "relative" }}>
+      <ExportBtn onClick={() => exportRowsXlsx("predikce", mergeSeriesRows([
+        { col: "Výroba avg (kW)", points: avg.map((p) => ({ t: p.ts, v: Math.round(p.pv_w / 10) / 100 })) },
+        { col: "Výroba min (kW)", points: avg.map((p) => ({ t: p.ts, v: Math.round((p.pv_w_lo ?? p.pv_w) / 10) / 100 })) },
+        { col: "Výroba max (kW)", points: avg.map((p) => ({ t: p.ts, v: Math.round((p.pv_w_hi ?? p.pv_w) / 10) / 100 })) },
+        { col: "Spotřeba (kW)", points: loadS.map((p) => ({ t: p.ts, v: Math.round(p.load_w / 10) / 100 })) },
+        { col: "Cena nákup (Kč/kWh)", points: rightS.map((p) => ({ t: p.ts, v: Math.round(p.v * 100) / 100 })) },
+        ...(plan && plan.length ? [{ col: "SoC plán (%)", points: plan.map((p) => ({ t: p.ts, v: p.soc_pct })) }] : []),
+      ]))} />
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}
            onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
         {/* osy kW (vlevo) */}
@@ -152,6 +163,7 @@ export default function ForecastChart({ localityId }) {
         {/* hover */}
         {hov && <line x1={X(hov.t)} y1={padT} x2={X(hov.t)} y2={padT + plotH} stroke="#fff" strokeWidth="0.5" opacity="0.4" />}
       </svg>
+      </div>
       {hov && (
         <div className="muted" style={{ fontSize: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
           <span>{new Date(hov.t).toLocaleString("cs-CZ", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>
