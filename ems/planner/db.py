@@ -101,6 +101,7 @@ async def ensure_schema() -> None:
             ("dso_export_limit_kw", "DOUBLE PRECISION DEFAULT 9.45"),
             ("export_price_floor_czk", "DOUBLE PRECISION DEFAULT 0.7"),
             ("import_price_ceiling_czk", "DOUBLE PRECISION DEFAULT 1.0"),
+            ("grid_charge_enabled", "BOOLEAN NOT NULL DEFAULT TRUE"),
             ("reserve_margin_pct", "DOUBLE PRECISION DEFAULT 20"),
             ("priority_order", "TEXT DEFAULT '[\"reserve\",\"export\",\"spiral\",\"grid_charge\"]'"),
             ("hodnota_tepla_leto", "DOUBLE PRECISION DEFAULT 2.0"),

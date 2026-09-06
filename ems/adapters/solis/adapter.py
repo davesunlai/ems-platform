@@ -229,6 +229,16 @@ class SolisAdapter:
             reg = CTRL_FORCE_POWER if int(mode) == 1 else CTRL_FORCE_DISCHARGE_POWER
             res["power"] = await self.write_holding(reg, int(power))
         res["force"] = await self.write_holding(CTRL_FORCE, int(mode))
+        # ÚKLID (brief PLANNER-GRIDCHARGE-FIX §3.1): výkonové registry nesmí viset —
+        # stop nuluje OBA (43129 i 43136); start force nuluje protisměrný. Reziduum
+        # 43136=734 po stopu způsobilo tiché ~1kW nabíjení ze sítě (6. 9., hypotéza D).
+        if int(mode) == 0:
+            res["clear_discharge_power"] = await self.write_holding(CTRL_FORCE_DISCHARGE_POWER, 0)
+            res["clear_charge_power"] = await self.write_holding(CTRL_FORCE_POWER, 0)
+        elif int(mode) == 1:
+            res["clear_discharge_power"] = await self.write_holding(CTRL_FORCE_DISCHARGE_POWER, 0)
+        elif int(mode) == 2:
+            res["clear_charge_power"] = await self.write_holding(CTRL_FORCE_POWER, 0)
         return res
 
     async def poke_force(self, mode: int) -> dict:

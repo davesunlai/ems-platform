@@ -853,6 +853,11 @@ function PlannerPanel({ locId }) {
           <input type="checkbox" checked={!!cfg.allow_grid_discharge} onChange={(e) => set("allow_grid_discharge", e.target.checked)} />
           🔻 vybíjet ve špičce do sítě
         </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
+               title={`Planner smí nabíjet baterii ze sítě jen v nejlevnějších hodinách a jen pod stropem ${cfg.import_price_ceiling_czk ?? "?"} Kč/kWh. Vypnutím se nabíjení ze sítě plánovačem zcela zakáže (záporné ceny se řeší zvlášť).`}>
+          <input type="checkbox" checked={cfg.grid_charge_enabled !== false} onChange={(e) => set("grid_charge_enabled", e.target.checked)} />
+          🔌 nabíjet ze sítě při levném spotu
+        </label>
         <button className="btn primary" style={{ marginLeft: "auto", padding: "7px 15px" }} disabled={busy} onClick={save}>Uložit a přepočítat</button>
       </div>
 

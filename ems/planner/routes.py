@@ -14,6 +14,7 @@ control = require_permission("control")
 
 
 class PlannerConfigIn(BaseModel):
+    grid_charge_enabled: bool | None = None
     enabled: bool | None = None
     allow_grid_discharge: bool | None = None
     capacity_kwh: float | None = None
@@ -83,8 +84,23 @@ async def get_plan(locality_id: int, _: dict = Depends(read)):
 
 
 @router.put("/{locality_id}/config")
-async def put_config(locality_id: int, body: PlannerConfigIn, _: dict = Depends(control)):
-    cfg = await pdb.upsert_config(locality_id, body.model_dump(exclude_unset=True))
+async def put_config(locality_id: int, body: PlannerConfigIn, user: dict = Depends(control)):
+    data = body.model_dump(exclude_unset=True)
+    # Audit přepínače nabíjení ze sítě (brief §3.2): kdo a kdy ho změnil
+    if "grid_charge_enabled" in data:
+        try:
+            old = (await pdb.get_config(locality_id) or {}).get("grid_charge_enabled")
+            if old is not None and bool(old) != bool(data["grid_charge_enabled"]):
+                from ems.alerts import db as alerts_db
+                from ems.notify import dispatch as notify_dispatch
+                stav = "ZAPNUTO" if data["grid_charge_enabled"] else "VYPNUTO"
+                await alerts_db.record_event(locality_id, "config",
+                    "Nabíjení baterie ze sítě (levný spot)",
+                    f"{stav} · uživatel {user.get('username', '?')}")
+                await notify_dispatch.notify_new_alerts()
+        except Exception:
+            pass
+    cfg = await pdb.upsert_config(locality_id, data)
     # po změně rovnou přepočítej plán
     try:
         await service.run_locality(locality_id)

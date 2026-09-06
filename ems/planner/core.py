@@ -17,7 +17,8 @@ def _clamp(x, lo, hi):
 def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
          max_charge_kwh, max_discharge_kwh, allow_grid_discharge=False,
          export_price_floor=0.0, export_limit_kwh=None, neg_price_pull=True,
-         floor_kwh=None, import_price_ceiling=None, export_before_battery=False) -> list[dict]:
+         floor_kwh=None, import_price_ceiling=None, export_before_battery=False,
+         grid_charge_enabled=True) -> list[dict]:
     n = len(ts)
     soc = soc_now_pct / 100.0 * cap_kwh
     floor_scalar = floor_pct / 100.0 * cap_kwh
@@ -71,7 +72,7 @@ def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
                 exp = min(surplus - chg, elimit)                 # strop měniče (zbytek se ořízne)
                 action = "charge_pv" if chg > 0 else ("export" if exp > 0 else "idle")
                 reason = f"přebytek FVE {surplus:.1f} kWh"
-            if h in cheap and soc < grid_charge_cap(h):           # dofoukni levně z gridu (s místem pro FVE)
+            if grid_charge_enabled and h in cheap and soc < grid_charge_cap(h):   # dofoukni levně z gridu (s místem pro FVE)
                 extra = min(grid_charge_cap(h) - soc, max_charge_kwh - chg)
                 if extra > 0.05:
                     soc += extra; imp += extra; chg += extra
@@ -88,7 +89,7 @@ def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
                 to_grid = min(max(0.0, soc - floor), max_discharge_kwh - to_load, elimit)
                 soc -= to_grid; exp += to_grid; dis = to_load + to_grid
                 action = "discharge_grid"; reason = f"špička: do sítě {to_grid:.1f} kWh"
-            elif h in cheap and soc < grid_charge_cap(h):        # levné okno → nabíjej z gridu
+            elif grid_charge_enabled and h in cheap and soc < grid_charge_cap(h):   # levné okno → nabíjej z gridu
                 extra = min(grid_charge_cap(h) - soc, max_charge_kwh)
                 soc += extra; imp += deficit + extra; chg = extra
                 action = "charge_grid"; reason = f"levné okno: nabití {extra:.1f} kWh"
