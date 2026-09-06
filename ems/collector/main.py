@@ -315,6 +315,26 @@ async def tick_alerts() -> None:
         logger.debug("alert evaluator: %s", exc)
 
 
+def pick_control(rule_pick, plan_pick, sources: dict):
+    """Výběr řídicího zdroje pro modul dle per-modul vypínačů (⏰ schedule / 🧠 planner).
+    None = žádný povolený zdroj → modul se nechává na pokoji (příp. jednorázový úklid)."""
+    if rule_pick is not None and sources.get("schedule", True):
+        return rule_pick
+    if sources.get("planner", True):
+        return plan_pick
+    return None
+
+
+def should_release(st: dict) -> bool:
+    """Uvolnit modul stopem, pokud ho drží vypnutý automatický zdroj (ruční force nech)."""
+    return st.get("source") in ("planner", "schedule") and st.get("action") not in (None, "idle")
+
+
+async def _control_sources_map() -> dict:
+    from ems.api.db import list_devices as _ld
+    return {d["device_id"]: (d.get("control_sources") or {}) for d in await _ld()}
+
+
 async def tick_planner(state: dict) -> None:
     """Přepočet plánu (à 30 min) + výkon: enqueue aktuální akce při změně
     pro lokality se zapnutým plánovačem. Force jede BEZ syrového výkonu —
@@ -435,24 +455,37 @@ async def tick_planner(state: dict) -> None:
                                                           "ok": c["ok"], "latched": c.get("latched", False)}
                                              for c in _ev["conditions"]},
                                   "rule_id": batt_rule["id"], "window": f"{batt_rule['time_from']}–{batt_rule['time_to']}"}
+            rule_pick = None
+            if batt_rule:
                 if batt_rule["action"] == "force_charge":
-                    desired, cmd, params = "force_charge", "force_charge", {"power": p_reg, "source": "schedule", "reason": lbl}
+                    rule_pick = ("force_charge", "force_charge", {"power": p_reg, "source": "schedule", "reason": lbl})
                 elif batt_rule["action"] == "force_discharge":
-                    desired, cmd, params = "force_discharge", "force_discharge", {"power": p_reg, "source": "schedule", "reason": lbl}
+                    rule_pick = ("force_discharge", "force_discharge", {"power": p_reg, "source": "schedule", "reason": lbl})
                 else:
-                    desired, cmd, params = "idle", "stop", {"source": "schedule", "reason": lbl}
+                    rule_pick = ("idle", "stop", {"source": "schedule", "reason": lbl})
                 if cond_audit:
-                    params["conditions"] = cond_audit
-            elif act == "charge_grid":
-                desired, cmd, params = "force_charge", "force_charge", {"power": power_reg, "source": "planner"}
+                    rule_pick[2]["conditions"] = cond_audit
+            if act == "charge_grid":
+                plan_pick = ("force_charge", "force_charge", {"power": power_reg, "source": "planner"})
             elif act == "discharge_grid":
-                desired, cmd, params = "force_discharge", "force_discharge", {"power": power_reg, "source": "planner"}
+                plan_pick = ("force_discharge", "force_discharge", {"power": power_reg, "source": "planner"})
             else:
-                desired, cmd, params = "idle", "stop", {"source": "planner"}
+                plan_pick = ("idle", "stop", {"source": "planner"})
             if not batt_rule and blocked_batt:
-                params["schedule_blocked"] = blocked_batt   # proč teď neřídí časový plán (okno aktivní, podmínky NE)
+                plan_pick[2]["schedule_blocked"] = blocked_batt   # proč teď neřídí časový plán (okno aktivní, podmínky NE)
+            src_map = await _control_sources_map()
             for dev in devs:
                 st = states.get(dev) or {}
+                pick = pick_control(rule_pick, plan_pick, src_map.get(dev, {}))
+                if pick is None:
+                    # oba automatické zdroje pro modul vypnuty → nezasahovat; jen jednorázově
+                    # uvolnit, pokud modul ještě drží dřívější force od planneru/plánu
+                    if should_release(st):
+                        cid = await control_db.enqueue(dev, "stop",
+                              {"source": "planner", "reason": "zdroje řízení pro modul vypnuty"}, username="planner")
+                        logger.info("planner lok %s modul %s: uvolněn (zdroje vypnuty, povel #%s)", lid, dev, cid)
+                    continue
+                desired, cmd, params = pick[0], pick[1], dict(pick[2])
                 # Ruční přebití: po manuálním povelu nech plánovač modul 30 min na pokoji
                 # (jinak by planner okamžitě přebil tvůj Stop / ruční zásah).
                 since = st.get("since")
@@ -466,7 +499,7 @@ async def tick_planner(state: dict) -> None:
                         pass
                 cur = st.get("action", "idle")
                 if cur != desired:
-                    src = "schedule" if batt_rule else "planner"
+                    src = params.get("source", "planner")
                     cid = await control_db.enqueue(dev, cmd, params, username=src)
                     await control_db.record(src, dev, cmd,
                                             {**params, "reason": params.get("reason") or ca.get("reason")}, True, {"queued": cid})

@@ -69,6 +69,13 @@ async def evaluate_all(price, skip_devices=None) -> None:
     aby si dva regulátory nelezly do zelí (plánovač má přednost).
     """
     skip = set(skip_devices or [])
+    try:   # per-modul vypínač ⚡ SPOT (params.control_sources.spot = false)
+        from ems.api.db import list_devices as _ld
+        for d in await _ld():
+            if (d.get("control_sources") or {}).get("spot") is False:
+                skip.add(d["device_id"])
+    except Exception:
+        pass
     by_target: dict[str, list] = {}
     for r in await auto_db.list_enabled():
         t = r.params.get("target_module")

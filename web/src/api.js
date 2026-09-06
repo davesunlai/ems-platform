@@ -53,6 +53,8 @@ export const api = {
   updateModule: (id, patch) => request(`/api/admin/modules/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
   deleteModule: (id) => request(`/api/admin/modules/${encodeURIComponent(id)}`, { method: "DELETE" }),
   controlModules: () => request("/api/control/modules"),
+  setControlSources: (id, body) => request(`/api/control/modules/${id}/control-sources`,
+    { method: "PUT", body: JSON.stringify(body) }),
   enqueueCommand: (id, action, params = {}) =>
     request(`/api/control/${encodeURIComponent(id)}/command`, { method: "POST", body: { action, params } }),
   commandStatus: (cmdId) => request(`/api/control/command/${cmdId}`),

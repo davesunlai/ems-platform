@@ -337,6 +337,35 @@ function SpotDischargePanel({ moduleId }) {
   );
 }
 
+function ControlSourcesRow({ mod }) {
+  // Per-modul vypínače automatických zdrojů řízení; ruční povely jdou vždy.
+  const [src, setSrc] = useState({ planner: true, schedule: true, spot: true, ...(mod.control_sources || {}) });
+  const [saving, setSaving] = useState(false);
+  const flip = async (k) => {
+    const next = { ...src, [k]: !src[k] };
+    setSrc(next); setSaving(true);
+    try { await api.setControlSources(mod.id, next); }
+    catch (e) { setSrc(src); alert("Uložení selhalo: " + e.message); }
+    setSaving(false);
+  };
+  const item = (k, ico, lbl, hint) => (
+    <label key={k} title={hint} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5,
+                                         opacity: src[k] ? 1 : 0.55 }}>
+      <input type="checkbox" checked={!!src[k]} disabled={saving} onChange={() => flip(k)} />{ico} {lbl}
+    </label>
+  );
+  return (
+    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center",
+                  padding: "6px 10px", background: "var(--bg2, #161b22)", borderRadius: 8, marginBottom: 8 }}>
+      <span className="muted" style={{ fontSize: 12 }}>Zdroje řízení:</span>
+      {item("planner", "🧠", "chytré řízení", "Plánovač (predikce, levná okna, spirála)")}
+      {item("schedule", "⏰", "časový plán", "Pravidla časového plánu (okna force / výstupy)")}
+      {item("spot", "⚡", "spot pravidla", "Reaktivní SPOT pravidla (nabíjení/vybíjení dle ceny)")}
+      <span className="muted" style={{ fontSize: 11.5 }}>· ruční povely jdou vždy · vypnutý zdroj modul uvolní</span>
+    </div>
+  );
+}
+
 function SolisControl({ mod }) {
   const has = (k) => (mod.control_enabled || []).includes(k);
   const [power, setPower] = useState(5);
@@ -417,6 +446,7 @@ function SolisControl({ mod }) {
             color: "#0b0e13", background: b.bg, whiteSpace: "nowrap" }}>{b.t}{src}</span>;
         })()}
       </h3>
+      <ControlSourcesRow mod={mod} />
       <p className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
         ⚠️ Reálně zapisuje do měniče. Výkon zadáváš v <b>kW pro celé úložiště</b> (obě baterie dohromady). Vybíjení jde do sítě jen nad rámec spotřeby domu. (nabíjení reg. 43136, vybíjení 43129; jednotka 10 W)
       </p>

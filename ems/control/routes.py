@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from ems.auth.deps import require_permission
 from ems.api.db import get_pool, list_devices
@@ -27,6 +28,41 @@ async def _has_battery(device_id: str, days: int = 7) -> bool:
     return v is not None
 
 
+class ControlSourcesBody(BaseModel):
+    planner: bool = True
+    schedule: bool = True
+    spot: bool = True
+
+
+@router.put("/modules/{module_id}/control-sources")
+async def set_control_sources(module_id: str, body: ControlSourcesBody,
+                              user: dict = Depends(require_permission("control"))):
+    """Per-modul vypínače zdrojů řízení (🧠 planner / ⏰ časový plán / ⚡ spot).
+    Ruční povely nejsou zdrojem — jdou vždy. Změna se audituje."""
+    from ems.api.db import get_pool
+    import json as _json
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT locality_id, params FROM modules WHERE id = $1", module_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="modul neexistuje")
+        newsrc = {"planner": body.planner, "schedule": body.schedule, "spot": body.spot}
+        await conn.execute(
+            "UPDATE modules SET params = COALESCE(params,'{}'::jsonb) || jsonb_build_object('control_sources', $2::jsonb) "
+            "WHERE id = $1", module_id, _json.dumps(newsrc))
+    try:
+        from ems.alerts import db as alerts_db
+        from ems.notify import dispatch as notify_dispatch
+        on = [n for n, k in (("🧠 plánovač", "planner"), ("⏰ časový plán", "schedule"), ("⚡ spot", "spot")) if newsrc[k]]
+        await alerts_db.record_event(row["locality_id"], "config", f"Zdroje řízení – {module_id}",
+                                     (" · ".join(on) if on else "vše vypnuto (jen ruční)")
+                                     + f" · uživatel {user.get('username', '?')}")
+        await notify_dispatch.notify_new_alerts()
+    except Exception:
+        pass
+    return {"module_id": module_id, "control_sources": newsrc}
+
+
 @router.get("/modules")
 async def controllable_modules(_: dict = Depends(require_permission("control"))):
     """Řiditelné moduly s lokalitou — Solis (control_enabled) i goodwe (s baterií)."""
@@ -38,7 +74,8 @@ async def controllable_modules(_: dict = Depends(require_permission("control")))
         if adapter == "solis" and ce:
             out.append({"id": d["device_id"], "name": d["device_id"], "adapter": "solis",
                         "locality_id": d.get("locality_id"), "locality": d.get("locality"),
-                        "control_enabled": ce})
+                        "control_enabled": ce,
+                        "control_sources": d.get("control_sources") or {}})
         elif adapter == "goodwe" and await _has_battery(d["device_id"]):
             out.append({"id": d["device_id"], "name": d["device_id"], "adapter": "goodwe",
                         "locality_id": d.get("locality_id"), "locality": d.get("locality"),
