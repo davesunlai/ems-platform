@@ -35,6 +35,8 @@ class DeviceType(str, Enum):
 class Metric(str, Enum):
     """Měřené veličiny v kanonickém modelu. Jednotky viz UNIT_OF."""
     PV_POWER = "pv_power"
+    INVERTER_STATE = "inverter_state"     # stavové slovo měniče (Solis 33095; 4121 = interní override)
+    INVERTER_FAULT = "inverter_fault"     # první nenulový fault registr (Solis 33116+), 0 = bez chyby
     ACTIVE_POWER = "active_power"
     REACTIVE_POWER = "reactive_power"
     BATTERY_POWER = "battery_power"

@@ -21,7 +21,7 @@ import logging
 
 from ems.core.model import DeviceType, Measurement, Metric, Reading, UNIT_OF, utcnow
 from .mapping import (
-    BATTERY_PACKS, BLOCK_BAT1, BLOCK_BAT2, BLOCK_GRID, BLOCK_SYS1, BLOCK_SYS2,
+    BATTERY_PACKS, BLOCK_BAT1, BLOCK_BAT2, BLOCK_GRID, BLOCK_SYS1, BLOCK_SYS2, BLOCK_STATE,
     CTRL_FORCE, CTRL_FORCE_POWER, CTRL_FORCE_DISCHARGE_POWER, CTRL_WORK_MODE,
     CTRL_CHARGE_CURRENT_LIMIT, CTRL_DISCHARGE_CURRENT_LIMIT,
     CTRL_SOC_BACKUP, CTRL_SOC_FORCE,
@@ -351,6 +351,7 @@ class SolisAdapter:
             blocks += [BLOCK_BAT1 if self.battery_pack != 2 else BLOCK_BAT2]
         if dtype == DeviceType.HYBRID.value:
             blocks += [BLOCK_BAT1, BLOCK_BAT2]
+        blocks += [BLOCK_STATE]
         cache = self._load(blocks)
 
         measurements: list[Measurement] = []
@@ -425,6 +426,18 @@ class SolisAdapter:
                 add(temp_m[pid], d.get("temp"))
             if socs:
                 add(Metric.BATTERY_SOC, sum(socs) / len(socs))   # průměr (pro souhrn)
+            # --- stav/chyby měniče (diagnostika, vyšetřování 6.–7. 9.) ---
+            from .mapping import STATE_WORD, FAULT_REGS
+            st_word = self._dec(cache, STATE_WORD)
+            if st_word is not None:
+                add(Metric.INVERTER_STATE, st_word)
+                if int(st_word) == 4121:
+                    self._state_warn(st_word)
+            faults = [int(self._dec(cache, (r, "u16", 1.0)) or 0) for r in FAULT_REGS]
+            first_fault = next((f for f in faults if f), 0)
+            add(Metric.INVERTER_FAULT, first_fault)
+            if first_fault:
+                logger.warning("Solis '%s': FAULT registry 33116+: %s", self.device_id, faults)
             if powers:
                 tot_p = sum(powers)
                 add(Metric.BATTERY_POWER, tot_p)                 # součet (pro graf/souhrn)
@@ -435,6 +448,14 @@ class SolisAdapter:
             # LOAD_POWER / BACKUP: registry pro 3f model zatím nepotvrzené (brief §9).
 
         return Reading(device_id=self.device_id, timestamp=utcnow(), measurements=measurements)
+
+    def _state_warn(self, word) -> None:
+        import time as _t
+        now = _t.monotonic()
+        if now - getattr(self, "_state_warn_ts", -1e9) > 600:
+            self._state_warn_ts = now
+            logger.warning("Solis '%s': stav měniče %s (0x%04X) — interní override, "
+                           "force povely mohou být ignorovány", self.device_id, int(word), int(word))
 
     def _soc_guard(self, soc: float, power_w: float) -> None:
         import time as _t

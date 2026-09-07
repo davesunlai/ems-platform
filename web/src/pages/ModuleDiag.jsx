@@ -85,6 +85,20 @@ export default function ModuleDiag() {
           })}</tbody></table>
       </div>
 
+      {(d.state_episodes || []).length > 0 && (
+        <div className="panel" style={{ marginBottom: 14, borderLeft: "3px solid #f85149" }}>
+          <b style={{ fontSize: 14 }}>⚠ Epizody interního stavu měniče (≠ 15)</b>
+          <p className="muted" style={{ fontSize: 12, margin: "4px 0 6px" }}>
+            Stav 4121 = měnič ignoruje force a potichu nabíjí ze sítě (viz vyšetřovací spis SOLIS). Alarm chodí do 🔔.
+          </p>
+          <table style={{ fontSize: 12.5 }}>
+            <thead><tr><th>Čas</th><th>Stav</th></tr></thead>
+            <tbody>{d.state_episodes.map((e, i) => (
+              <tr key={i}><td>{fmt(e.time)}</td>
+                <td style={e.value === 4121 ? { color: "#f85149", fontWeight: 700 } : {}}>{e.value}</td></tr>))}
+            </tbody></table>
+        </div>)}
+
       <div className="panel">
         <b style={{ fontSize: 14 }}>Timeline povelů (posledních 30)</b>
         {d.commands.length ? (

@@ -46,6 +46,13 @@ async def delete_module(module_id: str, _: dict = Depends(require_permission("ad
         raise HTTPException(status_code=404, detail="Modul nenalezen")
 
 
+async def _ep_rows(query: str, module_id: str, hours: int):
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetch(query, module_id, hours)
+
+
 @router.get("/modules/{module_id}/diagnostics")
 async def module_diagnostics(module_id: str, hours: int = 24,
                              _: dict = Depends(require_permission("read"))):
@@ -135,4 +142,12 @@ async def module_diagnostics(module_id: str, hours: int = 24,
                       "result_short": str(c["result"])[:160] if c["result"] else None}
                      for c in cmds],
         "box": box,
+        "state_episodes": [
+            {"time": iso(e["t"]), "value": int(e["value"])}
+            for e in (await _ep_rows(
+                """SELECT time AS t, value FROM samples
+                   WHERE device_id = $1 AND metric = 'inverter_state' AND value != 15
+                     AND time > now() - make_interval(hours => $2)
+                   ORDER BY time DESC LIMIT 60""", module_id, hours))
+        ],
     }

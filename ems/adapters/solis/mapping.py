@@ -75,3 +75,12 @@ CONTROL_REGISTERS = [
     ("SOC backup         ", CTRL_SOC_BACKUP),
     ("SOC force          ", CTRL_SOC_FORCE),
 ]
+
+
+# Stavový blok (vyšetřování 6.–7. 9. 2026): 33095 = stavové slovo (15 = normální
+# provoz/force; 4121 = interní override — měnič ignoruje force a trickle-nabíjí
+# ~1,4 kW ze sítě; pozorováno v noci, ráno, poledne i večer, i mimo Time-Charging
+# okno a i po jeho vynulování). 33116+ = fault registry.
+BLOCK_STATE = (33095, 30)   # 33095..33124
+STATE_WORD = (33095, "u16", 1.0)
+FAULT_REGS = [33116, 33117, 33118, 33119, 33120, 33121]

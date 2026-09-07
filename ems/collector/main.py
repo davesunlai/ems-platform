@@ -265,6 +265,7 @@ async def run() -> None:
             await tick_planner(state)
             await tick_alerts()
             await tick_force_keepalive(state)
+            await tick_inverter_state(state)
             await tick_notify(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
@@ -533,6 +534,42 @@ async def tick_planner(state: dict) -> None:
                     logger.debug("Časový plán výstup %s lok %s: %s", oid, lid, exc)
     except Exception as exc:
         logger.debug("Planner výkon: %s", exc)
+
+
+async def tick_inverter_state(state: dict) -> None:
+    """Alarm: měnič ve stavu 4121 (interní override — ignoruje force, trickle-nabíjí).
+    Event + notifikace s cooldownem 30 min per modul; zotavení zaloguje info."""
+    now = asyncio.get_event_loop().time()
+    if now - state.get("last_invstate_check", 0) < 60:
+        return
+    state["last_invstate_check"] = now
+    try:
+        from ems.api.db import get_pool
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT DISTINCT ON (s.device_id) s.device_id, s.value, m.locality_id
+                   FROM samples s JOIN modules m ON m.id = s.device_id
+                   WHERE s.metric = 'inverter_state' AND s.time > now() - interval '5 minutes'
+                   ORDER BY s.device_id, s.time DESC""")
+        bad = state.setdefault("invstate_bad", {})
+        for r in rows:
+            dev, val = r["device_id"], int(r["value"])
+            if val == 4121:
+                if now - bad.get(dev, -1e9) > 1800:
+                    bad[dev] = now
+                    from ems.alerts import db as alerts_db
+                    from ems.notify import dispatch as notify_dispatch
+                    await alerts_db.record_event(r["locality_id"], "inverter",
+                        f"⚠ Měnič v interním override stavu (4121) – {dev}",
+                        "Střídač ignoruje force povely a potichu nabíjí ze sítě (~1,4 kW). "
+                        "Viz diagnostika modulu / vyšetřovací spis SOLIS.")
+                    await notify_dispatch.notify_new_alerts()
+            elif dev in bad:
+                del bad[dev]
+                logger.info("Měnič %s: stav zpět v normálu (%s)", dev, val)
+    except Exception as exc:
+        logger.debug("tick_inverter_state: %s", exc)
 
 
 async def tick_force_keepalive(state: dict) -> None:
