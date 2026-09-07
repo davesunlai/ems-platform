@@ -142,6 +142,15 @@ async def module_diagnostics(module_id: str, hours: int = 24,
                       "result_short": str(c["result"])[:160] if c["result"] else None}
                      for c in cmds],
         "box": box,
+        "state_daily": [
+            {"day": str(e["d"]), "count": int(e["c"])}
+            for e in (await _ep_rows(
+                """SELECT date_trunc('day', time AT TIME ZONE 'Europe/Prague')::date AS d, count(*) AS c
+                   FROM samples
+                   WHERE device_id = $1 AND metric = 'inverter_state' AND value = 4121
+                     AND time > now() - make_interval(hours => GREATEST($2, 336))
+                   GROUP BY 1 ORDER BY 1 DESC LIMIT 14""", module_id, hours))
+        ],
         "state_episodes": [
             {"time": iso(e["t"]), "value": int(e["value"])}
             for e in (await _ep_rows(

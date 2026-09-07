@@ -362,7 +362,25 @@ function ControlSourcesRow({ mod }) {
       {item("schedule", "⏰", "časový plán", "Pravidla časového plánu (okna force / výstupy)")}
       {item("spot", "⚡", "spot pravidla", "Reaktivní SPOT pravidla (nabíjení/vybíjení dle ceny)")}
       <span className="muted" style={{ fontSize: 11.5 }}>· ruční povely jdou vždy · vypnutý zdroj modul uvolní</span>
+      <SelfHealToggle mod={mod} />
     </div>
+  );
+}
+
+function SelfHealToggle({ mod }) {
+  const [on, setOn] = useState(!!mod.self_heal_igfol);
+  const [busy, setBusy] = useState(false);
+  const flip = async () => {
+    setBusy(true);
+    try { await api.setSelfHeal(mod.id, !on); setOn(!on); }
+    catch (e) { alert("Uložení selhalo: " + e.message); }
+    setBusy(false);
+  };
+  return (
+    <label title="Při poruše IGFOL-F (stav 4121) za aktivního force provede stop→re-force, max 1× za 15 min. Poruchu neopravuje — jen udrží řízení v chodu do zásahu servisu."
+           style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, opacity: on ? 1 : 0.55 }}>
+      <input type="checkbox" checked={on} disabled={busy} onChange={flip} />🩹 samoléčba IGFOL-F
+    </label>
   );
 }
 

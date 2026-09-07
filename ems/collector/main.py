@@ -536,6 +536,51 @@ async def tick_planner(state: dict) -> None:
         logger.debug("Planner výkon: %s", exc)
 
 
+async def _self_heal_igfol(dev: str, state: dict, now: float) -> None:
+    """🩹 Samoléčba IGFOL-F: drží-li modul force a měnič spadl do 4121, jednou za 15 min
+    provede stop→re-force (empiricky poruchu vždy srovnal). Jen s params.self_heal_igfol=true."""
+    heals = state.setdefault("igfol_heals", {})
+    if now - heals.get(dev, -1e9) < 900:
+        return
+    try:
+        from ems.api.db import get_pool
+        import json as _json
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            mod = await conn.fetchrow("SELECT params FROM modules WHERE id = $1", dev)
+            params = mod["params"] if mod else None
+            if isinstance(params, str):
+                try:
+                    params = _json.loads(params)
+                except Exception:
+                    params = {}
+            if not (params or {}).get("self_heal_igfol"):
+                return
+            st = await conn.fetchrow("SELECT action FROM control_state WHERE module_id = $1", dev)
+            if not st or st["action"] not in ("force_charge", "force_discharge"):
+                return
+            last = await conn.fetchrow(
+                """SELECT action, params FROM control_queue
+                   WHERE module_id = $1 AND action IN ('force_charge','force_discharge')
+                     AND status = 'done'
+                   ORDER BY id DESC LIMIT 1""", dev)
+            if not last:
+                return
+            lp = last["params"]
+            if isinstance(lp, str):
+                lp = _json.loads(lp)
+        heals[dev] = now
+        await control_db.enqueue(dev, "stop",
+            {"source": "self-heal", "reason": "IGFOL-F samoléčba: restart force"}, username="self-heal")
+        fp = dict(lp or {})
+        fp["source"] = "self-heal"
+        fp["reason"] = "IGFOL-F samoléčba: re-force po 4121"
+        await control_db.enqueue(dev, last["action"], fp, username="self-heal")
+        logger.warning("IGFOL-F samoléčba: %s stop→%s (výkon %s)", dev, last["action"], fp.get("power"))
+    except Exception as exc:
+        logger.debug("_self_heal_igfol: %s", exc)
+
+
 async def tick_inverter_state(state: dict) -> None:
     """Alarm: měnič ve stavu 4121 (interní override — ignoruje force, trickle-nabíjí).
     Event + notifikace s cooldownem 30 min per modul; zotavení zaloguje info."""
@@ -561,10 +606,11 @@ async def tick_inverter_state(state: dict) -> None:
                     from ems.alerts import db as alerts_db
                     from ems.notify import dispatch as notify_dispatch
                     await alerts_db.record_event(r["locality_id"], "inverter",
-                        f"⚠ Měnič v interním override stavu (4121) – {dev}",
-                        "Střídač ignoruje force povely a potichu nabíjí ze sítě (~1,4 kW). "
-                        "Viz diagnostika modulu / vyšetřovací spis SOLIS.")
+                        f"⚠ Solis alarm IGFOL-F (1019) – {dev}",
+                        "Porucha sledování síťového proudu (stav 33095=4121): měnič ignoruje force "
+                        "a trickle-nabíjí ze sítě. Případ pro servis — viz diagnostika modulu.")
                     await notify_dispatch.notify_new_alerts()
+                await _self_heal_igfol(dev, state, now)
             elif dev in bad:
                 del bad[dev]
                 logger.info("Měnič %s: stav zpět v normálu (%s)", dev, val)

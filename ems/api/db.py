@@ -58,6 +58,7 @@ async def list_devices() -> list[dict]:
                    m.params->>'hidden_metrics' AS hidden_metrics,
                    m.params->>'control_enabled' AS control_enabled,
                    m.params->>'control_sources' AS control_sources,
+                   m.params->>'self_heal_igfol' AS self_heal_igfol,
                    m.adapter,
                    ls.last_seen,
                    (ls.last_seen > now() - interval '5 minutes') AS active
@@ -88,6 +89,7 @@ async def list_devices() -> list[dict]:
         "hidden_metrics": json.loads(r["hidden_metrics"]) if r["hidden_metrics"] else [],
         "control_enabled": json.loads(r["control_enabled"]) if r["control_enabled"] else [],
         "control_sources": json.loads(r["control_sources"]) if r["control_sources"] else {},
+        "self_heal_igfol": (r["self_heal_igfol"] == "true"),
         "adapter": r["adapter"],
         "last_seen": r["last_seen"].isoformat() if r["last_seen"] else None,
         "active": bool(r["active"]),

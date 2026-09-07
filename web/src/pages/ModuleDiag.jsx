@@ -91,6 +91,14 @@ export default function ModuleDiag() {
           <p className="muted" style={{ fontSize: 12, margin: "4px 0 6px" }}>
             Stav 4121 = měnič ignoruje force a potichu nabíjí ze sítě (viz vyšetřovací spis SOLIS). Alarm chodí do 🔔.
           </p>
+          {(d.state_daily || []).length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <span className="muted" style={{ fontSize: 12 }}>Denní počet vzorků 4121 (trend pro servis):</span>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12.5, marginTop: 3 }}>
+                {d.state_daily.map((x) => (
+                  <span key={x.day}><b style={{ color: "#f85149" }}>{x.count}×</b> {new Date(x.day).toLocaleDateString("cs-CZ")}</span>))}
+              </div>
+            </div>)}
           <table style={{ fontSize: 12.5 }}>
             <thead><tr><th>Čas</th><th>Stav</th></tr></thead>
             <tbody>{d.state_episodes.map((e, i) => (

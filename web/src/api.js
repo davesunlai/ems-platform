@@ -56,6 +56,8 @@ export const api = {
   controlModules: () => request("/api/control/modules"),
   setControlSources: (id, body) => request(`/api/control/modules/${id}/control-sources`,
     { method: "PUT", body }),
+  setSelfHeal: (id, enabled) => request(`/api/control/modules/${id}/self-heal`,
+    { method: "PUT", body: { enabled } }),
   enqueueCommand: (id, action, params = {}) =>
     request(`/api/control/${encodeURIComponent(id)}/command`, { method: "POST", body: { action, params } }),
   commandStatus: (cmdId) => request(`/api/control/command/${cmdId}`),

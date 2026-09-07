@@ -63,6 +63,33 @@ async def set_control_sources(module_id: str, body: ControlSourcesBody,
     return {"module_id": module_id, "control_sources": newsrc}
 
 
+class SelfHealBody(BaseModel):
+    enabled: bool
+
+
+@router.put("/modules/{module_id}/self-heal")
+async def set_self_heal(module_id: str, body: SelfHealBody,
+                        user: dict = Depends(require_permission("control"))):
+    """🩹 Per-modul přepínač samoléčby IGFOL-F (stop→re-force při 4121, max 1×/15 min)."""
+    from ems.api.db import get_pool
+    import json as _json
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT locality_id FROM modules WHERE id = $1", module_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="modul neexistuje")
+        await conn.execute(
+            "UPDATE modules SET params = COALESCE(params,'{}'::jsonb) || jsonb_build_object('self_heal_igfol', $2::bool) "
+            "WHERE id = $1", module_id, body.enabled)
+    try:
+        from ems.alerts import db as alerts_db
+        await alerts_db.record_event(row["locality_id"], "config", f"Samoléčba IGFOL-F – {module_id}",
+                                     ("ZAPNUTA" if body.enabled else "VYPNUTA") + f" · uživatel {user.get('username', '?')}")
+    except Exception:
+        pass
+    return {"module_id": module_id, "self_heal_igfol": body.enabled}
+
+
 @router.get("/modules")
 async def controllable_modules(_: dict = Depends(require_permission("control"))):
     """Řiditelné moduly s lokalitou — Solis (control_enabled) i goodwe (s baterií)."""
@@ -75,7 +102,8 @@ async def controllable_modules(_: dict = Depends(require_permission("control")))
             out.append({"id": d["device_id"], "name": d["device_id"], "adapter": "solis",
                         "locality_id": d.get("locality_id"), "locality": d.get("locality"),
                         "control_enabled": ce,
-                        "control_sources": d.get("control_sources") or {}})
+                        "control_sources": d.get("control_sources") or {},
+                        "self_heal_igfol": bool(d.get("self_heal_igfol"))})
         elif adapter == "goodwe" and await _has_battery(d["device_id"]):
             out.append({"id": d["device_id"], "name": d["device_id"], "adapter": "goodwe",
                         "locality_id": d.get("locality_id"), "locality": d.get("locality"),
