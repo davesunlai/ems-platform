@@ -266,12 +266,16 @@ async def ensure_factory_wifi() -> None:
                      capture_output=True, text=True, timeout=8).returncode
         if rc == 0:
             return
-        _sp.run(["nmcli", "con", "add", "type", "wifi", "ifname", "*",
-                 "con-name", "emsbox-default", "ssid", "emsbox",
-                 "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", "emsbox",
-                 "connection.autoconnect", "yes", "connection.autoconnect-priority", "-10"],
-                capture_output=True, text=True, timeout=15)
-        logger.info("Tovární Wi-Fi profil emsbox-default založen (SSID emsbox, priorita -10)")
+        r = _sp.run(["nmcli", "con", "add", "type", "wifi", "ifname", "*",
+                     "con-name", "emsbox-default", "ssid", "emsbox",
+                     "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", "emsbox123",
+                     "connection.autoconnect", "yes", "connection.autoconnect-priority", "-10"],
+                    capture_output=True, text=True, timeout=15)
+        if r.returncode == 0:
+            logger.info("Tovární Wi-Fi profil emsbox-default založen (SSID emsbox, priorita -10)")
+        else:   # WPA-PSK chce 8+ znaků — proto heslo emsbox123, ne emsbox (lekce 7. 9.)
+            logger.warning("Tovární Wi-Fi profil se nepodařilo založit: %s %s",
+                           r.stdout.strip(), r.stderr.strip())
     except Exception as exc:
         logger.debug("ensure_factory_wifi: %s", exc)
 

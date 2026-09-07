@@ -149,7 +149,7 @@ function openNet(){
    <input id="wssid" placeholder="SSID"><input id="wpw" type="password" placeholder="heslo Wi-Fi">
    <button class="sec" onclick="wifiGo()">Připojit k Wi-Fi</button>
    <div class="muted" style="margin-top:4px;font-size:13px">Tovární záloha: box se sám připojí k síti
-   <b>emsbox</b> / heslo <b>emsbox</b> (hotspot na mobilu) — pak ho najdeš ve fleetu na teraems.</div>
+   <b>emsbox</b> / heslo <b>emsbox123</b> (hotspot na mobilu) — pak ho najdeš ve fleetu na teraems.</div>
    <div class="muted" style="margin:10px 0 4px">IP režim Wi-Fi</div>
    <select id="ipmode" onchange="ipModeChg()" style="width:100%;font-size:17px;padding:10px;border-radius:10px;background:#0d1117;color:#e6edf3;border:1px solid #30363d">
      <option value="dhcp">DHCP (automaticky)</option><option value="static">Pevná IP</option></select>

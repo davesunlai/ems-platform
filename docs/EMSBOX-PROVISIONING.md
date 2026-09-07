@@ -15,16 +15,16 @@
    ```bash
    curl -fsSL https://raw.githubusercontent.com/davesunlai/ems-platform/main/emsbox/provision.sh | bash
    ```
-3. Skript (idempotentní): hostname `emsbox-XXXX` (ze sériáku CPU) → NetworkManager → **tovární Wi-Fi profil `emsbox`/`emsbox`** (autoconnect, priorita −10) → Docker → clone/pull repa → build + start agenta → nainstaluje `emsbox-update`.
+3. Skript (idempotentní): hostname `emsbox-XXXX` (ze sériáku CPU) → NetworkManager → **tovární Wi-Fi profil `emsbox`/`emsbox123`** (autoconnect, priorita −10) → Docker → clone/pull repa → build + start agenta → nainstaluje `emsbox-update`.
 4. Konec: vypíše IP lokálního UI (port 80). Box je připraven k párování z mobilu.
 
 Skryté servisní heslo lokálního UI (topadmin) zůstává beze změny — env `EMSBOX_TOPADMIN`, default dle interní dokumentace; ve výrobě NEMĚNIT na kartě, drží se v image.
 
-## 2. Tovární Wi-Fi `emsbox`/`emsbox` — servisní záchrana
+## 2. Tovární Wi-Fi `emsbox`/`emsbox123` — servisní záchrana
 
 Profil je v NM s nízkou prioritou: nikdy nepřebije nakonfigurovanou síť klienta, ale když box
 „zmizí" (klient změnil router apod.), stačí komukoli na místě zapnout **hotspot na mobilu se
-jménem `emsbox` a heslem `emsbox`** → box se do minuty připojí → heartbeat donese privátní IP
+jménem `emsbox` a heslem `emsbox123`** → box se do minuty připojí → heartbeat donese privátní IP
 na `teraems.com/emsboxes` → servis se dostane na lokální UI. Profil zakládá provision.sh
 i agent sám při startu (ensure_factory_wifi — pokrývá i staré instalace po updatu).
 
@@ -50,5 +50,5 @@ i agent sám při startu (ensure_factory_wifi — pokrývá i staré instalace p
 
 - Wi-Fi heslo klientovy sítě se od v0.77.0 posílá v heartbeatu a ukazuje ve fleetu (rozhodnutí
   Davida — servisní přístup). Přenos jde přes HTTPS na teraems; ve fleet UI je za „okem".
-- Tovární síť `emsbox`/`emsbox` je vědomě slabá (servisní kanál) — box na ní pouze *klientsky
+- Tovární síť `emsbox`/`emsbox123` je vědomě slabá (servisní kanál; WPA-PSK vyžaduje min. 8 znaků, proto ne jen 'emsbox') — box na ní pouze *klientsky
   visí*; lokální UI dál chrání heslo uživatele/topadmina.

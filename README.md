@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.77.2 — hotfix tovární Wi-Fi: WPA-PSK vyžaduje heslo min. 8 znaků → „emsbox" (6) NM tiše odmítl (Error: no such connection profile). Heslo tovární sítě změněno na emsbox123 všude (agent, provision.sh, hint v lokálním UI, README, provisioning doc). ensure_factory_wifi nově loguje rc+stderr při selhání (konec tichých pádů). SSID zůstává emsbox. Nasazení: franta (texty) + REBUILD BOXU.
+
 ## v0.77.1 — dokumentace: přehledová sekce „EMSBOX — připojení a konfigurace" na začátku README (3 cesty konektivity vč. tovární Wi-Fi, zařízení RTU/TCP, konfigurace přes lokální UI + párování, 6 provozních scénářů, odkazy na provisioning). Jen texty — bez rebuildů.
 
 ## Konektivita boxu (3 cesty k internetu)
@@ -11,7 +13,7 @@ a po obnově vše dohraje.
 |---|---|---|
 | 🔌 **LAN kabel** | zapoj — DHCP, jede hned | preferovaná instalace |
 | 📶 **Wi-Fi klienta** | lokální UI → Síť → 🔍 sken → vybrat + heslo | kde není kabel |
-| 🆘 **Tovární Wi-Fi `emsbox`/`emsbox`** | zapni hotspot s tímto jménem/heslem na mobilu → box se sám připojí (profil s nízkou prioritou, klientskou síť nikdy nepřebije) | první setup bez LAN, ztracený box |
+| 🆘 **Tovární Wi-Fi `emsbox`/`emsbox123`** | zapni hotspot s tímto jménem/heslem na mobilu → box se sám připojí (profil s nízkou prioritou, klientskou síť nikdy nepřebije) | první setup bez LAN, ztracený box |
 
 IP režim Wi-Fi: DHCP (default) nebo pevná IP — v lokálním UI. LAN port je vždy DHCP.
 
@@ -28,9 +30,9 @@ IP režim Wi-Fi: DHCP (default) nebo pevná IP — v lokálním UI. LAN port je 
 
 ## Scénáře
 - **Instalace u klienta (LAN):** kabel → napájení → fleet ukáže nespárovaný box → párování → hotovo.
-- **Instalace jen s Wi-Fi:** hotspot `emsbox`/`emsbox` na mobilu → box naskočí do fleetu → z jeho
+- **Instalace jen s Wi-Fi:** hotspot `emsbox`/`emsbox123` na mobilu → box naskočí do fleetu → z jeho
   lokálního UI sken + připojení na klientskou síť → hotspot vypnout.
-- **Box „zmizel"** (klient vyměnil router): hotspot `emsbox`/`emsbox` → fleet ukáže novou IP → UI → nová síť.
+- **Box „zmizel"** (klient vyměnil router): hotspot `emsbox`/`emsbox123` → fleet ukáže novou IP → UI → nová síť.
 - **Výpadek internetu:** box čte dál do bufferu, po obnově dohraje; fleet hlásí offline.
 - **Výroba karty:** čisté RPi OS Lite + `emsbox/provision.sh` přes SSH (hostname ze sériáku,
   tovární Wi-Fi, Docker, agent, `emsbox-update`). Malosérie: golden image — viz `docs/EMSBOX-PROVISIONING.md`.

@@ -24,9 +24,9 @@ apt-get install -y -qq network-manager git curl >/dev/null
 systemctl enable --now NetworkManager
 if ! nmcli -t -g NAME con show emsbox-default >/dev/null 2>&1; then
   nmcli con add type wifi ifname "*" con-name emsbox-default ssid emsbox \
-    wifi-sec.key-mgmt wpa-psk wifi-sec.psk emsbox \
+    wifi-sec.key-mgmt wpa-psk wifi-sec.psk emsbox123 \
     connection.autoconnect yes connection.autoconnect-priority -10
-  echo "Tovární Wi-Fi profil emsbox/emsbox založen."
+  echo "Tovární Wi-Fi profil emsbox/emsbox123 založen."
 fi
 
 # 3) Docker
@@ -74,4 +74,4 @@ chmod +x /usr/local/bin/emsbox-update
 echo "== HOTOVO =="
 echo "Lokální UI:  http://$(hostname -I | awk '{print $1}')/  (port 80)"
 echo "Update:      emsbox-update (přes SSH)"
-echo "Tovární WiFi: SSID emsbox / heslo emsbox (hotspot na mobilu)"
+echo "Tovární WiFi: SSID emsbox / heslo emsbox123 (hotspot na mobilu)"
