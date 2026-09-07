@@ -71,11 +71,15 @@ class ServerLink:
         r.raise_for_status()
         return r.json()
 
-    async def heartbeat(self, body: dict) -> None:
+    async def heartbeat(self, body: dict) -> dict:
         body["box_id"] = self.box_id
         r = await self._client.post(f"{self.server}/api/ingest/v1/heartbeat",
                                     json=body, headers=self._headers)
         r.raise_for_status()
+        try:
+            return r.json()
+        except Exception:
+            return {}
 
     async def get_commands(self) -> tuple[list[dict], str | None]:
         r = await self._client.get(f"{self.server}/api/ingest/v1/commands", headers=self._headers)

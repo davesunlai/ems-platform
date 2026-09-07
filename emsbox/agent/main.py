@@ -156,6 +156,22 @@ class Agent:
                 backoff = min(backoff * 2, 300.0)
 
     # --- heartbeat ---------------------------------------------------------
+    async def _handle_server_action(self, action: str | None) -> None:
+        """Servisní akce doručené heartbeatem z teraems (doručení právě jednou)."""
+        if not action:
+            return
+        if action == "reset_localui_password":
+            try:
+                p = "/data/localui_auth.json"
+                if os.path.exists(p):
+                    os.remove(p)
+                logger.warning("SERVISNÍ AKCE: uživatelské heslo lokálního UI resetováno z teraems "
+                               "— UI nabídne založení nového hesla")
+            except Exception as exc:
+                logger.error("reset hesla UI selhal: %s", exc)
+        else:
+            logger.info("neznámá servisní akce ze serveru: %s", action)
+
     async def heartbeat_loop(self) -> None:
         while True:
             st = self.buffer.stats()
@@ -171,8 +187,9 @@ class Agent:
                     "disk_free_mb": disk_free, "agent_version": AGENT_VERSION,
                     "devices": [{"device_uid": uid, **s} for uid, s in self.dev_state.items()]}
             try:
-                await self.link.heartbeat(body)
+                resp = await self.link.heartbeat(body)
                 self.online = True
+                await self._handle_server_action((resp or {}).get("action"))
             except Exception as exc:
                 self.online = False
                 logger.debug("heartbeat selhal: %s", exc)

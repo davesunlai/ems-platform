@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.78.0 — 🔐 Dálkový reset uživatelského hesla lokálního UI boxu. Fleet /emsboxy: u každého spárovaného boxu tlačítko „reset hesla UI" (s potvrzením) → POST /api/emsboxes/{id}/reset-localui-password (perm admin) → emsbox.pending_action (nový sloupec, migrace) → box si akci vyzvedne s příštím HEARTBEATEM (odpověď heartbeatu nově může nést action; pop je atomický přes CTE FOR UPDATE — doručení právě jednou) → agent smaže /data/localui_auth.json a UI nabídne založení nového hesla. Servisní topadmin heslo se NEMĚNÍ. Audit: event „Reset hesla lokálního UI" s uživatelem. ASGI test endpointu. Mechanismus pending_action je obecný — připravený pro budoucí akce (update_agent apod.). Nasazení: franta + REBUILD BOXU (serverlink+agent).
+
 ## v0.77.2 — hotfix tovární Wi-Fi: WPA-PSK vyžaduje heslo min. 8 znaků → „emsbox" (6) NM tiše odmítl (Error: no such connection profile). Heslo tovární sítě změněno na emsbox123 všude (agent, provision.sh, hint v lokálním UI, README, provisioning doc). ensure_factory_wifi nově loguje rc+stderr při selhání (konec tichých pádů). SSID zůstává emsbox. Nasazení: franta (texty) + REBUILD BOXU.
 
 ## v0.77.1 — dokumentace: přehledová sekce „EMSBOX — připojení a konfigurace" na začátku README (3 cesty konektivity vč. tovární Wi-Fi, zařízení RTU/TCP, konfigurace přes lokální UI + párování, 6 provozních scénářů, odkazy na provisioning). Jen texty — bez rebuildů.

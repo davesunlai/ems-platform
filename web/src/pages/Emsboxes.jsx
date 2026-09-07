@@ -13,6 +13,20 @@ const ago = (iso) => {
   return m < 1 ? "právě teď" : m < 60 ? `před ${m} min` : m < 1440 ? `před ${Math.floor(m / 60)} h` : `před ${Math.floor(m / 1440)} d`;
 };
 
+function ResetUiPw({ box }) {
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (!window.confirm(`Resetovat uživatelské heslo lokálního UI boxu „${box.name || box.id}"?\n` +
+        "Box si akci vyzvedne do ~30 s; UI pak nabídne založení nového hesla. (Servisní topadmin heslo se nemění.)")) return;
+    setBusy(true);
+    try { await api.emsboxResetUiPassword(box.id); alert("Požadavek odeslán — box ho vyzvedne s příštím heartbeatem."); }
+    catch (e) { alert("Chyba: " + e.message); }
+    setBusy(false);
+  };
+  return <button className="btn" disabled={busy} title="Reset uživatelského hesla lokálního UI"
+                 style={{ padding: "3px 8px", fontSize: 12 }} onClick={go}>🔐 reset hesla UI</button>;
+}
+
 function Psk({ value }) {
   const [show, setShow] = useState(false);
   return (
@@ -38,7 +52,7 @@ export default function Emsboxes() {
         {d.boxes.length ? (
           <table style={{ fontSize: 12.5 }}>
             <thead><tr><th></th><th>Box</th><th>Hostname</th><th>Lokalita</th><th>Heartbeat</th><th>Ingest</th>
-              <th>Veřejná IP</th><th>Privátní IP</th><th>Síť</th><th>Disk</th><th>RAM</th><th>Buffer</th><th>Drift</th><th>Verze</th></tr></thead>
+              <th>Veřejná IP</th><th>Privátní IP</th><th>Síť</th><th>Disk</th><th>RAM</th><th>Buffer</th><th>Drift</th><th>Verze</th><th></th></tr></thead>
             <tbody>
               {d.boxes.map((b) => (
                 <tr key={b.id} style={rowStyle(b.disk_free_mb)} title={lowDisk(b.disk_free_mb) ? "⚠ méně než 10 GB volného místa" : undefined}>
@@ -52,6 +66,7 @@ export default function Emsboxes() {
                   <td>{b.private_ip ? <a href={`http://${b.private_ip}`} target="_blank" rel="noreferrer">{b.private_ip}</a> : "—"}</td>
                   <td>{b.wifi_ssid ? `📶 ${b.wifi_ssid}` : "🔌 LAN"}
                       {b.wifi_psk && <Psk value={b.wifi_psk} />}</td>
+                  <td><ResetUiPw box={b} /></td>
                   <td style={lowDisk(b.disk_free_mb) ? { color: "#f85149", fontWeight: 700 } : {}}>{diskCell(b.disk_total_mb, b.disk_free_mb)}</td>
                   <td>{b.mem_total_mb != null ? `${gb(b.mem_used_mb)} / ${gb(b.mem_total_mb)}` : "—"}</td>
                   <td>{b.buffer_rows ?? "—"} ř.</td>

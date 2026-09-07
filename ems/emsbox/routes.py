@@ -171,3 +171,26 @@ async def rules_update(rule_id: int, body: dict, _: dict = Depends(control)) -> 
 async def rules_delete(rule_id: int, _: dict = Depends(control)) -> dict:
     await db.alert_rule_delete(rule_id)
     return {"ok": True}
+
+
+@router.post("/emsboxes/{box_id}/reset-localui-password")
+async def reset_localui_password(box_id: int, user: dict = Depends(require_permission("admin"))):
+    """🔐 Dálkový reset UŽIVATELSKÉHO hesla lokálního UI boxu: box si akci vyzvedne
+    s příštím heartbeatem (≤30 s), smaže /data/localui_auth.json a UI nabídne
+    založení nového hesla. Topadmin hesla se netýká."""
+    from . import db as _db
+    ok = await _db.set_pending_action(box_id, "reset_localui_password")
+    if not ok:
+        raise HTTPException(status_code=404, detail="box neexistuje")
+    try:
+        from ems.alerts import db as alerts_db
+        from ems.api.db import get_pool
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            lid = await conn.fetchval("SELECT locality_id FROM emsbox WHERE id = $1", box_id)
+        if lid:
+            await alerts_db.record_event(lid, "config", f"Reset hesla lokálního UI – box #{box_id}",
+                                         f"vyžádal {user.get('username', '?')}")
+    except Exception:
+        pass
+    return {"ok": True, "box_id": box_id, "action": "reset_localui_password"}

@@ -72,7 +72,8 @@ async def ingest_heartbeat(body: dict, request: Request, box: dict = Depends(box
         raise HTTPException(status_code=403, detail="box_id nesouhlasí s tokenem")
     body["_public_ip"] = _client_ip(request)
     await db.heartbeat(box["id"], body)
-    return {"ok": True}
+    action = await db.pop_pending_action(box["id"])
+    return {"ok": True, **({"action": action} if action else {})}
 
 
 # --- povelový kanál (varianta B): box čte i VYKONÁVÁ povely — jediný klient na střídači
