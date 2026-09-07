@@ -89,6 +89,8 @@ class Metric(str, Enum):
 
 
 UNIT_OF: dict[Metric, str] = {
+    Metric.INVERTER_STATE: "",
+    Metric.INVERTER_FAULT: "",
     Metric.PV_POWER: "W",
     Metric.ACTIVE_POWER: "W",
     Metric.REACTIVE_POWER: "var",
