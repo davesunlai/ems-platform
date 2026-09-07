@@ -173,6 +173,29 @@ async def rules_delete(rule_id: int, _: dict = Depends(control)) -> dict:
     return {"ok": True}
 
 
+@router.post("/emsboxes/{box_id}/update-agent")
+async def update_agent(box_id: int, user: dict = Depends(require_permission("admin"))):
+    """⬆ Dálkový update agenta: box heartbeatem vyzvedne akci, zapíše /data/update_request,
+    hostový emsbox-update.path spustí git pull + rebuild + restart (~3 min). Vyžaduje
+    nainstalované systemd jednotky (provision.sh je zakládá; starší boxy jednorázově ručně)."""
+    from . import db as _db
+    ok = await _db.set_pending_action(box_id, "update_agent")
+    if not ok:
+        raise HTTPException(status_code=404, detail="box neexistuje")
+    try:
+        from ems.alerts import db as alerts_db
+        from ems.api.db import get_pool
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            lid = await conn.fetchval("SELECT locality_id FROM emsbox WHERE id = $1", box_id)
+        if lid:
+            await alerts_db.record_event(lid, "config", f"Update agenta – box #{box_id}",
+                                         f"vyžádal {user.get('username', '?')}")
+    except Exception:
+        pass
+    return {"ok": True, "box_id": box_id, "action": "update_agent"}
+
+
 @router.post("/emsboxes/{box_id}/reset-localui-password")
 async def reset_localui_password(box_id: int, user: dict = Depends(require_permission("admin"))):
     """🔐 Dálkový reset UŽIVATELSKÉHO hesla lokálního UI boxu: box si akci vyzvedne

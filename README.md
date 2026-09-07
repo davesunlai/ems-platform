@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.79.0 — ⬆ Dálkový update EMSBOXu + sjednocené verzování. (1) AGENT_VERSION nově = ems.__version__ (jedno repo, jedna verze — fleet i box ukážou 0.79.0 místo 0.1.0). (2) Lokální UI boxu má v patičce „EMSBOX agent vX.Y.Z" — viditelné před i po přihlášení. (3) Fleet /emsboxy: tlačítko „⬆ update" vedle verze → POST /api/emsboxes/{id}/update-agent (admin, audit) → pending_action=update_agent → agent zapíše /data/update_request → hostový systemd emsbox-update.path spustí emsbox-update (git pull + rebuild + restart, ~3 min; buffer data drží). provision.sh jednotky zakládá automaticky; STARŠÍ boxy (pilot!) je nutné doinstalovat jednorázovým blokem. Login boxu reaguje na Enter (z v0.78.1). Provisioning doc aktualizován (dálkový update z „plán" na „hotovo"). Nasazení: franta + REBUILD BOXU + jednorázová instalace systemd jednotek na pilotu.
+
 ## v0.78.1 — opravy reset kanálu + UX. (1) Tlačítko „🔐 reset hesla UI" přesunuto na KONEC řádku fleetu (v v0.78.0 sedělo uprostřed a posunulo sloupce vůči hlavičce). (2) pop_pending_action přepsán z CTE na čitelnou transakci SELECT FOR UPDATE → UPDATE (CTE varianta nebyla testovatelná bez PG a je podezřelá č. 1 z nefunkčního resetu). (3) Logování obou konců kanálu: api „heartbeat box #N: doručena servisní akce X", agent „přijata servisní akce ze serveru: X" — příště je hned vidět, kde se řetěz zastavil. (4) Login obrazovka boxu reaguje na ENTER (onkeydown na poli hesla). Nasazení: franta + REBUILD BOXU.
 
 ## v0.78.0 — 🔐 Dálkový reset uživatelského hesla lokálního UI boxu. Fleet /emsboxy: u každého spárovaného boxu tlačítko „reset hesla UI" (s potvrzením) → POST /api/emsboxes/{id}/reset-localui-password (perm admin) → emsbox.pending_action (nový sloupec, migrace) → box si akci vyzvedne s příštím HEARTBEATEM (odpověď heartbeatu nově může nést action; pop je atomický přes CTE FOR UPDATE — doručení právě jednou) → agent smaže /data/localui_auth.json a UI nabídne založení nového hesla. Servisní topadmin heslo se NEMĚNÍ. Audit: event „Reset hesla lokálního UI" s uživatelem. ASGI test endpointu. Mechanismus pending_action je obecný — připravený pro budoucí akce (update_agent apod.). Nasazení: franta + REBUILD BOXU (serverlink+agent).
@@ -40,7 +42,7 @@ IP režim Wi-Fi: DHCP (default) nebo pevná IP — v lokálním UI. LAN port je 
 - **Výpadek internetu:** box čte dál do bufferu, po obnově dohraje; fleet hlásí offline.
 - **Výroba karty:** čisté RPi OS Lite + `emsbox/provision.sh` přes SSH (hostname ze sériáku,
   tovární Wi-Fi, Docker, agent, `emsbox-update`). Malosérie: golden image — viz `docs/EMSBOX-PROVISIONING.md`.
-- **Aktualizace:** `ssh root@box 'emsbox-update'` (dálková fáze 2 v plánu).
+- **Aktualizace:** z teraems fleetu tlačítkem „⬆ update" u verze boxu (nebo `ssh root@box 'emsbox-update'`).
 
 ---
 

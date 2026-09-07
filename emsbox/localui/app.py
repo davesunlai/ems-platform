@@ -200,7 +200,7 @@ async function pair(){const m=document.getElementById("msg");m.textContent="";
 async function unpair(){if(!confirm("Opravdu odpárovat? Box přestane posílat data."))return;
  await j("/api/unpair",{method:"POST"});render(true);}
 render();setInterval(()=>render(false),5000);
-</script></body></html>"""
+</script><div style="text-align:center;color:#8b949e;font-size:12px;padding:14px 0 10px">EMSBOX agent v__VER__ · teraems.com</div></body></html>"""
 
 
 class PairBody(BaseModel):
@@ -230,7 +230,11 @@ def create_app(state: dict) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def index():
-        return _PAGE
+        try:
+            from ems import __version__ as _v
+        except Exception:
+            _v = "?"
+        return _PAGE.replace("__VER__", _v)
 
     def _serial_ports() -> list[dict]:
         """Detekce RS485/USB-serial adaptérů viditelných v kontejneru."""

@@ -39,9 +39,10 @@ i agent sám při startu (ensure_factory_wifi — pokrývá i staré instalace p
 ## 4. Aktualizace firmwaru
 
 - **Dnes (přes SSH):** `ssh root@box 'emsbox-update'` — git pull + rebuild + restart kontejneru, ~3 min.
-- **Plán (dálkově z teraems, fáze 2):** povel `update_agent` v command channelu → agent zapíše
-  požadavek do /data → host-side systemd path unit spustí `emsbox-update`. (Agent v kontejneru
-  nemůže sám sebe rebuildnout; potřebuje hostovou jednotku — přidá se do provision.sh.)
+- **Dálkově z teraems (od v0.79.0):** fleet /emsboxy → tlačítko „⬆ update" u verze → akce
+  `update_agent` heartbeatem → agent zapíše `/data/update_request` → hostový
+  `emsbox-update.path` (systemd, instaluje provision.sh) spustí `emsbox-update`. Starší boxy:
+  jednorázově doinstalovat jednotky (blok v README/chatu).
   Alternativa pro větší flotily: publikovat hotový multi-arch image do registru
   (ghcr.io) → update = `docker pull` + restart, bez buildů na Pi (rychlejší, deterministické).
   Doporučený cíl pro produkci.

@@ -26,7 +26,10 @@ from .serverlink import ServerLink, load_credentials, save_credentials
 
 logger = logging.getLogger("emsbox")
 CONFIG_CACHE = os.environ.get("EMSBOX_CONFIG_CACHE", "/data/config.json")
-AGENT_VERSION = "0.1.0"
+try:
+    from ems import __version__ as AGENT_VERSION   # box žije ve stejném repu jako platforma
+except Exception:
+    AGENT_VERSION = "0.0.0"
 
 
 def _now_iso() -> str:
@@ -170,6 +173,14 @@ class Agent:
                                "— UI nabídne založení nového hesla")
             except Exception as exc:
                 logger.error("reset hesla UI selhal: %s", exc)
+        elif action == "update_agent":
+            try:
+                with open("/data/update_request", "w") as f:
+                    f.write(_now_iso())
+                logger.warning("SERVISNÍ AKCE: vyžádán update agenta z teraems — hostový "
+                               "emsbox-update.path spustí rebuild (kontejner se restartuje)")
+            except Exception as exc:
+                logger.error("zápis update_request selhal: %s", exc)
         else:
             logger.info("neznámá servisní akce ze serveru: %s", action)
 

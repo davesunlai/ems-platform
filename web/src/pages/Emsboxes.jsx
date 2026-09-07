@@ -13,6 +13,20 @@ const ago = (iso) => {
   return m < 1 ? "právě teď" : m < 60 ? `před ${m} min` : m < 1440 ? `před ${Math.floor(m / 60)} h` : `před ${Math.floor(m / 1440)} d`;
 };
 
+function UpdateBtn({ box }) {
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (!window.confirm(`Aktualizovat agenta boxu „${box.name || box.id}"?\n` +
+        "Box provede git pull + rebuild + restart (~3 min); čtení se na tu dobu přeruší (buffer nic neztratí).")) return;
+    setBusy(true);
+    try { await api.emsboxUpdateAgent(box.id); alert("Požadavek odeslán — po dokončení se ve fleetu objeví nová verze."); }
+    catch (e) { alert("Chyba: " + e.message); }
+    setBusy(false);
+  };
+  return <button className="btn" disabled={busy} title="Dálkový update agenta (git pull + rebuild)"
+                 style={{ padding: "2px 7px", fontSize: 11.5, marginLeft: 4 }} onClick={go}>⬆ update</button>;
+}
+
 function ResetUiPw({ box }) {
   const [busy, setBusy] = useState(false);
   const go = async () => {
@@ -70,7 +84,7 @@ export default function Emsboxes() {
                   <td>{b.mem_total_mb != null ? `${gb(b.mem_used_mb)} / ${gb(b.mem_total_mb)}` : "—"}</td>
                   <td>{b.buffer_rows ?? "—"} ř.</td>
                   <td style={Math.abs(b.clock_drift_s || 0) > 60 ? { color: "#f85149" } : {}}>{b.clock_drift_s != null ? `${Math.round(b.clock_drift_s)} s` : "—"}</td>
-                  <td>{b.agent_version || "—"}</td>
+                  <td>{b.agent_version || "—"} <UpdateBtn box={b} /></td>
                   <td><ResetUiPw box={b} /></td>
                 </tr>))}
             </tbody>

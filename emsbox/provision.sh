@@ -71,6 +71,27 @@ echo "EMSBOX aktualizován: $(cd /opt/emsbox && git log --oneline -1)"
 UPD
 chmod +x /usr/local/bin/emsbox-update
 
+# 7) dálkový update z teraems: path unit hlídá /data/update_request (zapisuje agent na povel)
+VOL=/var/lib/docker/volumes/emsbox-data/_data
+cat > /etc/systemd/system/emsbox-update.service << 'SVC'
+[Unit]
+Description=EMSBOX agent update (vyzadano z teraems)
+[Service]
+Type=oneshot
+ExecStartPre=/bin/rm -f /var/lib/docker/volumes/emsbox-data/_data/update_request
+ExecStart=/usr/local/bin/emsbox-update
+SVC
+cat > /etc/systemd/system/emsbox-update.path << 'PTH'
+[Unit]
+Description=Hlidac pozadavku na update EMSBOX agenta
+[Path]
+PathExists=/var/lib/docker/volumes/emsbox-data/_data/update_request
+[Install]
+WantedBy=multi-user.target
+PTH
+systemctl daemon-reload
+systemctl enable --now emsbox-update.path
+
 echo "== HOTOVO =="
 echo "Lokální UI:  http://$(hostname -I | awk '{print $1}')/  (port 80)"
 echo "Update:      emsbox-update (přes SSH)"
