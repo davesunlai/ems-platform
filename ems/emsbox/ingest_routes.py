@@ -73,6 +73,8 @@ async def ingest_heartbeat(body: dict, request: Request, box: dict = Depends(box
     body["_public_ip"] = _client_ip(request)
     await db.heartbeat(box["id"], body)
     action = await db.pop_pending_action(box["id"])
+    if action:
+        logger.info("heartbeat box #%s: doručena servisní akce %s", box["id"], action)
     return {"ok": True, **({"action": action} if action else {})}
 
 

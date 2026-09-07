@@ -98,7 +98,7 @@ async function render(force){
   document.getElementById("sub").textContent=auth.password_set?"zamčeno — zadej heslo boxu":"první spuštění — nastav heslo boxu";
   document.getElementById("app").innerHTML=`<div class="card"><b>${auth.password_set?"Přihlášení":"Nastavení hesla boxu"}</b>
    ${auth.password_set?"":'<div class="muted">Heslo chrání lokální správu boxu. Zadává se jednou a nemění se.</div>'}
-   <label class="muted">Heslo</label><input id="pw" type="password">
+   <label class="muted">Heslo</label><input id="pw" type="password" onkeydown="if(event.key==='Enter')authGo(${auth.password_set})">
    <button onclick="authGo(${auth.password_set})">${auth.password_set?"Přihlásit":"Nastavit a pokračovat"}</button>
    <div id="amsg" class="bad" style="margin-top:8px"></div></div>`;
   return;

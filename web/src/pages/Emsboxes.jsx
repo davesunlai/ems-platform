@@ -66,12 +66,12 @@ export default function Emsboxes() {
                   <td>{b.private_ip ? <a href={`http://${b.private_ip}`} target="_blank" rel="noreferrer">{b.private_ip}</a> : "—"}</td>
                   <td>{b.wifi_ssid ? `📶 ${b.wifi_ssid}` : "🔌 LAN"}
                       {b.wifi_psk && <Psk value={b.wifi_psk} />}</td>
-                  <td><ResetUiPw box={b} /></td>
                   <td style={lowDisk(b.disk_free_mb) ? { color: "#f85149", fontWeight: 700 } : {}}>{diskCell(b.disk_total_mb, b.disk_free_mb)}</td>
                   <td>{b.mem_total_mb != null ? `${gb(b.mem_used_mb)} / ${gb(b.mem_total_mb)}` : "—"}</td>
                   <td>{b.buffer_rows ?? "—"} ř.</td>
                   <td style={Math.abs(b.clock_drift_s || 0) > 60 ? { color: "#f85149" } : {}}>{b.clock_drift_s != null ? `${Math.round(b.clock_drift_s)} s` : "—"}</td>
                   <td>{b.agent_version || "—"}</td>
+                  <td><ResetUiPw box={b} /></td>
                 </tr>))}
             </tbody>
           </table>

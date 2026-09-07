@@ -160,6 +160,7 @@ class Agent:
         """Servisní akce doručené heartbeatem z teraems (doručení právě jednou)."""
         if not action:
             return
+        logger.info("přijata servisní akce ze serveru: %s", action)
         if action == "reset_localui_password":
             try:
                 p = "/data/localui_auth.json"

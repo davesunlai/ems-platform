@@ -392,13 +392,13 @@ async def set_pending_action(box_id: int, action: str | None) -> bool:
 
 
 async def pop_pending_action(box_id: int) -> str | None:
-    """Atomicky vrátí a smaže čekající akci (doručení právě jednou).
-    Pozn.: v UPDATE ... RETURNING vidí RETURNING NOVOU hodnotu — starou vrátí CTE."""
+    """Atomicky vrátí a smaže čekající akci (doručení právě jednou) — čitelná transakce."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """WITH old AS (SELECT pending_action FROM emsbox WHERE id = $1 FOR UPDATE)
-               UPDATE emsbox SET pending_action = NULL
-               WHERE id = $1 AND pending_action IS NOT NULL
-               RETURNING (SELECT pending_action FROM old)""", box_id)
-    return row[0] if row else None
+        async with conn.transaction():
+            val = await conn.fetchval(
+                "SELECT pending_action FROM emsbox WHERE id = $1 FOR UPDATE", box_id)
+            if val:
+                await conn.execute(
+                    "UPDATE emsbox SET pending_action = NULL WHERE id = $1", box_id)
+    return val
