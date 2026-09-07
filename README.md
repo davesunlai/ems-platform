@@ -1,3 +1,43 @@
+# 📦 EMSBOX — připojení a konfigurace (přehled)
+
+**Co to je:** edge krabička (Raspberry Pi 4) u klienta — čte zařízení lokálně, data syncuje na
+teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
+a po obnově vše dohraje.
+
+## v0.77.1 — dokumentace: přehledová sekce „EMSBOX — připojení a konfigurace" na začátku README (3 cesty konektivity vč. tovární Wi-Fi, zařízení RTU/TCP, konfigurace přes lokální UI + párování, 6 provozních scénářů, odkazy na provisioning). Jen texty — bez rebuildů.
+
+## Konektivita boxu (3 cesty k internetu)
+| Cesta | Jak | Kdy |
+|---|---|---|
+| 🔌 **LAN kabel** | zapoj — DHCP, jede hned | preferovaná instalace |
+| 📶 **Wi-Fi klienta** | lokální UI → Síť → 🔍 sken → vybrat + heslo | kde není kabel |
+| 🆘 **Tovární Wi-Fi `emsbox`/`emsbox`** | zapni hotspot s tímto jménem/heslem na mobilu → box se sám připojí (profil s nízkou prioritou, klientskou síť nikdy nepřebije) | první setup bez LAN, ztracený box |
+
+IP režim Wi-Fi: DHCP (default) nebo pevná IP — v lokálním UI. LAN port je vždy DHCP.
+
+## Zařízení na boxu
+- **RS485/Modbus RTU** — USB převodník (FTDI) např. k Solisu (9600 8N1)
+- **Modbus TCP / HTTP** — zařízení v místní síti (měniče, TČ, brány)
+
+## Konfigurace
+1. **Lokální UI** (`http://<ip-boxu>/`, port 80): heslo uživatele (+ skryté servisní topadmin),
+   párovací wizard, síťová administrace, stav čtení. Ochrana heslem, session 30 dní.
+2. **Párování:** na teraems → 📦 EMSBOXy → vygenerovat kód → zadat v lokálním UI. Od té chvíle
+   box posílá heartbeat (IP, SSID, heslo Wi-Fi za 👁, disk/RAM, stav zařízení) a přijímá povely.
+3. **Moduly:** v teraems se modul přiřadí boxu — box ho začne číst a vykonávat povely.
+
+## Scénáře
+- **Instalace u klienta (LAN):** kabel → napájení → fleet ukáže nespárovaný box → párování → hotovo.
+- **Instalace jen s Wi-Fi:** hotspot `emsbox`/`emsbox` na mobilu → box naskočí do fleetu → z jeho
+  lokálního UI sken + připojení na klientskou síť → hotspot vypnout.
+- **Box „zmizel"** (klient vyměnil router): hotspot `emsbox`/`emsbox` → fleet ukáže novou IP → UI → nová síť.
+- **Výpadek internetu:** box čte dál do bufferu, po obnově dohraje; fleet hlásí offline.
+- **Výroba karty:** čisté RPi OS Lite + `emsbox/provision.sh` přes SSH (hostname ze sériáku,
+  tovární Wi-Fi, Docker, agent, `emsbox-update`). Malosérie: golden image — viz `docs/EMSBOX-PROVISIONING.md`.
+- **Aktualizace:** `ssh root@box 'emsbox-update'` (dálková fáze 2 v plánu).
+
+---
+
 # TERA EMS
 
 Univerzální energy management napříč energetickým portfoliem — sledování a (postupně) řízení vyrobené a spotřebované elektrické energie. Stavěno modulárně: jádro drží kanonický model, každý typ zdroje se připojuje přes vlastní adaptér.
