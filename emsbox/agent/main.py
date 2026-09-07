@@ -253,6 +253,29 @@ def main() -> None:
     asyncio.run(run_with_ui())
 
 
+async def ensure_factory_wifi() -> None:
+    """Tovární záložní Wi-Fi profil: SSID 'emsbox' / heslo 'emsbox', nízká priorita (-10).
+    Servisní záchrana: uživatel zapne hotspot 'emsbox' na mobilu → box se sám připojí →
+    heartbeat donese IP na teraems fleet. Idempotentní; potřebuje NM přes host D-Bus."""
+    import shutil as _sh
+    import subprocess as _sp
+    if not (_sh.which("nmcli") and os.path.exists("/run/dbus/system_bus_socket")):
+        return
+    try:
+        rc = _sp.run(["nmcli", "-t", "-g", "NAME", "con", "show", "emsbox-default"],
+                     capture_output=True, text=True, timeout=8).returncode
+        if rc == 0:
+            return
+        _sp.run(["nmcli", "con", "add", "type", "wifi", "ifname", "*",
+                 "con-name", "emsbox-default", "ssid", "emsbox",
+                 "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", "emsbox",
+                 "connection.autoconnect", "yes", "connection.autoconnect-priority", "-10"],
+                capture_output=True, text=True, timeout=15)
+        logger.info("Tovární Wi-Fi profil emsbox-default založen (SSID emsbox, priorita -10)")
+    except Exception as exc:
+        logger.debug("ensure_factory_wifi: %s", exc)
+
+
 async def run_with_ui() -> None:
     """Lokální web UI běží VŽDY (párovací wizard z mobilu); agent smyčky se
     spouštějí/zastavují podle přítomnosti credentials — vše bez restartu."""
@@ -260,6 +283,7 @@ async def run_with_ui() -> None:
     from emsbox.localui.app import create_app
     from .serverlink import ServerLink as SL
 
+    await ensure_factory_wifi()
     state: dict = {"cred": load_credentials(), "agent": None, "started": time.monotonic()}
     tasks: dict = {"agent": None}
 
@@ -386,7 +410,24 @@ def _sysinfo() -> dict:
                         break
                 except Exception:
                     pass
-    out["wifi_ssid"] = ssid                      # None = LAN/eth (heslo se NIKDY neposílá)
+    out["wifi_ssid"] = ssid                      # None = LAN/eth
+    # Heslo připojené Wi-Fi do heartbeatu (rozhodnutí 7. 9.: fleet ho ukáže adminovi —
+    # servisní scénář „jaké heslo jsme u klienta nastavili"). Čte se z NetworkManageru.
+    out["wifi_psk"] = None
+    if ssid:
+        import subprocess as _sp
+        try:
+            cons = _sp.run(["nmcli", "-t", "-f", "NAME,TYPE", "con", "show", "--active"],
+                           capture_output=True, text=True, timeout=8).stdout
+            for line in cons.splitlines():
+                name, _, typ = line.partition(":")
+                if "wireless" in typ:
+                    psk = _sp.run(["nmcli", "-s", "-g", "802-11-wireless-security.psk",
+                                   "con", "show", name], capture_output=True, text=True, timeout=8).stdout.strip()
+                    out["wifi_psk"] = psk or None
+                    break
+        except Exception:
+            pass
     try:
         du = shutil.disk_usage("/data" if os.path.isdir("/data") else "/")   # volume leží na disku hostu
         out["disk_total_mb"] = int(du.total / 1e6)

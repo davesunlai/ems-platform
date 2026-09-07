@@ -144,8 +144,12 @@ function openNet(){
    <button class="sec" onclick="loadNet()" style="margin-top:8px">↻ Obnovit</button></div>
   <div class="card" id="netforms" style="display:none">
    <div class="muted" style="margin-bottom:4px">Wi-Fi (LAN port zůstává vždy DHCP)</div>
+   <button class="sec" onclick="wifiScan()">🔍 Najít Wi-Fi sítě</button>
+   <div id="wlist"></div>
    <input id="wssid" placeholder="SSID"><input id="wpw" type="password" placeholder="heslo Wi-Fi">
    <button class="sec" onclick="wifiGo()">Připojit k Wi-Fi</button>
+   <div class="muted" style="margin-top:4px;font-size:13px">Tovární záloha: box se sám připojí k síti
+   <b>emsbox</b> / heslo <b>emsbox</b> (hotspot na mobilu) — pak ho najdeš ve fleetu na teraems.</div>
    <div class="muted" style="margin:10px 0 4px">IP režim Wi-Fi</div>
    <select id="ipmode" onchange="ipModeChg()" style="width:100%;font-size:17px;padding:10px;border-radius:10px;background:#0d1117;color:#e6edf3;border:1px solid #30363d">
      <option value="dhcp">DHCP (automaticky)</option><option value="static">Pevná IP</option></select>
@@ -164,9 +168,16 @@ async function loadNet(){
  try{const n=await j("/api/network");const el=document.getElementById("net");if(!el)return;
   el.innerHTML=n.interfaces.map(i=>`<div class="row"><span>${i.wireless?"📶":"🔌"} ${esc(i.name)} ${i.up?'<span class="ok">●</span>':'<span class="bad">●</span>'}</span>
     <span class="muted">${i.ssid?esc(i.ssid)+" · ":""}${i.ip?esc(i.ip):"bez IP"}</span></div>`).join("")
+   +(n.wifi_psk?`<div class="row"><span>🔑 heslo Wi-Fi</span><span class="muted" style="font-family:monospace">${esc(n.wifi_psk)}</span></div>`:"")
    +(n.nm_available?"":'<div class="muted" style="margin-top:6px">Konfigurace sítě nedostupná (host nemá NetworkManager / chybí mount /run/dbus) — jen zobrazení.</div>');
   document.getElementById("netforms").style.display=n.nm_available?"block":"none";
  }catch(e){}}
+async function wifiScan(){const el=document.getElementById("wlist");el.innerHTML='<div class="muted">Hledám sítě…</div>';
+ try{const r=await j("/api/network/wifi-scan");
+  el.innerHTML=r.networks.map(n=>`<div class="row" style="cursor:pointer" onclick="document.getElementById('wssid').value='${esc(n.ssid).replace(/'/g,"\\'")}';document.getElementById('wpw').focus()">
+   <span>📶 ${esc(n.ssid)}</span><span class="muted">${n.signal}% ${n.security?"🔒":""}</span></div>`).join("")
+   ||'<div class="muted">Žádné sítě nenalezeny.</div>';}
+ catch(e){el.innerHTML='<div class="bad">Sken selhal: '+e.message+'</div>'}}
 async function wifiGo(){const m=document.getElementById("nmsg");m.className="muted";m.textContent="Připojuji… (může to chvíli trvat, box může změnit IP!)";
  try{const r=await j("/api/network/wifi",{method:"POST",headers:{"Content-Type":"application/json"},
   body:JSON.stringify({ssid:document.getElementById("wssid").value,password:document.getElementById("wpw").value})});
@@ -299,7 +310,33 @@ def create_app(state: dict) -> FastAPI:
                 pass
             ifaces.append({"name": name, "wireless": wireless, "up": oper == "up",
                            "ssid": ssid, "ip": ip})
-        return {"interfaces": ifaces, "nm_available": _nm_ok()}
+        psk = None
+        if _nm_ok():
+            con = await _active_wifi_con()
+            if con:
+                rc, out = await _run(["nmcli", "-s", "-g", "802-11-wireless-security.psk",
+                                      "con", "show", con], 10)
+                if rc == 0 and out.strip():
+                    psk = out.strip()
+        return {"interfaces": ifaces, "nm_available": _nm_ok(), "wifi_psk": psk}
+
+    @app.get("/api/network/wifi-scan")
+    async def wifi_scan(_: None = Depends(require_auth)):
+        """Sken okolních Wi-Fi sítí (rescan + list, unikátní SSID dle síly signálu)."""
+        if not _nm_ok():
+            raise HTTPException(status_code=400, detail="NetworkManager nedostupný")
+        await _run(["nmcli", "dev", "wifi", "rescan"], 20)   # rc ignorujeme (rate-limit NM)
+        rc, out = await _run(["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list"], 20)
+        nets, seen = [], set()
+        for line in out.splitlines():
+            parts = line.split(":")
+            if len(parts) < 2 or not parts[0] or parts[0] in seen:
+                continue
+            seen.add(parts[0])
+            nets.append({"ssid": parts[0], "signal": int(parts[1] or 0),
+                         "security": parts[2] if len(parts) > 2 else ""})
+        nets.sort(key=lambda n: -n["signal"])
+        return {"networks": nets[:25]}
 
     async def _active_wifi_con() -> str | None:
         rc, out = await _run(["nmcli", "-t", "-f", "NAME,TYPE", "con", "show", "--active"], 10)

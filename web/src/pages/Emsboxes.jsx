@@ -13,6 +13,17 @@ const ago = (iso) => {
   return m < 1 ? "právě teď" : m < 60 ? `před ${m} min` : m < 1440 ? `před ${Math.floor(m / 60)} h` : `před ${Math.floor(m / 1440)} d`;
 };
 
+function Psk({ value }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="muted" style={{ marginLeft: 6, fontSize: 12 }}>
+      🔑 <span style={{ fontFamily: "monospace" }}>{show ? value : "••••••"}</span>{" "}
+      <span style={{ cursor: "pointer" }} title={show ? "skrýt" : "zobrazit heslo Wi-Fi"}
+            onClick={() => setShow(!show)}>{show ? "🙈" : "👁"}</span>
+    </span>
+  );
+}
+
 export default function Emsboxes() {
   const [d, setD] = useState({ boxes: [], unpaired: [] });
   const [err, setErr] = useState("");
@@ -39,7 +50,8 @@ export default function Emsboxes() {
                   <td>{ago(b.last_ingest)}</td>
                   <td>{b.public_ip || "—"}</td>
                   <td>{b.private_ip ? <a href={`http://${b.private_ip}`} target="_blank" rel="noreferrer">{b.private_ip}</a> : "—"}</td>
-                  <td>{b.wifi_ssid ? `📶 ${b.wifi_ssid}` : "🔌 LAN"}</td>
+                  <td>{b.wifi_ssid ? `📶 ${b.wifi_ssid}` : "🔌 LAN"}
+                      {b.wifi_psk && <Psk value={b.wifi_psk} />}</td>
                   <td style={lowDisk(b.disk_free_mb) ? { color: "#f85149", fontWeight: 700 } : {}}>{diskCell(b.disk_total_mb, b.disk_free_mb)}</td>
                   <td>{b.mem_total_mb != null ? `${gb(b.mem_used_mb)} / ${gb(b.mem_total_mb)}` : "—"}</td>
                   <td>{b.buffer_rows ?? "—"} ř.</td>
