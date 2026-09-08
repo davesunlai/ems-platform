@@ -4,6 +4,15 @@ import Icon from "../components/Icon";
 import { MAX_TRACKED, METRIC_LABEL, iconFor, groupMetrics, metricsFor, controlFor } from "../metrics";
 
 const ADAPTERS = ["goodwe", "solis", "stiebel_isg", "uvr_cmi", "mock"];
+// který model podporuje který typ zařízení (filtr výběru; mock umí vše — vývoj)
+const ADAPTER_TYPES = {
+  solis: ["hybrid"],
+  goodwe: ["hybrid", "storage"],
+  stiebel_isg: ["heat_pump"],
+  uvr_cmi: ["sensor"],
+  mock: ["hybrid", "generation", "storage", "load", "grid_point", "sensor", "heat_pump"],
+};
+const modelsForType = (t) => ADAPTERS.filter((a) => (ADAPTER_TYPES[a] || []).includes(t));
 const ADAPTER_LABEL = { stiebel_isg: "Stiebel Eltron ISG (TČ)",
   goodwe: "Goodwe — FVE + baterie (UDP/Modbus)",
   solis: "Solis S6-EH3P50K-H — FVE + baterie (Modbus TCP)",
@@ -146,15 +155,21 @@ export default function Modules() {
             <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Adaptér</label>
-            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" || a === "stiebel_isg" ? 502 : a === "goodwe" ? 8899 : f.port, device_type: a === "solis" ? "hybrid" : a === "uvr_cmi" ? "sensor" : a === "stiebel_isg" ? "heat_pump" : f.device_type }); }}>
-              {ADAPTERS.map((a) => <option key={a} value={a}>{ADAPTER_LABEL[a] || a}</option>)}
+            <label>Typ zařízení</label>
+            <select value={f.device_type}
+                    onChange={(e) => { const t = e.target.value; const ms = modelsForType(t);
+                      const a = ms.includes(f.adapter) ? f.adapter : (ms[0] || f.adapter);
+                      setF({ ...f, device_type: t, adapter: a,
+                             port: a === "solis" || a === "stiebel_isg" ? 502 : a === "goodwe" ? 8899 : f.port }); }}>
+              {DTYPES.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
             </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Typ zařízení</label>
-            <select value={f.device_type} onChange={(e) => setF({ ...f, device_type: e.target.value })}>
-              {DTYPES.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
+            <label>Model / zařízení</label>
+            <select value={f.adapter} onChange={(e) => { const a = e.target.value; setF({ ...f, adapter: a, port: a === "solis" || a === "stiebel_isg" ? 502 : a === "goodwe" ? 8899 : f.port }); }}>
+              {modelsForType(f.device_type).map((a) => <option key={a} value={a}>{ADAPTER_LABEL[a] || a}</option>)}
+              {modelsForType(f.device_type).length === 0 &&
+                <option value={f.adapter}>— pro tento typ zatím žádný podporovaný model —</option>}
             </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>

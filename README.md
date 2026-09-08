@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.81.2 — Formulář modulu: pořadí a závislý výběr. Pole jdou logicky: ID → Název → TYP ZAŘÍZENÍ → MODEL/ZAŘÍZENÍ (přejmenováno z „Adaptér"). Výběr modelu je FILTROVANÝ typem: 🌀 TČ nabídne jen Stiebel Eltron ISG, hybridní střídač jen Solis/GoodWe, čidla jen UVR/CMI (mapa ADAPTER_TYPES; mock umí vše — vývoj). Změna typu automaticky přepne model na první podporovaný (vč. výchozího portu); typ bez modelů ukáže „— zatím žádný podporovaný model —". Odpadá dřívější obrácená logika (model určoval typ). Jen rebuild webu.
+
 ## v0.81.1 — Typ zařízení lidsky. Výběr i tabulka Modulů místo surových hodnot (hybrid/storage/load/grid_point…) ukazují české popisky s ikonami: 🔋 Hybridní střídač (FVE + baterie) · ☀️ Výrobna · 🔋 Bateriové úložiště · 🔌 Spotřebič/řízená zátěž · 🗼 Měření odběrného místa (elektroměr) · 🌡️ Čidla · 🌀 Tepelné čerpadlo. Hodnoty v DB beze změny (jsou funkční — backend filtry, např. heat_pump), překládá se jen fasáda. Jen rebuild webu.
 
 ## v0.81.0 — Verze v hlavičce + úklid typu modulu. (1) Hlavička teraems ukazuje místo „pilot" ŽIVOU verzi platformy (nový GET /api/version bez auth, hook v Layoutu → „v0.81.0"). (2) Pole „Typ modulu" (čtecí/zápisový—fáze C/logika—fáze D) byl nepoužívaný relikt fázového plánu — greppem ověřeno, že modules.kind žádná logika nečte. Z formuláře ODSTRANĚNO (kind se interně dál ukládá kvůli kompatibilitě, default source_read); sloupec Typ v tabulce nahrazen „Schopnosti" ODVOZENÝMI z reálné konfigurace: 📖 čtení (vždy) · 🎛 řízení (má povolené povely) · 🤖 automatika (řízení + aspoň jeden zapnutý zdroj 🧠/⏰/⚡) — u Solisu tedy 📖 🎛 🤖 podle skutečnosti, žádná ruční volba, žádné lhaní. Jen franta.
