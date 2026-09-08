@@ -159,7 +159,7 @@ export default function Modules() {
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Připojení</label>
             <select value={f.emsbox_id ?? ""} onChange={(e) => setF({ ...f, emsbox_id: e.target.value })}>
-              <option value="">přímo (server)</option>
+              <option value="">🌐 po síti (Modbus TCP/IP — server čte zařízení přímo)</option>
               {boxes.map((b) => (
                 <option key={b.id} value={b.id}>📦 {b.name} #{b.id}{b.locality_name ? ` (${b.locality_name})` : ""}{b.status !== "online" ? " 🔴" : ""}</option>))}
             </select>
@@ -368,7 +368,8 @@ export default function Modules() {
 
       <div className="panel">
         <h3>Moduly</h3>
-        <table>
+        <div style={{ overflowX: "auto" }}>
+        <table style={{ minWidth: 860 }}>
           <thead><tr><th></th><th>ID</th><th>Název</th><th>Typ</th><th>Adaptér</th><th>Zařízení</th><th>Lokalita</th><th>Parametry</th><th>Stav</th><th></th></tr></thead>
           <tbody>
             {mods.map((m) => (
@@ -398,6 +399,7 @@ export default function Modules() {
             ))}
           </tbody>
         </table>
+        </div>
         <p className="muted" style={{ marginTop: 14, fontSize: 12 }}>
           Změny se projeví do ~10 s — kolektor čte registr živě, bez restartu. Funkční jsou zatím čtecí moduly.
         </p>

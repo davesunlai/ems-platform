@@ -30,7 +30,7 @@ export default function ModuleDiag() {
     <div>
       <h1 style={{ fontSize: 20, marginTop: 0 }}>🔬 Diagnostika — {d.module.id}
         <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}> · {d.module.adapter}
-          {d.module.emsbox_id ? ` · 📦 box #${d.module.emsbox_id}` : " · přímo (server)"}</span></h1>
+          {d.module.emsbox_id ? ` · 📦 box #${d.module.emsbox_id}` : " · 🌐 po síti (Modbus TCP/IP)"}</span></h1>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
         {[6, 24, 72, 168].map((h) => (
           <button key={h} className={h === hours ? "btn primary" : "btn"} style={{ padding: "4px 10px", fontSize: 12 }}
