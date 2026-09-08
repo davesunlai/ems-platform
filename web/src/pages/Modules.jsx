@@ -13,7 +13,7 @@ const ADAPTER_TYPES = {
   mock: ["hybrid", "generation", "storage", "load", "grid_point", "sensor", "heat_pump"],
 };
 const modelsForType = (t) => ADAPTERS.filter((a) => (ADAPTER_TYPES[a] || []).includes(t));
-const ADAPTER_LABEL = { stiebel_isg: "Stiebel Eltron ISG (TČ)",
+const ADAPTER_LABEL = { stiebel_isg: "Stiebel Eltron HPA-O 13 C Premium (TČ, přes ISG)",
   goodwe: "Goodwe — FVE + baterie (UDP/Modbus)",
   solis: "Solis S6-EH3P50K-H — FVE + baterie (Modbus TCP)",
   uvr_cmi: "UVR16x2 / CMI — teploty AKU (JSON API, read-only)",
