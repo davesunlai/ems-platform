@@ -98,6 +98,19 @@ async def ensure_schema() -> None:
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_action_status TEXT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_action_at TIMESTAMPTZ")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_action_detail TEXT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_action_username TEXT")
+        await conn.execute(
+            """CREATE TABLE IF NOT EXISTS emsbox_action_log (
+                 id BIGSERIAL PRIMARY KEY,
+                 box_id INT NOT NULL,
+                 action TEXT NOT NULL,
+                 username TEXT,
+                 status TEXT NOT NULL DEFAULT 'pending',
+                 detail TEXT,
+                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS emsbox_action_log_box ON emsbox_action_log (box_id, id DESC)")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS disk_total_mb INT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS disk_free_mb INT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS mem_total_mb INT")
@@ -249,7 +262,7 @@ async def overview() -> dict:
             "e.last_heartbeat, e.last_ingest, e.buffer_rows, e.clock_drift_s, e.agent_version, "
             "e.public_ip, e.private_ip, e.hostname, e.wifi_ssid, e.wifi_psk, "
             "e.disk_total_mb, e.disk_free_mb, e.mem_total_mb, e.mem_used_mb, e.created_at, "
-            "e.last_action, e.last_action_status, e.last_action_at, e.last_action_detail "
+            "e.last_action, e.last_action_status, e.last_action_at, e.last_action_detail, e.last_action_username "
             "FROM emsbox e LEFT JOIN localities l ON l.id = e.locality_id "
             "WHERE e.status != 'disabled' ORDER BY e.id")
         ann = await conn.fetch(
@@ -274,9 +287,31 @@ async def overview() -> dict:
 
 
 async def _finish_action(conn, box_id: int, ok: bool, detail: str) -> None:
+    st = "done" if ok else "failed"
     await conn.execute(
         "UPDATE emsbox SET last_action_status = $2, last_action_at = now(), last_action_detail = $3 "
-        "WHERE id = $1", box_id, "done" if ok else "failed", detail)
+        "WHERE id = $1", box_id, st, detail)
+    await conn.execute(
+        """UPDATE emsbox_action_log SET status = $2, detail = $3, updated_at = now()
+           WHERE id = (SELECT id FROM emsbox_action_log
+                       WHERE box_id = $1 AND status IN ('pending','delivered') ORDER BY id DESC LIMIT 1)""",
+        box_id, st, detail)
+
+
+async def action_log(box_id: int, limit: int = 30) -> list[dict]:
+    """📜 Historie servisních akcí boxu (kdo, co, kdy, výsledek)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, action, username, status, detail, created_at, updated_at "
+            "FROM emsbox_action_log WHERE box_id = $1 ORDER BY id DESC LIMIT $2", box_id, limit)
+    out = []
+    for r in rows:
+        d = dict(r)
+        for k in ("created_at", "updated_at"):
+            d[k] = d[k].isoformat() if d[k] else None
+        out.append(d)
+    return out
 
 
 async def heartbeat(box_id: int, body: dict) -> None:
@@ -405,7 +440,7 @@ async def locality_recipient_emails(locality_id: int) -> list[str]:
     return [r["email"] for r in rows]
 
 
-async def set_pending_action(box_id: int, action: str | None) -> bool:
+async def set_pending_action(box_id: int, action: str | None, username: str | None = None) -> bool:
     """Servisní akce pro box (vyzvedne si ji heartbeatem). None = zrušit.
     Zakládá i stavový řádek životního cyklu: pending → delivered → done/failed.
     U update_agent se do detail uloží AKTUÁLNÍ verze (pro pozdější porovnání)."""
@@ -419,8 +454,14 @@ async def set_pending_action(box_id: int, action: str | None) -> bool:
             detail = await conn.fetchval("SELECT agent_version FROM emsbox WHERE id = $1", box_id)
         r = await conn.execute(
             "UPDATE emsbox SET pending_action = $2, last_action = $2, last_action_status = 'pending', "
-            "last_action_at = now(), last_action_detail = $3 WHERE id = $1", box_id, action, detail)
-        return r.endswith("1")
+            "last_action_at = now(), last_action_detail = $3, last_action_username = $4 "
+            "WHERE id = $1", box_id, action, detail, username)
+        if r.endswith("1"):
+            await conn.execute(
+                "INSERT INTO emsbox_action_log (box_id, action, username, status, detail) "
+                "VALUES ($1, $2, $3, 'pending', $4)", box_id, action, username, detail)
+            return True
+        return False
 
 
 async def pop_pending_action(box_id: int) -> str | None:
@@ -434,4 +475,9 @@ async def pop_pending_action(box_id: int) -> str | None:
                 await conn.execute(
                     "UPDATE emsbox SET pending_action = NULL, last_action_status = 'delivered', "
                     "last_action_at = now() WHERE id = $1", box_id)
+                await conn.execute(
+                    """UPDATE emsbox_action_log SET status = 'delivered', updated_at = now()
+                       WHERE id = (SELECT id FROM emsbox_action_log
+                                   WHERE box_id = $1 AND status = 'pending' ORDER BY id DESC LIMIT 1)""",
+                    box_id)
     return val

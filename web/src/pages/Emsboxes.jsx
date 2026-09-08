@@ -24,7 +24,31 @@ function ActionStatus({ box }) {
     done:      { ico: "✅", txt: `${a}: úspěšně provedeno${box.last_action_detail ? ` (${box.last_action_detail})` : ""}`, col: "var(--green)" },
     failed:    { ico: "❌", txt: `${a}: selhalo${box.last_action_detail ? ` — ${box.last_action_detail}` : ""}`, col: "#f85149" },
   }[box.last_action_status] || { ico: "•", txt: a, col: "var(--muted)" };
-  return <span style={{ color: S.col }}>{S.ico} {S.txt} <span className="muted">· {t}</span></span>;
+  const [hist, setHist] = useState(null);
+  const toggle = async () => {
+    if (hist) { setHist(null); return; }
+    try { setHist((await api.emsboxActions(box.id)).actions); } catch (e) { alert(e.message); }
+  };
+  return (<>
+    <span style={{ color: S.col }}>{S.ico} {S.txt}
+      {box.last_action_username && <span className="muted"> · zadal {box.last_action_username}</span>}
+      <span className="muted"> · {t}</span>{" "}
+      <span style={{ cursor: "pointer" }} className="muted" onClick={toggle}
+            title="historie servisních akcí">📜 {hist ? "skrýt" : "historie"}</span>
+    </span>
+    {hist && (
+      <table style={{ fontSize: 11.5, marginTop: 4 }}>
+        <thead><tr><th>Kdy</th><th>Akce</th><th>Zadal</th><th>Stav</th><th>Detail</th></tr></thead>
+        <tbody>{hist.map((h) => (
+          <tr key={h.id}>
+            <td>{new Date(h.created_at).toLocaleString("cs-CZ")}</td>
+            <td>{ACTION_CZ[h.action] || h.action}</td>
+            <td>{h.username || "—"}</td>
+            <td>{{ pending: "⏳", delivered: "📨", done: "✅", failed: "❌" }[h.status] || h.status}</td>
+            <td className="muted">{h.detail || ""}</td>
+          </tr>))}
+        </tbody></table>)}
+  </>);
 }
 
 function UpdateBtn({ box }) {

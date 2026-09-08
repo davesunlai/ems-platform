@@ -68,6 +68,7 @@ export const api = {
   moduleDiagnostics: (id, hours = 24) => request(`/api/admin/modules/${id}/diagnostics?hours=${hours}`),
   emsboxResetUiPassword: (id) => request(`/api/emsboxes/${id}/reset-localui-password`, { method: "POST" }),
   emsboxUpdateAgent: (id) => request(`/api/emsboxes/${id}/update-agent`, { method: "POST" }),
+  emsboxActions: (id) => request(`/api/emsboxes/${id}/actions`),
   emsboxList: (locId) => request(`/api/localities/${locId}/emsboxes`),
   emsboxCreate: (locId, name) => request(`/api/localities/${locId}/emsboxes`, { method: "POST", body: { name } }),
   emsboxDelete: (boxId) => request(`/api/emsbox/${boxId}`, { method: "DELETE" }),

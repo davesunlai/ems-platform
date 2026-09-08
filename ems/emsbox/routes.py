@@ -173,13 +173,20 @@ async def rules_delete(rule_id: int, _: dict = Depends(control)) -> dict:
     return {"ok": True}
 
 
+@router.get("/emsboxes/{box_id}/actions")
+async def box_action_log(box_id: int, _: dict = Depends(require_permission("admin"))):
+    """📜 Historie servisních akcí boxu (posledních 30)."""
+    from . import db as _db
+    return {"box_id": box_id, "actions": await _db.action_log(box_id)}
+
+
 @router.post("/emsboxes/{box_id}/update-agent")
 async def update_agent(box_id: int, user: dict = Depends(require_permission("admin"))):
     """⬆ Dálkový update agenta: box heartbeatem vyzvedne akci, zapíše /data/update_request,
     hostový emsbox-update.path spustí git pull + rebuild + restart (~3 min). Vyžaduje
     nainstalované systemd jednotky (provision.sh je zakládá; starší boxy jednorázově ručně)."""
     from . import db as _db
-    ok = await _db.set_pending_action(box_id, "update_agent")
+    ok = await _db.set_pending_action(box_id, "update_agent", user.get("username"))
     if not ok:
         raise HTTPException(status_code=404, detail="box neexistuje")
     try:
@@ -202,7 +209,7 @@ async def reset_localui_password(box_id: int, user: dict = Depends(require_permi
     s příštím heartbeatem (≤30 s), smaže /data/localui_auth.json a UI nabídne
     založení nového hesla. Topadmin hesla se netýká."""
     from . import db as _db
-    ok = await _db.set_pending_action(box_id, "reset_localui_password")
+    ok = await _db.set_pending_action(box_id, "reset_localui_password", user.get("username"))
     if not ok:
         raise HTTPException(status_code=404, detail="box neexistuje")
     try:
