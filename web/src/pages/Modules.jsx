@@ -10,11 +10,8 @@ const ADAPTER_LABEL = { stiebel_isg: "Stiebel Eltron ISG (TČ)",
   uvr_cmi: "UVR16x2 / CMI — teploty AKU (JSON API, read-only)",
   mock: "Mock — simulace (bez HW)",
 };
-const KINDS = [
-  { v: "source_read", l: "Čtecí (telemetrie)" },
-  { v: "source_write", l: "Zápisový (řízení) — fáze C" },
-  { v: "logic", l: "Logika (automatizace) — fáze D" },
-];
+// kind je interní pozůstatek fázového plánu — v UI se nevolí (schopnosti se odvozují z konfigurace)
+const KINDS = [{ v: "source_read", l: "modul" }];
 const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point", "sensor", "heat_pump"];
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
@@ -137,12 +134,6 @@ export default function Modules() {
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Název</label>
             <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-          </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>Typ modulu</label>
-            <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
-              {KINDS.map((k) => <option key={k.v} value={k.v}>{k.l}</option>)}
-            </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Adaptér</label>
@@ -370,7 +361,7 @@ export default function Modules() {
         <h3>Moduly</h3>
         <div style={{ overflowX: "auto" }}>
         <table style={{ minWidth: 860 }}>
-          <thead><tr><th></th><th>ID</th><th>Název</th><th>Typ</th><th>Adaptér</th><th>Zařízení</th><th>Lokalita</th><th>Parametry</th><th>Stav</th><th></th></tr></thead>
+          <thead><tr><th></th><th>ID</th><th>Název</th><th>Schopnosti</th><th>Adaptér</th><th>Zařízení</th><th>Lokalita</th><th>Parametry</th><th>Stav</th><th></th></tr></thead>
           <tbody>
             {mods.map((m) => (
               <tr key={m.id}>
@@ -381,7 +372,11 @@ export default function Modules() {
                 </td>
                 <td>{m.id}</td>
                 <td className="muted">{m.name}</td>
-                <td style={{ fontSize: 12 }}>{KIND_LABEL[m.kind] || m.kind}</td>
+                <td style={{ fontSize: 12 }} title="odvozeno z konfigurace: 📖 čtení vždy · 🎛 řízení dle povolených povelů · 🤖 automatika dle zapnutých zdrojů">
+                  {(() => { const p = m.params || {}; const ctl = (p.control_enabled || []).length > 0;
+                    const auto = ctl && ["planner", "schedule", "spot"].some((k) => (p.control_sources || {})[k] !== false);
+                    return <>📖{ctl && " 🎛"}{auto && " 🤖"}</>; })()}
+                </td>
                 <td className="role">{m.adapter}</td>
                 <td className="muted">{m.device_type}</td>
                 <td className="muted">{m.locality || "—"}</td>

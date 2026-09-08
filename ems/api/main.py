@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.80.2", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.81.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -87,6 +87,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/api/version")
+async def api_version():
+    """Verze platformy pro hlavičku UI (bez auth — neškodný řetězec)."""
+    import ems as _e
+    return {"version": _e.__version__}
+
 
 app.include_router(auth_router)
 app.include_router(modules_router)

@@ -99,7 +99,16 @@ function SpotChip() {
   </span>;
 }
 
+function useVersion() {
+  const [v, setV] = useState("");
+  useEffect(() => {
+    fetch("/api/version").then((r) => r.json()).then((d) => setV(d.version ? `v${d.version}` : "")).catch(() => {});
+  }, []);
+  return v;
+}
+
 export default function Layout() {
+  const ver = useVersion();
   const { user, logout, has } = useAuth();
   const [tour, setTour] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -116,7 +125,7 @@ export default function Layout() {
                  style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
           <span className="dot" />
           <b>TERA EMS</b>
-          <span className="hide-sm">pilot</span>
+          <span className="hide-sm" title="verze platformy">{ver}</span>
         </NavLink>
         <nav className={`nav ${menuOpen ? "open" : ""}`} onClick={close}>
           <NavLink to="/" end>Dashboard</NavLink>
