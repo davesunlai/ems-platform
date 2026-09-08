@@ -12,7 +12,17 @@ const ADAPTER_LABEL = { stiebel_isg: "Stiebel Eltron ISG (TČ)",
 };
 // kind je interní pozůstatek fázového plánu — v UI se nevolí (schopnosti se odvozují z konfigurace)
 const KINDS = [{ v: "source_read", l: "modul" }];
-const DTYPES = ["hybrid", "generation", "storage", "load", "grid_point", "sensor", "heat_pump"];
+// hodnoty jsou funkční (filtry v backendu) — překládá se jen popisek
+const DTYPES = [
+  { v: "hybrid", l: "🔋 Hybridní střídač (FVE + baterie)" },
+  { v: "generation", l: "☀️ Výrobna (jen FVE / generátor)" },
+  { v: "storage", l: "🔋 Bateriové úložiště (bez FVE)" },
+  { v: "load", l: "🔌 Spotřebič / řízená zátěž" },
+  { v: "grid_point", l: "🗼 Měření odběrného místa (elektroměr)" },
+  { v: "sensor", l: "🌡️ Čidla (teploty, senzorová jednotka)" },
+  { v: "heat_pump", l: "🌀 Tepelné čerpadlo" },
+];
+const DTYPE_LABEL = Object.fromEntries(DTYPES.map((d) => [d.v, d.l]));
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
 
 function emptyForm() {
@@ -144,7 +154,7 @@ export default function Modules() {
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Typ zařízení</label>
             <select value={f.device_type} onChange={(e) => setF({ ...f, device_type: e.target.value })}>
-              {DTYPES.map((d) => <option key={d} value={d}>{d}</option>)}
+              {DTYPES.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
             </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
@@ -378,7 +388,7 @@ export default function Modules() {
                     return <>📖{ctl && " 🎛"}{auto && " 🤖"}</>; })()}
                 </td>
                 <td className="role">{m.adapter}</td>
-                <td className="muted">{m.device_type}</td>
+                <td className="muted" style={{ fontSize: 12 }}>{DTYPE_LABEL[m.device_type] || m.device_type}</td>
                 <td className="muted">{m.locality || "—"}</td>
                 <td className="muted" style={{ fontFamily: "var(--mono)", fontSize: 12 }}>
                   {m.params.host ? `${m.params.host}:${m.params.port}` : JSON.stringify(m.params)}

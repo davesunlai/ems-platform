@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.81.1 — Typ zařízení lidsky. Výběr i tabulka Modulů místo surových hodnot (hybrid/storage/load/grid_point…) ukazují české popisky s ikonami: 🔋 Hybridní střídač (FVE + baterie) · ☀️ Výrobna · 🔋 Bateriové úložiště · 🔌 Spotřebič/řízená zátěž · 🗼 Měření odběrného místa (elektroměr) · 🌡️ Čidla · 🌀 Tepelné čerpadlo. Hodnoty v DB beze změny (jsou funkční — backend filtry, např. heat_pump), překládá se jen fasáda. Jen rebuild webu.
+
 ## v0.81.0 — Verze v hlavičce + úklid typu modulu. (1) Hlavička teraems ukazuje místo „pilot" ŽIVOU verzi platformy (nový GET /api/version bez auth, hook v Layoutu → „v0.81.0"). (2) Pole „Typ modulu" (čtecí/zápisový—fáze C/logika—fáze D) byl nepoužívaný relikt fázového plánu — greppem ověřeno, že modules.kind žádná logika nečte. Z formuláře ODSTRANĚNO (kind se interně dál ukládá kvůli kompatibilitě, default source_read); sloupec Typ v tabulce nahrazen „Schopnosti" ODVOZENÝMI z reálné konfigurace: 📖 čtení (vždy) · 🎛 řízení (má povolené povely) · 🤖 automatika (řízení + aspoň jeden zapnutý zdroj 🧠/⏰/⚡) — u Solisu tedy 📖 🎛 🤖 podle skutečnosti, žádná ruční volba, žádné lhaní. Jen franta.
 
 ## v0.80.2 — UI drobnosti: (1) volba připojení modulu „přímo (server)" přejmenována laicky na „🌐 po síti (Modbus TCP/IP — server čte zařízení přímo)"; stejné pojmenování v hlavičce diagnostiky. (2) Tabulka Modulů přetékala přes okraj panelu (od přidání 🔬) — nyní vodorovný posuv UVNITŘ panelu (overflow-x: auto + minWidth), stejné chování jako na mobilu. Jen rebuild webu.
