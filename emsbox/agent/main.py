@@ -171,8 +171,10 @@ class Agent:
                     os.remove(p)
                 logger.warning("SERVISNÍ AKCE: uživatelské heslo lokálního UI resetováno z teraems "
                                "— UI nabídne založení nového hesla")
+                self._action_ack = {"action": action, "ok": True, "detail": "heslo smazáno, čeká na nové"}
             except Exception as exc:
                 logger.error("reset hesla UI selhal: %s", exc)
+                self._action_ack = {"action": action, "ok": False, "detail": str(exc)[:120]}
         elif action == "update_agent":
             try:
                 with open("/data/update_request", "w") as f:
@@ -199,6 +201,10 @@ class Agent:
                     "disk_free_mb": disk_free, "agent_version": AGENT_VERSION,
                     "devices": [{"device_uid": uid, **s} for uid, s in self.dev_state.items()]}
             try:
+                ack = getattr(self, "_action_ack", None)
+                if ack:
+                    body["action_result"] = ack
+                    self._action_ack = None
                 resp = await self.link.heartbeat(body)
                 self.online = True
                 await self._handle_server_action((resp or {}).get("action"))

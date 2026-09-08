@@ -131,6 +131,8 @@ async function render(force){
   <div class="muted" style="margin-top:6px">Zařízení se definují na teraems.com — tady je jen stav a diagnostika.</div></div>`;
 }
 async function authGo(isLogin){const m=document.getElementById("amsg");m.textContent="";
+ const _pw=document.getElementById("pw").value;
+ if(!_pw){m.textContent=isLogin?"Zadej heslo.":"Heslo nesmí být prázdné (min. 4 znaky).";return}
  try{await j(isLogin?"/api/login":"/api/set-password",{method:"POST",headers:{"Content-Type":"application/json"},
   body:JSON.stringify({password:document.getElementById("pw").value})});
   document.getElementById("pw").value="";render(true);}
@@ -261,6 +263,8 @@ def create_app(state: dict) -> FastAPI:
 
     @app.post("/api/set-password")
     async def set_password(body: LoginBody, request: Request, response: Response):
+        if len((body.password or "").strip()) < 4:
+            raise HTTPException(status_code=400, detail="heslo musí mít aspoň 4 znaky")
         if _pass_set() and not _authed(request):
             raise HTTPException(status_code=403, detail="heslo už je nastavené (reset umí jen topadmin)")
         if len(body.password) < 6:

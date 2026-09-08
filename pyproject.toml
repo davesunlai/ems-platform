@@ -1,6 +1,6 @@
 [project]
 name = "ems-platform"
-version = "0.79.0"
+version = "0.80.0"
 description = "Univerzální energy management napříč energetickým portfoliem"
 requires-python = ">=3.11"
 dependencies = [

@@ -94,6 +94,10 @@ async def ensure_schema() -> None:
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS wifi_ssid TEXT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS wifi_psk TEXT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS pending_action TEXT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_action TEXT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_action_status TEXT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_action_at TIMESTAMPTZ")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_action_detail TEXT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS disk_total_mb INT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS disk_free_mb INT")
         await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS mem_total_mb INT")
@@ -244,7 +248,8 @@ async def overview() -> dict:
             "SELECT e.id, e.name, e.status, e.locality_id, l.name AS locality_name, "
             "e.last_heartbeat, e.last_ingest, e.buffer_rows, e.clock_drift_s, e.agent_version, "
             "e.public_ip, e.private_ip, e.hostname, e.wifi_ssid, e.wifi_psk, "
-            "e.disk_total_mb, e.disk_free_mb, e.mem_total_mb, e.mem_used_mb, e.created_at "
+            "e.disk_total_mb, e.disk_free_mb, e.mem_total_mb, e.mem_used_mb, e.created_at, "
+            "e.last_action, e.last_action_status, e.last_action_at, e.last_action_detail "
             "FROM emsbox e LEFT JOIN localities l ON l.id = e.locality_id "
             "WHERE e.status != 'disabled' ORDER BY e.id")
         ann = await conn.fetch(
@@ -266,6 +271,12 @@ async def overview() -> dict:
         unp.append(d)
     return {"boxes": [iso(dict(r), ("last_heartbeat", "last_ingest", "created_at")) for r in boxes],
             "unpaired": unp}
+
+
+async def _finish_action(conn, box_id: int, ok: bool, detail: str) -> None:
+    await conn.execute(
+        "UPDATE emsbox SET last_action_status = $2, last_action_at = now(), last_action_detail = $3 "
+        "WHERE id = $1", box_id, "done" if ok else "failed", detail)
 
 
 async def heartbeat(box_id: int, body: dict) -> None:
@@ -293,6 +304,17 @@ async def heartbeat(box_id: int, body: dict) -> None:
             body.get("hostname"), body.get("wifi_ssid"), body.get("wifi_psk"),
             body.get("disk_total_mb"), body.get("disk_free_mb"),
             body.get("mem_total_mb"), body.get("mem_used_mb"))
+        # --- životní cyklus servisních akcí ---
+        ar = body.get("action_result")
+        if isinstance(ar, dict) and ar.get("action"):
+            await _finish_action(conn, box_id, bool(ar.get("ok")), str(ar.get("detail") or ar["action"]))
+        else:
+            row = await conn.fetchrow(
+                "SELECT last_action, last_action_status, last_action_detail FROM emsbox WHERE id = $1", box_id)
+            if (row and row["last_action"] == "update_agent" and row["last_action_status"] == "delivered"
+                    and body.get("agent_version") and body["agent_version"] != row["last_action_detail"]):
+                await _finish_action(conn, box_id, True,
+                                     f"verze {row['last_action_detail'] or '?'} → {body['agent_version']}")
 
 
 # --- boxy / alerty (uživatelské) -------------------------------------------
@@ -384,10 +406,20 @@ async def locality_recipient_emails(locality_id: int) -> list[str]:
 
 
 async def set_pending_action(box_id: int, action: str | None) -> bool:
-    """Servisní akce pro box (vyzvedne si ji heartbeatem). None = zrušit."""
+    """Servisní akce pro box (vyzvedne si ji heartbeatem). None = zrušit.
+    Zakládá i stavový řádek životního cyklu: pending → delivered → done/failed.
+    U update_agent se do detail uloží AKTUÁLNÍ verze (pro pozdější porovnání)."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        r = await conn.execute("UPDATE emsbox SET pending_action = $2 WHERE id = $1", box_id, action)
+        if action is None:
+            r = await conn.execute("UPDATE emsbox SET pending_action = NULL WHERE id = $1", box_id)
+            return r.endswith("1")
+        detail = None
+        if action == "update_agent":
+            detail = await conn.fetchval("SELECT agent_version FROM emsbox WHERE id = $1", box_id)
+        r = await conn.execute(
+            "UPDATE emsbox SET pending_action = $2, last_action = $2, last_action_status = 'pending', "
+            "last_action_at = now(), last_action_detail = $3 WHERE id = $1", box_id, action, detail)
         return r.endswith("1")
 
 
@@ -400,5 +432,6 @@ async def pop_pending_action(box_id: int) -> str | None:
                 "SELECT pending_action FROM emsbox WHERE id = $1 FOR UPDATE", box_id)
             if val:
                 await conn.execute(
-                    "UPDATE emsbox SET pending_action = NULL WHERE id = $1", box_id)
+                    "UPDATE emsbox SET pending_action = NULL, last_action_status = 'delivered', "
+                    "last_action_at = now() WHERE id = $1", box_id)
     return val

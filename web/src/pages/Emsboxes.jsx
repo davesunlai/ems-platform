@@ -1,5 +1,5 @@
 // 📦 Přehled flotily EMSBOXů: spárované (vč. IP) + nespárované ohlášené boxy.
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../api";
 
 const gb = (mb) => (mb == null ? "—" : (mb / 1000).toFixed(mb < 10000 ? 1 : 0) + " GB");
@@ -12,6 +12,20 @@ const ago = (iso) => {
   const m = Math.round((Date.now() - new Date(iso)) / 60000);
   return m < 1 ? "právě teď" : m < 60 ? `před ${m} min` : m < 1440 ? `před ${Math.floor(m / 60)} h` : `před ${Math.floor(m / 1440)} d`;
 };
+
+const ACTION_CZ = { update_agent: "update agenta", reset_localui_password: "reset hesla UI" };
+
+function ActionStatus({ box }) {
+  const a = ACTION_CZ[box.last_action] || box.last_action;
+  const t = box.last_action_at ? new Date(box.last_action_at).toLocaleString("cs-CZ") : "";
+  const S = {
+    pending:   { ico: "⏳", txt: `zadán pokyn: ${a} — čeká na vyzvednutí boxem`, col: "var(--amber)" },
+    delivered: { ico: "📨", txt: `pokyn ${a} předán boxu — provádí se…`, col: "var(--blue, #58a6ff)" },
+    done:      { ico: "✅", txt: `${a}: úspěšně provedeno${box.last_action_detail ? ` (${box.last_action_detail})` : ""}`, col: "var(--green)" },
+    failed:    { ico: "❌", txt: `${a}: selhalo${box.last_action_detail ? ` — ${box.last_action_detail}` : ""}`, col: "#f85149" },
+  }[box.last_action_status] || { ico: "•", txt: a, col: "var(--muted)" };
+  return <span style={{ color: S.col }}>{S.ico} {S.txt} <span className="muted">· {t}</span></span>;
+}
 
 function UpdateBtn({ box }) {
   const [busy, setBusy] = useState(false);
@@ -69,7 +83,8 @@ export default function Emsboxes() {
               <th>Veřejná IP</th><th>Privátní IP</th><th>Síť</th><th>Disk</th><th>RAM</th><th>Buffer</th><th>Drift</th><th>Verze</th><th></th></tr></thead>
             <tbody>
               {d.boxes.map((b) => (
-                <tr key={b.id} style={rowStyle(b.disk_free_mb)} title={lowDisk(b.disk_free_mb) ? "⚠ méně než 10 GB volného místa" : undefined}>
+                <React.Fragment key={b.id}>
+                <tr style={rowStyle(b.disk_free_mb)} title={lowDisk(b.disk_free_mb) ? "⚠ méně než 10 GB volného místa" : undefined}>
                   <td>{b.status === "online" ? "🟢" : b.status === "pairing" ? "🟡" : "🔴"}</td>
                   <td><b>{b.name}</b> <span className="muted">#{b.id}</span></td>
                   <td>{b.hostname || "—"}</td>
@@ -86,7 +101,11 @@ export default function Emsboxes() {
                   <td style={Math.abs(b.clock_drift_s || 0) > 60 ? { color: "#f85149" } : {}}>{b.clock_drift_s != null ? `${Math.round(b.clock_drift_s)} s` : "—"}</td>
                   <td>{b.agent_version || "—"} <UpdateBtn box={b} /></td>
                   <td><ResetUiPw box={b} /></td>
-                </tr>))}
+                </tr>
+                {b.last_action && <tr>
+                  <td colSpan={99} style={{ paddingTop: 0, fontSize: 12 }}><ActionStatus box={b} /></td>
+                </tr>}
+                </React.Fragment>))}
             </tbody>
           </table>
         ) : <p className="muted">Zatím žádné boxy.</p>}
