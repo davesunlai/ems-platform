@@ -36,7 +36,8 @@ class ServerLink:
     def __init__(self, cred: dict, timeout: float = 25.0):
         self.server = cred["server"]
         self.box_id = int(cred["box_id"])
-        self._headers = {"Authorization": f"Bearer {cred['box_token']}"}
+        self.token = cred["box_token"]          # veřejně: konzole (WS query auth) ho potřebuje
+        self._headers = {"Authorization": f"Bearer {self.token}"}
         self._client = httpx.AsyncClient(timeout=timeout)
         self._config_etag: str | None = None
 
