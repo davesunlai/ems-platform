@@ -6,6 +6,7 @@ from datetime import datetime
 from ems.api.db import get_pool
 
 CONFIG_DEFAULTS = {
+    "grid_charge_enabled": True,   # v0.81.4: klíč CHYBĚL → upsert ho zahazoval a planner četl vždy default True
     "enabled": False,                 # řídí (zapisuje do měniče)? default NE
     "allow_grid_discharge": False,    # smí vybíjet do sítě? (43136 neověřen) default NE
     "capacity_kwh": 52.8,             # Solis 2× 26.4
