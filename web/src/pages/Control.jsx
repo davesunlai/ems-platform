@@ -946,8 +946,18 @@ function PlannerPanel({ locId }) {
         <span style={{ fontWeight: 700, fontSize: 15 }}>🧠 Chytré řízení</span>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: cfg.enabled ? "var(--green)" : "var(--muted)" }}>
           <input type="checkbox" checked={!!cfg.enabled} onChange={(e) => set("enabled", e.target.checked)} />
-          {cfg.enabled ? "ZAPNUTÉ — řídí baterii i spotřebiče" : "vypnuté (jen poradní plán)"}
+          {cfg.enabled ? "ZAPNUTÉ — plánovač řídí baterii i spotřebiče" : "VYPNUTÉ — plánovač jen počítá, neřídí"}
         </label>
+        <span className="muted" style={{ fontSize: 12, flexBasis: "100%", lineHeight: 1.45 }}>
+          {cfg.enabled
+            ? <>🧠 Plánovač každou hodinu přepočítá 24–48 h dopředu (predikce výroby a spotřeby, spotové ceny) a sám
+                posílá povely: nabíjení ze sítě v levných/záporných hodinách, vybíjení do domu (příp. do sítě), spínání
+                spirály podle přebytku a anti-ořezu. ⏰ Časový plán má přednost a přebíjí ho v aktivních oknech.</>
+            : <><b>Co NEfunguje:</b> automatické povely plánovače — nabíjení ze sítě, vybíjení, řízení spirály podle plánu
+                (plán se dál počítá a zobrazuje jen jako náhled). Při vypnutí se uvolní vše, co plánovač držel.{" "}
+                <b>Co funguje dál:</b> ⏰ časový plán (baterie i spínané výstupy), ⚡ spot pravidla modulů, ruční povely,
+                alarmy a 🩹 samoléčba, měření. Plánovač je tedy jen jeden ze tří zdrojů řízení — ostatní na něm nezávisí.</>}
+        </span>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
           <input type="checkbox" checked={!!cfg.allow_grid_discharge} onChange={(e) => set("allow_grid_discharge", e.target.checked)} />
           🔻 vybíjet ve špičce do sítě
