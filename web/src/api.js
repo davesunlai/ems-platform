@@ -117,6 +117,7 @@ export const api = {
   localityBilling: (id) => request(`/api/localities/${id}/billing`),
   localityBillingDays: (id, month) => request(`/api/localities/${id}/billing/days?month=${month}`),
   plannerTimeRules: (id) => request(`/api/planner/${id}/time-rules`),
+  plannerTimeRulesCheck: (id) => request(`/api/planner/${id}/time-rules/check`),
   plannerTimeRuleCreate: (id, body) => request(`/api/planner/${id}/time-rules`, { method: "POST", body }),
   plannerTimeRuleUpdate: (id, rid, body) => request(`/api/planner/${id}/time-rules/${rid}`, { method: "PUT", body }),
   plannerTimeRuleDelete: (id, rid) => request(`/api/planner/${id}/time-rules/${rid}`, { method: "DELETE" }),

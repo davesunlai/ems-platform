@@ -716,8 +716,57 @@ function TimePlanBox({ locId, outputs }) {
     return parts.join(r.cond_logic === "or" ? "  NEBO  " : " · ");
   };
 
+  const [chk, setChk] = useState(null);
+  const [chkBusy, setChkBusy] = useState(false);
+  const runCheck = async () => {
+    setChkBusy(true);
+    try { setChk(await api.plannerTimeRulesCheck(locId)); } catch (e) { setMsg(e.message); }
+    setChkBusy(false);
+  };
+  const fmt = (v, d = 1) => (v == null ? "?" : Number(v).toFixed(d));
+  const CZ_COND = { sun: "☀️ výroba", soc: "🔋 SoC", spot: "💰 spot" };
+
   return (
     <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <button className="btn" disabled={chkBusy || rules.length === 0} onClick={runCheck}
+                title="Vyhodnotí každé pravidlo proti AKTUÁLNÍ realitě (čas, den, SoC, spot, plán výroby) stejnými funkcemi jako řídicí engine">
+          🔍 Kontrola podmínek s realitou
+        </button>
+        {chk && <span className="muted" style={{ fontSize: 12 }}>
+          stav k {new Date(chk.now).toLocaleTimeString("cs-CZ")} · SoC {fmt(chk.inputs.soc_pct, 0)} % · spot {fmt(chk.inputs.spot_czk_kwh, 2)} Kč/kWh
+          · výroba dnes {fmt(chk.inputs.pv_today_kwh, 0)} / zítra {fmt(chk.inputs.pv_tomorrow_kwh, 0)} kWh
+          {chk.holder && <> · baterii teď řídí <b>{chk.holder.source || "nikdo"}</b>{chk.holder.action ? ` (${chk.holder.action})` : ""}</>}
+          {" "}<span style={{ cursor: "pointer" }} onClick={() => setChk(null)}>✖</span>
+        </span>}
+      </div>
+      {chk && (
+        <div style={{ marginBottom: 10 }}>
+          {chk.rules.map((c) => (
+            <div key={c.id} style={{ padding: "6px 10px", marginBottom: 5, borderRadius: 8, fontSize: 12.5,
+                                     border: `1px solid ${c.would_run ? "var(--green)" : "var(--border)"}`,
+                                     background: c.would_run ? "rgba(63,185,80,.08)" : "var(--bg)" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <b>{c.would_run ? "✅" : "⛔"} {c.label}</b>
+                <span className="muted">{c.action}{c.power_kw ? ` ${c.power_kw} kW` : ""}</span>
+                {c.note && <span style={{ color: c.note.startsWith("▶") ? "var(--green)" : "var(--amber)" }}>{c.note}</span>}
+              </div>
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 3 }}>
+                <span>{c.enabled ? "✅" : "❌"} zapnuto</span>
+                <span>{c.day_ok ? "✅" : "❌"} den ({c.days})</span>
+                <span>{c.window_ok ? "✅" : "❌"} okno {c.window}</span>
+                {c.conditions.length === 0 && <span className="muted">bez dalších podmínek</span>}
+                {c.conditions.map((k) => (
+                  <span key={k.cond} title={k.latched ? "drženo z vstupu do okna (latch)" : ""}>
+                    {k.ok ? "✅" : "❌"} {CZ_COND[k.cond] || k.cond}: <b>{fmt(k.value, k.cond === "spot" ? 2 : 0)}</b>
+                    {" "}{k.cond === "sun" ? (k.mode === "sunny" ? "≥" : "<") : ({ ge: "≥", le: "≤", gt: ">", lt: "<" }[k.op] || k.op || "")}
+                    {" "}práh {fmt(k.threshold, k.cond === "spot" ? 2 : 0)}{k.cond === "sun" ? ` kWh (${k.day === "tomorrow" ? "zítra" : "dnes"})` : ""}{k.latched ? " 🔒" : ""}
+                  </span>))}
+                {c.conditions.length > 1 && <span className="muted">logika: {c.logic === "or" ? "NEBO" : "A"}</span>}
+              </div>
+            </div>))}
+        </div>
+      )}
       {rules.map((r, ri) => (
         <div key={r.id} style={{ padding: "7px 10px",
                                  border: `1px solid ${editId === r.id ? "var(--amber, #d29922)" : "var(--border)"}`, borderRadius: 8,

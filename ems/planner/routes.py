@@ -187,6 +187,80 @@ async def list_time_rules(locality_id: int, _: dict = Depends(require_permission
     return await pdb.list_time_rules(locality_id)
 
 
+@router.get("/{locality_id}/time-rules/check")
+async def check_time_rules(locality_id: int, _: dict = Depends(require_permission("read"))):
+    """🔍 Kontrola pravidel s REALITOU: pro každé pravidlo okno/den/zapnuto + každá podmínka
+    s aktuální hodnotou a prahem + verdikt „spustilo by se TEĎ". Stejné vstupy a stejné
+    funkce jako collector (rule_conditions_explain), takže výsledek = co engine udělá."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Europe/Prague"))
+    hm, isoday = now.strftime("%H:%M"), str(now.isoweekday())
+    rules = await pdb.list_time_rules(locality_id)
+    # vstupy reality (stejné zdroje jako collector)
+    devs = (await service.controlled_devices()).get(locality_id, [])
+    soc_now = None
+    try:
+        soc_now = await service._soc_now(devs) if devs else None
+    except Exception:
+        pass
+    spot_kwh = None
+    try:
+        from ems.outputs.engine import _spot_price
+        sp = await _spot_price()
+        spot_kwh = float(sp) / 1000.0 if sp is not None else None
+    except Exception:
+        pass
+    day_pv = {}
+    try:
+        t0 = now.date()
+        for e in (await service.pv_forecast_days_kwh(locality_id)) or []:
+            if e["day"] == t0.isoformat():
+                day_pv["today"] = e["kwh"]
+            elif e["day"] == (t0 + timedelta(days=1)).isoformat():
+                day_pv["tomorrow"] = e["kwh"]
+    except Exception:
+        pass
+    # kdo teď drží řízení baterie
+    holder = None
+    try:
+        from ems.control import db as control_db
+        sts = await control_db.get_states(devs) if devs else {}
+        for d, st in (sts or {}).items():
+            holder = {"device": d, "source": st.get("source"), "action": st.get("action")}
+            break
+    except Exception:
+        pass
+    out, winner_batt = [], None
+    for rule in rules:
+        wk = pdb.rule_window_key(rule)
+        win_ok = pdb._rule_active({**rule, "enabled": True}, hm, isoday)
+        day_ok = isoday in (rule.get("days") or "1234567")
+        latched = ((rule.get("cond_spot_op") or "any") != "any" and not rule.get("cond_spot_hold", True)
+                   and rule.get("latched_window") == wk)
+        soc_latched = ((rule.get("cond_soc_op") or "any") != "any" and not rule.get("cond_soc_hold", True)
+                       and rule.get("latched_soc_window") == wk)
+        ev = pdb.rule_conditions_explain(rule, day_pv.get(rule.get("cond_sun_day") or "today"),
+                                         soc_now, spot_kwh, spot_latched=latched, soc_latched=soc_latched)
+        would = bool(rule.get("enabled")) and win_ok and ev["ok"]
+        item = {"id": rule["id"], "label": rule.get("label") or rule["action"], "action": rule["action"],
+                "target": rule.get("target"), "power_kw": rule.get("power_kw"),
+                "enabled": bool(rule.get("enabled")), "days": rule.get("days") or "1234567",
+                "window": f"{rule.get('time_from')}–{rule.get('time_to')}",
+                "day_ok": day_ok, "window_ok": win_ok,
+                "conditions": ev["conditions"], "formula": ev["formula"], "logic": ev["logic"],
+                "conditions_ok": ev["ok"], "would_run": would}
+        if would and rule["action"] in ("force_charge", "force_discharge", "stop") and winner_batt is None:
+            winner_batt = rule["id"]
+        out.append(item)
+    for it in out:
+        if it["action"] in ("force_charge", "force_discharge", "stop") and it["would_run"]:
+            it["note"] = "▶ TOTO pravidlo teď řídí baterii" if it["id"] == winner_batt else "aktivní, ale přebito dřívějším pravidlem"
+    return {"now": now.isoformat(), "inputs": {"soc_pct": soc_now, "spot_czk_kwh": spot_kwh,
+                                             "pv_today_kwh": day_pv.get("today"), "pv_tomorrow_kwh": day_pv.get("tomorrow")},
+            "holder": holder, "rules": out}
+
+
 @router.post("/{locality_id}/time-rules")
 async def create_time_rule(locality_id: int, body: TimeRuleIn,
                            _: dict = Depends(require_permission("control"))):
