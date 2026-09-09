@@ -234,8 +234,10 @@ class Agent:
         stop = asyncio.Event()
         try:
             async with websockets.connect(url, max_size=2 ** 20, ping_interval=20, ping_timeout=20) as ws:
-                # pošťouchni shell, ať hned vykreslí prompt (jinak uživatel vidí prázdno)
-                _os.write(fd, b"export PS1='emsbox:\\w\\$ '; clear\n")
+                # pošťouchni shell, ať hned vykreslí prompt (jinak uživatel vidí prázdno).
+                # Bez `clear` (na některých shellech způsobil EOF a pád session); jen \n.
+                await asyncio.sleep(0.2)
+                _os.write(fd, b"\n")
 
                 async def pty_to_ws():
                     try:

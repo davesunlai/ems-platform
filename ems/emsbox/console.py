@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
+import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -29,6 +30,7 @@ class Session:
     def __init__(self, box_id: int, username: str):
         self.box_id = box_id
         self.username = username
+        self.opened = time.monotonic()
         self.user_ws: WebSocket | None = None
         self.agent_ws: WebSocket | None = None
         self.ready = asyncio.Event()      # obě strany připojeny
@@ -125,4 +127,11 @@ async def _teardown(sid: str) -> None:
                 await w.close()
             except Exception:
                 pass
-    logger.info("konzole box #%s: session %s… uzavřena", sess.box_id, sid[:8])
+    dur = int(time.monotonic() - sess.opened)
+    connected = sess.agent_ws is not None
+    try:
+        await db.finish_console(sess.box_id, connected, dur)
+    except Exception:
+        pass
+    logger.info("konzole box #%s: session %s… uzavřena (%d s, box_připojen=%s)",
+                sess.box_id, sid[:8], dur, connected)

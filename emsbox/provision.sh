@@ -96,6 +96,14 @@ PTH
 systemctl daemon-reload
 systemctl enable --now emsbox-update.path
 
+# starší image mohou mít host systemd emsbox-agent.service (venv agent před Dockerem) —
+# koliduje/plní journal; agent teď běží v Dockeru → zamaskovat, pokud existuje
+if systemctl list-unit-files 2>/dev/null | grep -q '^emsbox-agent.service'; then
+  systemctl disable --now emsbox-agent.service 2>/dev/null || true
+  systemctl mask emsbox-agent.service 2>/dev/null || true
+  echo "starý emsbox-agent.service (venv) zamaskován."
+fi
+
 echo "== HOTOVO =="
 echo "Lokální UI:  http://$(hostname -I | awk '{print $1}')/  (port 80)"
 echo "Update:      emsbox-update (přes SSH)"

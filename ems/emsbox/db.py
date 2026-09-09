@@ -298,6 +298,23 @@ async def _finish_action(conn, box_id: int, ok: bool, detail: str) -> None:
         box_id, st, detail)
 
 
+async def finish_console(box_id: int, connected: bool, dur_s: int) -> None:
+    """Uzavře stavový řádek servisní konzole (jinak by visel na 'provádí se…')."""
+    st = "done" if connected else "failed"
+    detail = (f"konzole ukončena ({dur_s} s)" if connected else "box se nepřipojil")
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE emsbox SET last_action_status = $2, last_action_at = now(), last_action_detail = $3 "
+            "WHERE id = $1 AND last_action LIKE 'open_console%'", box_id, st, detail)
+        await conn.execute(
+            """UPDATE emsbox_action_log SET status = $2, detail = $3, updated_at = now()
+               WHERE id = (SELECT id FROM emsbox_action_log
+                           WHERE box_id = $1 AND action LIKE 'open_console%'
+                             AND status IN ('pending','delivered') ORDER BY id DESC LIMIT 1)""",
+            box_id, st, detail)
+
+
 async def action_log(box_id: int, limit: int = 30) -> list[dict]:
     """📜 Historie servisních akcí boxu (kdo, co, kdy, výsledek)."""
     pool = await get_pool()
