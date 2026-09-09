@@ -318,8 +318,13 @@ function FlowEdge({ d, kw, color, active, label, lx, ly, m = 1 }) {
     <g>
       <path d={d} fill="none" stroke={active ? color : "var(--border)"} strokeWidth={active ? wdt : 1.2 * m}
             strokeLinecap="round" className={active ? "eflow-anim" : ""}
-            strokeDasharray={active ? `${9 * m} ${9 * m}` : `${3 * m} ${6 * m}`} opacity={active ? 0.95 : 0.45}
+            strokeDasharray={active ? `${9 * m} ${9 * m}` : `${3 * m} ${6 * m}`} opacity={active ? 0.9 : 0.45}
             markerEnd={active ? `url(#efarr-${color.replace("#", "")})` : undefined} />
+      {active && [0, 1].map((i) => (
+        <circle key={i} r={Math.max(2.6, wdt * 0.62)} fill={color} stroke="var(--bg)" strokeWidth={1.1 * m}>
+          <animateMotion dur="2.2s" begin={`${-1.1 * i}s`} repeatCount="indefinite" path={d} />
+        </circle>
+      ))}
       {active && <text x={lx} y={ly} textAnchor="middle" fontSize={11.5 * m} fontWeight="700" fill={color}
                        stroke="var(--bg)" strokeWidth={3 * m} paintOrder="stroke">{label}</text>}
     </g>
@@ -393,8 +398,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
           <svg viewBox="0 0 400 700" style={{ width: "100%", marginTop: 8 }}>
             <defs>
               {COLORS.map((c) => (
-                <marker key={c} id={`efarr-${c}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                  <path d="M0,0 L10,5 L0,10 z" fill={`#${c}`} />
+                <marker key={c} id={`efarr-${c}`} viewBox="0 0 16 10" refX="14" refY="5" markerUnits="userSpaceOnUse" markerWidth="19" markerHeight="12" orient="auto-start-reverse">
+                  <path d="M0,0 L16,5 L0,10 L4.5,5 z" fill={`#${c}`} stroke="var(--bg)" strokeWidth="0.8" />
                 </marker>
               ))}
             </defs>
@@ -472,8 +477,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
           <svg viewBox="0 0 760 470" style={{ width: "100%", marginTop: 8 }}>
             <defs>
               {COLORS.map((c) => (
-                <marker key={c} id={`efarr-${c}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M0,0 L10,5 L0,10 z" fill={`#${c}`} />
+                <marker key={c} id={`efarr-${c}`} viewBox="0 0 16 10" refX="14" refY="5" markerUnits="userSpaceOnUse" markerWidth="19" markerHeight="12" orient="auto-start-reverse">
+                  <path d="M0,0 L16,5 L0,10 L4.5,5 z" fill={`#${c}`} stroke="var(--bg)" strokeWidth="0.8" />
                 </marker>
               ))}
             </defs>
