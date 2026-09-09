@@ -1,5 +1,6 @@
 // 📦 Přehled flotily EMSBOXů: spárované (vč. IP) + nespárované ohlášené boxy.
 import React, { useEffect, useState } from "react";
+import BoxConsole from "../components/BoxConsole";
 import { api } from "../api";
 
 const gb = (mb) => (mb == null ? "—" : (mb / 1000).toFixed(mb < 10000 ? 1 : 0) + " GB");
@@ -14,9 +15,10 @@ const ago = (iso) => {
 };
 
 const ACTION_CZ = { update_agent: "update agenta", reset_localui_password: "reset hesla UI" };
+const ACTION_CZ_DYN = (a) => (a && a.startsWith("open_console") ? "servisní konzole" : ACTION_CZ[a] || a);
 
 function ActionStatus({ box }) {
-  const a = ACTION_CZ[box.last_action] || box.last_action;
+  const a = ACTION_CZ_DYN(box.last_action);
   const t = box.last_action_at ? new Date(box.last_action_at).toLocaleString("cs-CZ") : "";
   const S = {
     pending:   { ico: "⏳", txt: `zadán pokyn: ${a} — čeká na vyzvednutí boxem`, col: "var(--amber)" },
@@ -42,7 +44,7 @@ function ActionStatus({ box }) {
         <tbody>{hist.map((h) => (
           <tr key={h.id}>
             <td>{new Date(h.created_at).toLocaleString("cs-CZ")}</td>
-            <td>{ACTION_CZ[h.action] || h.action}</td>
+            <td>{ACTION_CZ_DYN(h.action)}</td>
             <td>{h.username || "—"}</td>
             <td>{{ pending: "⏳", delivered: "📨", done: "✅", failed: "❌" }[h.status] || h.status}</td>
             <td className="muted">{h.detail || ""}</td>
@@ -63,6 +65,15 @@ function UpdateBtn({ box }) {
   };
   return <button className="btn" disabled={busy} title="Dálkový update agenta (git pull + rebuild)"
                  style={{ padding: "2px 7px", fontSize: 11.5, marginLeft: 4 }} onClick={go}>⬆ update</button>;
+}
+
+function ConsoleBtn({ box }) {
+  const [open, setOpen] = useState(false);
+  return (<>
+    <button className="btn" title="Servisní konzole boxu (shell agenta)"
+            style={{ padding: "3px 8px", fontSize: 12, marginRight: 6 }} onClick={() => setOpen(true)}>🖥 konzole</button>
+    {open && <BoxConsole box={box} onClose={() => setOpen(false)} />}
+  </>);
 }
 
 function ResetUiPw({ box }) {
@@ -124,7 +135,7 @@ export default function Emsboxes() {
                   <td>{b.buffer_rows ?? "—"} ř.</td>
                   <td style={Math.abs(b.clock_drift_s || 0) > 60 ? { color: "#f85149" } : {}}>{b.clock_drift_s != null ? `${Math.round(b.clock_drift_s)} s` : "—"}</td>
                   <td>{b.agent_version || "—"} <UpdateBtn box={b} /></td>
-                  <td><ResetUiPw box={b} /></td>
+                  <td style={{ whiteSpace: "nowrap" }}><ConsoleBtn box={b} /><ResetUiPw box={b} /></td>
                 </tr>
                 {b.last_action && <tr>
                   <td colSpan={99} style={{ paddingTop: 0, fontSize: 12 }}><ActionStatus box={b} /></td>

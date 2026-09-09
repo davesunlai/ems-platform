@@ -175,6 +175,13 @@ class Agent:
             except Exception as exc:
                 logger.error("reset hesla UI selhal: %s", exc)
                 self._action_ack = {"action": action, "ok": False, "detail": str(exc)[:120]}
+        elif action.startswith("open_console:"):
+            sid = action.split(":", 1)[1]
+            logger.warning("SERVISNÍ AKCE: otevírám konzoli (session %s…)", sid[:8])
+            t = asyncio.create_task(self._console_session(sid))
+            self._console_tasks = getattr(self, "_console_tasks", set())
+            self._console_tasks.add(t)                      # držet referenci (GC lekce v0.72)
+            t.add_done_callback(self._console_tasks.discard)
         elif action == "update_agent":
             try:
                 with open("/data/update_request", "w") as f:
@@ -185,6 +192,66 @@ class Agent:
                 logger.error("zápis update_request selhal: %s", exc)
         else:
             logger.info("neznámá servisní akce ze serveru: %s", action)
+
+    async def _console_session(self, sid: str) -> None:
+        """PTY /bin/sh v kontejneru ⇄ WS na server. Kontejner má --network host a nmcli
+        přes D-Bus → řeší se odsud síť, DNS, /data. Idle konec po 15 min řeší server."""
+        import fcntl
+        import json as _json
+        import os as _os
+        import pty
+        import signal
+        import struct
+        import termios
+        try:
+            import websockets
+        except Exception:
+            logger.error("konzole: chybí balík websockets (rebuild image)")
+            return
+        url = self.link.server.replace("https://", "wss://").replace("http://", "ws://")
+        url = f"{url}/api/ingest/v1/console/{sid}?token={self.link.token}"
+        pid, fd = pty.fork()
+        if pid == 0:   # dítě: shell
+            _os.environ["TERM"] = "xterm-256color"
+            _os.execvp("/bin/sh", ["/bin/sh", "-l"])
+            return
+        loop = asyncio.get_event_loop()
+        try:
+            async with websockets.connect(url, max_size=2 ** 20) as ws:
+                async def pty_to_ws():
+                    while True:
+                        data = await loop.run_in_executor(None, _os.read, fd, 4096)
+                        if not data:
+                            break
+                        await ws.send(_json.dumps({"t": "o", "d": data.decode("utf-8", "replace")}))
+                async def ws_to_pty():
+                    async for raw in ws:
+                        try:
+                            m = _json.loads(raw)
+                        except Exception:
+                            continue
+                        if m.get("t") == "i":
+                            _os.write(fd, m.get("d", "").encode())
+                        elif m.get("t") == "r":
+                            try:
+                                fcntl.ioctl(fd, termios.TIOCSWINSZ,
+                                            struct.pack("HHHH", int(m.get("r", 24)), int(m.get("c", 80)), 0, 0))
+                            except Exception:
+                                pass
+                done, pend = await asyncio.wait([asyncio.create_task(pty_to_ws()),
+                                                 asyncio.create_task(ws_to_pty())],
+                                                return_when=asyncio.FIRST_COMPLETED)
+                for p in pend:
+                    p.cancel()
+        except Exception as exc:
+            logger.warning("konzole: session skončila: %s", exc)
+        finally:
+            try:
+                _os.kill(pid, signal.SIGKILL)
+                _os.close(fd)
+            except Exception:
+                pass
+            logger.info("konzole: shell ukončen (session %s…)", sid[:8])
 
     async def heartbeat_loop(self) -> None:
         while True:
