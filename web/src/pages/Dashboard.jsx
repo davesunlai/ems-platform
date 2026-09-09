@@ -306,7 +306,9 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
     return (
       <g>
         <rect x={x} y={y} width={w} height={h} rx={10 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
-        <text x={x + 16 * m} y={y + h / 2 + 7 * m} fontSize={19 * m}>{icon}</text>
+        {String(icon).startsWith("/")
+          ? <image href={icon} x={x + 7 * m} y={y + h / 2 - 11 * m} width={22 * m} height={22 * m} />
+          : <text x={x + 16 * m} y={y + h / 2 + 7 * m} fontSize={19 * m}>{icon}</text>}
         <text x={x + w / 2 + 10 * m} y={y + 15 * m} textAnchor="middle" fontSize={9.5 * m} fill="var(--muted)">{title}</text>
         <text x={x + w / 2 + 10 * m} y={y + 31 * m} textAnchor="middle" fontSize={12.5 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
         {sub && <text x={x + w / 2 + 10 * m} y={y + 45 * m} textAnchor="middle" fontSize={9 * m} fill="var(--muted)">{sub}</text>}
@@ -316,7 +318,9 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
-      <text x={x + w / 2} y={y + 30 * m} textAnchor="middle" fontSize={24 * m}>{icon}</text>
+      {String(icon).startsWith("/")
+        ? <image href={icon} x={x + w / 2 - 15 * m} y={y + 7 * m} width={30 * m} height={30 * m} />
+        : <text x={x + w / 2} y={y + 30 * m} textAnchor="middle" fontSize={24 * m}>{icon}</text>}
       <text x={x + w / 2} y={y + 48 * m} textAnchor="middle" fontSize={11 * m} fill="var(--muted)">{title}</text>
       <text x={x + w / 2} y={y + 66 * m} textAnchor="middle" fontSize={13.5 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
       {sub && <text x={x + w / 2} y={y + 79 * m} textAnchor="middle" fontSize={10 * m} fill="var(--muted)">{sub}</text>}
@@ -326,13 +330,15 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
 
 // ===== volitelné ikonky uzlů (uloženo v prohlížeči) =====
 const FLOW_ICON_CHOICES = {
-  pv: ["☀️", "🌞", "🔆", "🌤️", "🔅"],
-  grid: ["🗼", "⚡", "🔌", "🏭", "🛰️"],
-  home: ["🏠", "🏡", "🏢", "🛖", "🏰"],
-  hp: ["🌀", "♨️", "❄️", "🌡️", "💨"],
+  pv: ["☀️", "🌞", "🔆", "🌤️", "🔅", "/flow-icons/fve.svg"],
+  grid: ["🗼", "⚡", "🔌", "🏭", "🛰️", "/flow-icons/distribuce.svg"],
+  home: ["🏠", "🏡", "🏢", "🛖", "🏰", "/flow-icons/dum.svg"],
+  hp: ["🌀", "♨️", "❄️", "🌡️", "💨", "/flow-icons/tepelne-cerpadlo.svg"],
+  bat: ["🔋", "/flow-icons/baterie.svg"],
+  heat: ["♨️", "🔥", "/flow-icons/topeni.svg"],
 };
-const FLOW_ICON_DEFAULT = { pv: "☀️", grid: "🗼", home: "🏠", hp: "🌀" };
-const FLOW_ICON_LABEL = { pv: "FVE", grid: "Distribuce", home: "Dům", hp: "Tep. čerpadlo" };
+const FLOW_ICON_DEFAULT = { pv: "☀️", grid: "🗼", home: "🏠", hp: "🌀", bat: "🔋", heat: "♨️" };
+const FLOW_ICON_LABEL = { pv: "FVE", grid: "Distribuce", home: "Dům", hp: "Tep. čerpadlo", bat: "Baterie", heat: "Topné výstupy" };
 function useFlowIcons() {
   const [ic, setIc] = useState(() => {
     try { return { ...FLOW_ICON_DEFAULT, ...JSON.parse(localStorage.getItem("ems.flow.icons") || "{}") }; }
@@ -350,8 +356,10 @@ function FlowIconPicker({ ic, pick, onClose }) {
           <span className="muted" style={{ fontSize: 11.5, marginRight: 4 }}>{FLOW_ICON_LABEL[k]}:</span>
           {FLOW_ICON_CHOICES[k].map((e) => (
             <span key={e} onClick={() => pick(k, e)}
-                  style={{ cursor: "pointer", fontSize: 17, padding: "1px 3px", borderRadius: 6,
-                           outline: ic[k] === e ? "2px solid var(--blue, #58a6ff)" : "none" }}>{e}</span>
+                  style={{ cursor: "pointer", fontSize: 17, padding: "1px 3px", borderRadius: 6, display: "inline-block",
+                           outline: ic[k] === e ? "2px solid var(--blue, #58a6ff)" : "none" }}>
+              {e.startsWith("/") ? <img src={e} alt="" style={{ width: 19, height: 19, verticalAlign: "-3px" }} /> : e}
+            </span>
           ))}
         </span>
       ))}
@@ -427,7 +435,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const spiralId = pl?.config?.spiral_output_id != null ? Number(pl.config.spiral_output_id) : null;
   const spiralKw = Number(pl?.config?.spiral_power_kw) || 6;
   const cur = pl?.current;
-  const outIcon = (o) => (/oh[řr]ev|spir|boiler|vod|top/i.test(o.name) ? "♨️" : "🔌");
+  const outIcon = (o) => (/oh[řr]ev|spir|boiler|vod|top/i.test(o.name) ? ic.heat : "🔌");
   const outKw = (o) => { const p = ewDev[o.target]?.power_w; return p != null && p > 0 ? p / 1000 : (o.id === spiralId ? spiralKw : null); };
   const outLabel = (o) => { const k = outKw(o); return k != null ? f1(k) : "ON"; };
   const outOn = (o) => (ewDev[o.target] ? !!ewDev[o.target].on : !!o.is_on);
@@ -500,7 +508,9 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {/* baterie — velký box s pod-boxy (mobil) */}
             <g>
               <rect x={10} y={354} width={230} height={176} rx="14" fill="var(--bg)" stroke="#a371f7" strokeWidth="2" />
-              <text x={125} y={388} textAnchor="middle" fontSize="30">🔋</text>
+              {ic.bat.startsWith("/")
+                ? <image href={ic.bat} x={106} y={362} width={38} height={38} />
+                : <text x={125} y={388} textAnchor="middle" fontSize="30">{ic.bat}</text>}
               <text x={125} y={410} textAnchor="middle" fontSize="15" fill="var(--muted)">Baterie celkem</text>
               <text x={125} y={434} textAnchor="middle" fontSize="19" fontWeight="700" fill="#a371f7">
                 {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}
@@ -576,7 +586,9 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                       sub={`dnes ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} accent="var(--amber, #d29922)" />
             <g>
               <rect x={45} y={330} width={200} height={124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
-              <text x={145} y={352} textAnchor="middle" fontSize="20">🔋</text>
+              {ic.bat.startsWith("/")
+                ? <image href={ic.bat} x={132} y={334} width={26} height={26} />
+                : <text x={145} y={352} textAnchor="middle" fontSize="20">{ic.bat}</text>}
               <text x={145} y={368} textAnchor="middle" fontSize="11" fill="var(--muted)">Baterie celkem</text>
               <text x={145} y={386} textAnchor="middle" fontSize="14" fontWeight="700" fill="#a371f7">
                 {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}

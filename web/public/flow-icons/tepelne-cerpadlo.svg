@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><style>*{stroke:#dbe4ee}.accent{stroke:#e3b341}</style>
+  <!-- outdoor unit -->
+  <rect x="8" y="16" width="48" height="34" rx="5"/>
+  <!-- fan ring -->
+  <circle cx="26" cy="33" r="10"/>
+  <!-- fan blades -->
+  <path class="accent" d="M26 33c0-5 3-7 3-7M26 33c5 0 7 3 7 3M26 33c0 5-3 7-3 7M26 33c-5 0-7-3-7-3"/>
+  <!-- side grille -->
+  <path d="M44 25v16M50 25v16"/>
+  <!-- feet -->
+  <path d="M14 50v5M50 50v5"/>
+</svg>

@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.81.8 — vlastní SVG ikonky ve schématu. Šest Davidových SVG (fve, distribuce, dům, tepelné čerpadlo, baterie, topení) přidáno do ⚙️ výběru ikonek; nové klíče Baterie a Topné výstupy (♨️/🔥/SVG — použije se u výstupů s ohřevem v názvu). Zpracování při importu: odstraněna c2pa metadata (7,7 kB → ~0,5 kB na soubor) a ZAPEČENY barvy (<style> stroke #dbe4ee + akcent #e3b341) — uvnitř <image> nefunguje currentColor ani CSS proměnné stránky, bez zapečení by kresby byly černé na tmavém pozadí. FlowNode i picker umí cestu (/flow-icons/*.svg) vedle emoji; servírováno z web/public. Jen rebuild webu (+api verze).
+
 ## v0.81.7 — ⚡ schéma: volitelné ikonky + zítřek + opravy. (1) ⚙️ v hlavičce schématu otevře výběr ikonek pro FVE (☀️🌞🔆🌤️🔅), Distribuci (🗼⚡🔌🏭🛰️), Dům (🏠🏡🏢🛖🏰) a TČ (🌀♨️❄️🌡️💨) — volba per prohlížeč (localStorage), zvýrazněná aktivní. (2) FVE box ukazuje „plán dnes X · zítra Y kWh". (3) Energetická kolečka s bleskem +50 % (r≥7,8). (4) OPRAVA: kompaktní boxy (výstupy eWeLink, TČ v desktop layoutu, h=54) kreslily „zapnuto/vypnuto" MIMO box (layout počítal s h=84) — nový kompaktní režim FlowNode (ikona vlevo, texty uvnitř). Jen rebuild webu (+api pro verzi v hlavičce dle standardu trojice).
 
 ## v0.81.6 — schéma dotaženo: (1) markery šipek se generují pro VŠECHNY barvy hran — #39c5cf (a rezerva #f85149) chyběl v seznamu, jeho tok byl bez šipky. (2) Energetické kolečko zvětšeno (r≥5,2, roste s výkonem) a nese uprostřed ⚡ blesk (animateMotion na <g>). Pozn. k v0.81.5: verze v hlavičce se nezměnila, protože deploy blok rebuildoval jen web — /api/version servíruje API kontejner; bloky se vrací k plné trojici api+collector+web.

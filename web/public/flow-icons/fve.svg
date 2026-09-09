@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><style>*{stroke:#dbe4ee}.accent{stroke:#e3b341}</style>
+  <!-- sun -->
+  <circle class="accent" cx="47" cy="14" r="6"/>
+  <path class="accent" d="M47 3v3M58 14h-3M55 6l-2 2M39 6l2 2"/>
+  <!-- panel -->
+  <path d="M14 30h30l6 20H8z"/>
+  <path d="M24 30l-3 20M40 30l3 20M11.5 40h41"/>
+  <!-- stand -->
+  <path d="M32 50v8M24 58h16"/>
+</svg>

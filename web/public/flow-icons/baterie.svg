@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><style>*{stroke:#dbe4ee}.accent{stroke:#e3b341}</style>
+  <!-- body -->
+  <rect x="18" y="14" width="28" height="42" rx="5"/>
+  <!-- terminal -->
+  <path d="M27 14v-5h10v5"/>
+  <!-- charge bolt -->
+  <path class="accent" d="M35 24l-8 14h6l-2 12 10-16h-6z"/>
+</svg>

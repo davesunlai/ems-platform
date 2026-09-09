@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><style>*{stroke:#dbe4ee}.accent{stroke:#e3b341}</style>
+  <!-- pylon legs -->
+  <path d="M26 58L30 14h4l4 44"/>
+  <!-- cross arms -->
+  <path d="M14 22h36M20 34h24"/>
+  <!-- lattice -->
+  <path d="M29 22l6 12M35 22l-6 12M28 34l8 14M36 34l-8 14"/>
+  <!-- top -->
+  <path d="M30 14l2-6 2 6"/>
+  <!-- insulators / wires -->
+  <path class="accent" d="M14 22v5M50 22v5M20 34v5M44 34v5"/>
+</svg>

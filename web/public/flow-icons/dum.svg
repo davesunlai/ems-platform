@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><style>*{stroke:#dbe4ee}.accent{stroke:#e3b341}</style>
+  <!-- roof -->
+  <path d="M8 30L32 10l24 20"/>
+  <!-- body -->
+  <path d="M14 27v29h36V27"/>
+  <!-- door -->
+  <path d="M27 56V42a5 5 0 0 1 10 0v14"/>
+  <!-- window -->
+  <path class="accent" d="M40 34h6v6h-6z"/>
+  <!-- chimney -->
+  <path d="M44 14v-4h5v8"/>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><style>*{stroke:#dbe4ee}.accent{stroke:#e3b341}</style>
+  <!-- heat waves -->
+  <path class="accent" d="M20 16c0-4 4-4 4-8M32 16c0-4 4-4 4-8M44 16c0-4 4-4 4-8"/>
+  <!-- radiator sections -->
+  <path d="M12 26v26M22 26v26M32 26v26M42 26v26M52 26v26"/>
+  <!-- top/bottom rails -->
+  <path d="M9 26h46M9 52h46"/>
+  <!-- valve -->
+  <path d="M9 32H4M4 29v6"/>
+</svg>
