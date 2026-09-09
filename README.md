@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.81.7 — ⚡ schéma: volitelné ikonky + zítřek + opravy. (1) ⚙️ v hlavičce schématu otevře výběr ikonek pro FVE (☀️🌞🔆🌤️🔅), Distribuci (🗼⚡🔌🏭🛰️), Dům (🏠🏡🏢🛖🏰) a TČ (🌀♨️❄️🌡️💨) — volba per prohlížeč (localStorage), zvýrazněná aktivní. (2) FVE box ukazuje „plán dnes X · zítra Y kWh". (3) Energetická kolečka s bleskem +50 % (r≥7,8). (4) OPRAVA: kompaktní boxy (výstupy eWeLink, TČ v desktop layoutu, h=54) kreslily „zapnuto/vypnuto" MIMO box (layout počítal s h=84) — nový kompaktní režim FlowNode (ikona vlevo, texty uvnitř). Jen rebuild webu (+api pro verzi v hlavičce dle standardu trojice).
+
 ## v0.81.6 — schéma dotaženo: (1) markery šipek se generují pro VŠECHNY barvy hran — #39c5cf (a rezerva #f85149) chyběl v seznamu, jeho tok byl bez šipky. (2) Energetické kolečko zvětšeno (r≥5,2, roste s výkonem) a nese uprostřed ⚡ blesk (animateMotion na <g>). Pozn. k v0.81.5: verze v hlavičce se nezměnila, protože deploy blok rebuildoval jen web — /api/version servíruje API kontejner; bloky se vrací k plné trojici api+collector+web.
 
 ## v0.81.5 — ⚡ schéma: zvýrazněné směry toků. (1) Šipky mají PEVNOU velikost nezávislou na tloušťce čáry (markerUnits=userSpaceOnUse — dřív se u slabých toků zmenšovaly do ztracena) a obrys v barvě pozadí pro čitelnost na čarách. (2) Tvar šipky protáhlý dart (16:10 s vykousnutým zadkem) místo rovnoramenného trojúhelníku — směr je zřejmý na první pohled. (3) Po každé aktivní čáře putují VE SMĚRU TOKU dvě „energetická kolečka" (animateMotion po stejné cestě, střídavě à 1,1 s, velikost dle výkonu, obrys pozadí) — pohyb už nesplývá s čárkováním. Jen rebuild webu.

@@ -302,6 +302,17 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
 const ACT_CZ = { charge_pv: "nabíjení z FVE", charge_grid: "nabíjení ze sítě", discharge_grid: "vybíjení do sítě",
                  discharge_load: "vybíjení do domu", idle: "self-use", export: "prodej přebytku" };
 function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1 }) {
+  if (h < 80 * m) {   // kompaktní box (výstupy, TČ v desktop layoutu): ikona vlevo, texty se vejdou DOVNITŘ
+    return (
+      <g>
+        <rect x={x} y={y} width={w} height={h} rx={10 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
+        <text x={x + 16 * m} y={y + h / 2 + 7 * m} fontSize={19 * m}>{icon}</text>
+        <text x={x + w / 2 + 10 * m} y={y + 15 * m} textAnchor="middle" fontSize={9.5 * m} fill="var(--muted)">{title}</text>
+        <text x={x + w / 2 + 10 * m} y={y + 31 * m} textAnchor="middle" fontSize={12.5 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
+        {sub && <text x={x + w / 2 + 10 * m} y={y + 45 * m} textAnchor="middle" fontSize={9 * m} fill="var(--muted)">{sub}</text>}
+      </g>
+    );
+  }
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
@@ -310,6 +321,42 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
       <text x={x + w / 2} y={y + 66 * m} textAnchor="middle" fontSize={13.5 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
       {sub && <text x={x + w / 2} y={y + 79 * m} textAnchor="middle" fontSize={10 * m} fill="var(--muted)">{sub}</text>}
     </g>
+  );
+}
+
+// ===== volitelné ikonky uzlů (uloženo v prohlížeči) =====
+const FLOW_ICON_CHOICES = {
+  pv: ["☀️", "🌞", "🔆", "🌤️", "🔅"],
+  grid: ["🗼", "⚡", "🔌", "🏭", "🛰️"],
+  home: ["🏠", "🏡", "🏢", "🛖", "🏰"],
+  hp: ["🌀", "♨️", "❄️", "🌡️", "💨"],
+};
+const FLOW_ICON_DEFAULT = { pv: "☀️", grid: "🗼", home: "🏠", hp: "🌀" };
+const FLOW_ICON_LABEL = { pv: "FVE", grid: "Distribuce", home: "Dům", hp: "Tep. čerpadlo" };
+function useFlowIcons() {
+  const [ic, setIc] = useState(() => {
+    try { return { ...FLOW_ICON_DEFAULT, ...JSON.parse(localStorage.getItem("ems.flow.icons") || "{}") }; }
+    catch { return { ...FLOW_ICON_DEFAULT }; }
+  });
+  const pick = (k, v) => { const n = { ...ic, [k]: v }; setIc(n); localStorage.setItem("ems.flow.icons", JSON.stringify(n)); };
+  return [ic, pick];
+}
+function FlowIconPicker({ ic, pick, onClose }) {
+  return (
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", padding: "6px 10px",
+                  background: "var(--bg2, #161b22)", borderRadius: 8, margin: "6px 0", fontSize: 13 }}>
+      {Object.keys(FLOW_ICON_CHOICES).map((k) => (
+        <span key={k}>
+          <span className="muted" style={{ fontSize: 11.5, marginRight: 4 }}>{FLOW_ICON_LABEL[k]}:</span>
+          {FLOW_ICON_CHOICES[k].map((e) => (
+            <span key={e} onClick={() => pick(k, e)}
+                  style={{ cursor: "pointer", fontSize: 17, padding: "1px 3px", borderRadius: 6,
+                           outline: ic[k] === e ? "2px solid var(--blue, #58a6ff)" : "none" }}>{e}</span>
+          ))}
+        </span>
+      ))}
+      <button className="btn" style={{ padding: "2px 8px", fontSize: 12, marginLeft: "auto" }} onClick={onClose}>hotovo</button>
+    </div>
   );
 }
 function FlowEdge({ d, kw, color, active, label, lx, ly, m = 1 }) {
@@ -321,7 +368,7 @@ function FlowEdge({ d, kw, color, active, label, lx, ly, m = 1 }) {
             strokeDasharray={active ? `${9 * m} ${9 * m}` : `${3 * m} ${6 * m}`} opacity={active ? 0.9 : 0.45}
             markerEnd={active ? `url(#efarr-${color.replace("#", "")})` : undefined} />
       {active && [0, 1].map((i) => {
-        const r = Math.max(5.2 * m, wdt * 0.95);
+        const r = Math.max(7.8 * m, wdt * 1.45);
         return (
           <g key={i}>
             <circle r={r} fill={color} stroke="var(--bg)" strokeWidth={1.2 * m} />
@@ -337,6 +384,8 @@ function FlowEdge({ d, kw, color, active, label, lx, ly, m = 1 }) {
   );
 }
 function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
+  const [ic, pickIcon] = useFlowIcons();
+  const [icOpen, setIcOpen] = useState(false);
   const [d, setD] = useState(null);
   const [pl, setPl] = useState(null);
   const [outs, setOuts] = useState([]);
@@ -392,6 +441,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
         <style>{`.eflow-anim{animation:eflowdash 0.9s linear infinite}@keyframes eflowdash{to{stroke-dashoffset:-36}}`}</style>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <b style={{ fontSize: 15 }}>⚡ Energetický tok — {name}</b>
+          <span title="vybrat ikonky uzlů" onClick={() => setIcOpen(!icOpen)}
+                style={{ cursor: "pointer", marginLeft: 8, fontSize: 14 }}>⚙️</span>
           {!inline && <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={onClose}>✕</button>}
         </div>
         {pl?.config?.enabled && cur && (
@@ -401,6 +452,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {cur.deferrable_on ? " · ♨️ spirála ON" : ""} <span className="muted">— {cur.reason}</span>
           </div>
         )}
+        {icOpen && <FlowIconPicker ic={ic} pick={pickIcon} onClose={() => setIcOpen(false)} />}
         {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
           <svg viewBox="0 0 400 700" style={{ width: "100%", marginTop: 8 }}>
             <defs>
@@ -436,14 +488,14 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={i === 0 ? 92 : 312} ly={470} />
             ))}
-            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon="☀️" title="FVE" value={f1(pvKw)}
-                      sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)} kWh` : null}
+            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon={ic.pv} title="FVE" value={f1(pvKw)}
+                      sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
-            <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon="🗼" title="Distribuce"
+            <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce"
                       value={gridW >= 0 ? `${f1(kw(gridW))}` : `${f1(kw(gridW))}`}
                       sub={gridW >= 0 ? "odběr" : "dodávka"}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon="🏠" title="Dům" value={f1(kw(d.load_w))}
+            <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" value={f1(kw(d.load_w))}
                       sub={`dnes ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} accent="var(--amber, #d29922)" />
             {/* baterie — velký box s pod-boxy (mobil) */}
             <g>
@@ -471,7 +523,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 })}
             </g>
             {hp && (
-              <FlowNode m={1.5} x={250} y={354} w={140} h={110} icon="🌀" title="Tep. čerpadlo"
+              <FlowNode m={1.5} x={250} y={354} w={140} h={110} icon={ic.hp} title="Tep. čerpadlo"
                         value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
                         sub={hp.compressor_on ? (HP_MODE_CZ[hp.hp_mode] || hp.hp_mode) : `aku ${hp.t_tank != null ? Number(hp.t_tank).toFixed(0) : "?"}°`}
                         accent={hp.compressor_on ? "#39c5cf" : null} />)}
@@ -515,12 +567,12 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={505} ly={330 + i * 55} />
             ))}
-            <FlowNode x={65} y={55} icon="☀️" title="FVE" value={f1(pvKw)}
-                      sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)} kWh` : null}
+            <FlowNode x={65} y={55} icon={ic.pv} title="FVE" value={f1(pvKw)}
+                      sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
-            <FlowNode x={535} y={55} icon="🗼" title="Distribuce" value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
+            <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode x={295} y={188} w={170} icon="🏠" title="Dům" value={f1(kw(d.load_w))}
+            <FlowNode x={295} y={188} w={170} icon={ic.home} title="Dům" value={f1(kw(d.load_w))}
                       sub={`dnes ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} accent="var(--amber, #d29922)" />
             <g>
               <rect x={45} y={330} width={200} height={124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
@@ -547,7 +599,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 })}
             </g>
             {hp && (
-              <FlowNode x={585} y={268} w={150} h={54} icon="🌀" title="Tepelné čerpadlo"
+              <FlowNode x={585} y={268} w={150} h={54} icon={ic.hp} title="Tepelné čerpadlo"
                         value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
                         sub={hp.compressor_on ? (HP_MODE_CZ[hp.hp_mode] || hp.hp_mode) : `aku ${hp.t_tank != null ? Number(hp.t_tank).toFixed(0) : "?"} °C`}
                         accent={hp.compressor_on ? "#39c5cf" : null} />)}
