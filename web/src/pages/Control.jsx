@@ -911,6 +911,11 @@ function PlannerPanel({ locId }) {
                title="Při záporné spotové ceně (< 0 Kč/MWh) planner aktivně táhne ze sítě do baterie — dostáváš zaplaceno za odběr. Nezávislé na levném spotu: můžeš vypnout běžné levné nabíjení a zápornou cenu dál využívat (nebo naopak).">
           <input type="checkbox" checked={cfg.neg_price_charge_enabled !== false} onChange={(e) => set("neg_price_charge_enabled", e.target.checked)} />
           💸 nabíjet při záporné ceně
+          <span className="muted" style={{ fontSize: 12 }}>· až od výdělku</span>
+          <input type="number" step="0.05" min="0" style={{ width: 62 }} value={cfg.neg_price_threshold_czk ?? 0}
+                 onChange={(e) => set("neg_price_threshold_czk", e.target.value)}
+                 title="Práh v Kč/kWh: nabíjí se, až když je CELKOVÁ cena odběru (spot + přirážka + distribuce VT/NT + poplatky) nižší než −práh. 0 = jakmile je celková cena pod nulou. Distribuce je započtená automaticky — holý spot −0,3 Kč/kWh při distribuci 1,5 Kč/kWh nabíjení NEspustí." />
+          <span className="muted" style={{ fontSize: 12 }}>Kč/kWh (vč. distribuce)</span>
         </label>
         <button className="btn primary" style={{ marginLeft: "auto", padding: "7px 15px" }} disabled={busy} onClick={save}>Uložit a přepočítat</button>
       </div>

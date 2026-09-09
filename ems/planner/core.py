@@ -16,7 +16,7 @@ def _clamp(x, lo, hi):
 
 def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
          max_charge_kwh, max_discharge_kwh, allow_grid_discharge=False,
-         export_price_floor=0.0, export_limit_kwh=None, neg_price_pull=True,
+         export_price_floor=0.0, export_limit_kwh=None, neg_price_pull=True, neg_price_threshold=0.0,
          floor_kwh=None, import_price_ceiling=None, export_before_battery=False,
          grid_charge_enabled=True) -> list[dict]:
     n = len(ts)
@@ -79,7 +79,9 @@ def plan(ts, pv, load, p_imp, p_exp, *, cap_kwh, soc_now_pct, floor_pct,
                     action = "charge_grid"; reason += f" + levné nabití {extra:.1f}"
         else:
             deficit = -surplus
-            if neg_price_pull and p_imp[h] < 0 and soc < cap_kwh:  # záporná cena → aktivně táhni z gridu (§5)
+            # záporná CELKOVÁ cena (p_imp = spot + distribuce + poplatky) pod prahem → aktivně táhni z gridu (§5);
+            # práh = požadovaný minimální výdělek Kč/kWh (rezerva na opotřebení/účinnost cyklu)
+            if neg_price_pull and p_imp[h] < -float(neg_price_threshold or 0) and soc < cap_kwh:
                 extra = min(cap_kwh - soc, max_charge_kwh)
                 soc += extra; imp += deficit + extra; chg = extra
                 action = "charge_grid"; reason = f"záporná cena: nabití {extra:.1f} kWh"

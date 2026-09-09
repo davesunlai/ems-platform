@@ -16,6 +16,7 @@ control = require_permission("control")
 class PlannerConfigIn(BaseModel):
     grid_charge_enabled: bool | None = None
     neg_price_charge_enabled: bool | None = None
+    neg_price_threshold_czk: float | None = None
     enabled: bool | None = None
     allow_grid_discharge: bool | None = None
     capacity_kwh: float | None = None
