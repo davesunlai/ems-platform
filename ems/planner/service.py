@@ -401,8 +401,11 @@ async def winddown() -> None:
         if sid:
             try:
                 o = await out_db.get(int(sid))
-                # vypni jen když je ON a zapnul ho planner (decision „Chytré řízení") → neperu se s ručním zásahem
-                if o and o.get("is_on") and str(o.get("last_decision") or "").startswith("Chytré řízení"):
+                # vypni jen když je ON a zapnul ho PLÁNOVAČ — ne ⏰ časový plán (ten běží i při vypnutém
+                # plánovači, v0.84.1) a ne ruční zásah. force_output prefixuje vše „Chytré řízení:", proto
+                # rozlišujeme podle důvodu uvnitř (lekce 9. 9.: smyčka zapnout/vypnout po 10 s).
+                dec = str(o.get("last_decision") or "") if o else ""
+                if o and o.get("is_on") and dec.startswith("Chytré řízení") and "časový plán" not in dec:
                     await force_output(int(sid), False, "Chytré řízení vypnuto → spotřebič off")
             except Exception as exc:
                 logger.debug("winddown spirála lok %s: %s", lid, exc)
