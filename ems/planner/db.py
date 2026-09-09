@@ -7,6 +7,7 @@ from ems.api.db import get_pool
 
 CONFIG_DEFAULTS = {
     "grid_charge_enabled": True,   # v0.81.4: klíč CHYBĚL → upsert ho zahazoval a planner četl vždy default True
+    "neg_price_charge_enabled": True,   # (c) 9. 9.: samostatný vypínač pro zápornou cenu (nezávislý na levném spotu)
     "enabled": False,                 # řídí (zapisuje do měniče)? default NE
     "allow_grid_discharge": False,    # smí vybíjet do sítě? (43136 neověřen) default NE
     "capacity_kwh": 52.8,             # Solis 2× 26.4
@@ -103,6 +104,7 @@ async def ensure_schema() -> None:
             ("export_price_floor_czk", "DOUBLE PRECISION DEFAULT 0.7"),
             ("import_price_ceiling_czk", "DOUBLE PRECISION DEFAULT 1.0"),
             ("grid_charge_enabled", "BOOLEAN NOT NULL DEFAULT TRUE"),
+            ("neg_price_charge_enabled", "BOOLEAN NOT NULL DEFAULT TRUE"),
             ("reserve_margin_pct", "DOUBLE PRECISION DEFAULT 20"),
             ("priority_order", "TEXT DEFAULT '[\"reserve\",\"export\",\"spiral\",\"grid_charge\"]'"),
             ("hodnota_tepla_leto", "DOUBLE PRECISION DEFAULT 2.0"),

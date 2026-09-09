@@ -903,9 +903,14 @@ function PlannerPanel({ locId }) {
           🔻 vybíjet ve špičce do sítě
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
-               title={`Planner smí nabíjet baterii ze sítě jen v nejlevnějších hodinách a jen pod stropem ${cfg.import_price_ceiling_czk ?? "?"} Kč/kWh. Vypnutím se nabíjení ze sítě plánovačem zcela zakáže (záporné ceny se řeší zvlášť).`}>
+               title={`Planner smí nabíjet baterii ze sítě jen v nejlevnějších hodinách a jen pod stropem ${cfg.import_price_ceiling_czk ?? "?"} Kč/kWh. Vypnutím se běžné nabíjení ze sítě zakáže; záporné ceny mají vlastní přepínač 💸.`}>
           <input type="checkbox" checked={cfg.grid_charge_enabled !== false} onChange={(e) => set("grid_charge_enabled", e.target.checked)} />
           🔌 nabíjet ze sítě při levném spotu
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
+               title="Při záporné spotové ceně (< 0 Kč/MWh) planner aktivně táhne ze sítě do baterie — dostáváš zaplaceno za odběr. Nezávislé na levném spotu: můžeš vypnout běžné levné nabíjení a zápornou cenu dál využívat (nebo naopak).">
+          <input type="checkbox" checked={cfg.neg_price_charge_enabled !== false} onChange={(e) => set("neg_price_charge_enabled", e.target.checked)} />
+          💸 nabíjet při záporné ceně
         </label>
         <button className="btn primary" style={{ marginLeft: "auto", padding: "7px 15px" }} disabled={busy} onClick={save}>Uložit a přepočítat</button>
       </div>

@@ -15,6 +15,7 @@ control = require_permission("control")
 
 class PlannerConfigIn(BaseModel):
     grid_charge_enabled: bool | None = None
+    neg_price_charge_enabled: bool | None = None
     enabled: bool | None = None
     allow_grid_discharge: bool | None = None
     capacity_kwh: float | None = None
@@ -96,6 +97,19 @@ async def put_config(locality_id: int, body: PlannerConfigIn, user: dict = Depen
                 stav = "ZAPNUTO" if data["grid_charge_enabled"] else "VYPNUTO"
                 await alerts_db.record_event(locality_id, "config",
                     "Nabíjení baterie ze sítě (levný spot)",
+                    f"{stav} · uživatel {user.get('username', '?')}")
+                await notify_dispatch.notify_new_alerts()
+        except Exception:
+            pass
+    if "neg_price_charge_enabled" in data:   # (c): samostatný vypínač záporné ceny — audit
+        try:
+            old = (await pdb.get_config(locality_id) or {}).get("neg_price_charge_enabled")
+            if old is not None and bool(old) != bool(data["neg_price_charge_enabled"]):
+                from ems.alerts import db as alerts_db
+                from ems.notify import dispatch as notify_dispatch
+                stav = "ZAPNUTO" if data["neg_price_charge_enabled"] else "VYPNUTO"
+                await alerts_db.record_event(locality_id, "config",
+                    "Nabíjení baterie při záporné ceně",
                     f"{stav} · uživatel {user.get('username', '?')}")
                 await notify_dispatch.notify_new_alerts()
         except Exception:
