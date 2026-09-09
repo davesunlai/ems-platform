@@ -46,7 +46,8 @@ docker rm -f emsbox 2>/dev/null || true
 DEV_ARG=""
 BYID=$(ls /dev/serial/by-id/ 2>/dev/null | head -1 || true)
 [ -n "$BYID" ] && DEV_ARG="--device /dev/serial/by-id/$BYID:/dev/ttyUSB0"
-docker run -d --name emsbox --restart unless-stopped --network host \
+docker run -d --name emsbox --restart unless-stopped --network host --pid host \
+  --cap-add SYS_ADMIN --cap-add SYS_PTRACE \
   -e TZ=Europe/Prague $DEV_ARG \
   -v /etc:/host/etc:ro \
   -v /etc/resolv.conf:/etc/resolv.conf:ro \
@@ -63,7 +64,8 @@ docker rm -f emsbox 2>/dev/null || true
 DEV_ARG=""
 BYID=$(ls /dev/serial/by-id/ 2>/dev/null | head -1 || true)
 [ -n "$BYID" ] && DEV_ARG="--device /dev/serial/by-id/$BYID:/dev/ttyUSB0"
-docker run -d --name emsbox --restart unless-stopped --network host \
+docker run -d --name emsbox --restart unless-stopped --network host --pid host \
+  --cap-add SYS_ADMIN --cap-add SYS_PTRACE \
   -e TZ=Europe/Prague $DEV_ARG \
   -v /etc:/host/etc:ro \
   -v /etc/resolv.conf:/etc/resolv.conf:ro \

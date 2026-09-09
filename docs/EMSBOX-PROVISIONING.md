@@ -66,3 +66,13 @@ i agent sám při startu (ensure_factory_wifi — pokrývá i staré instalace p
   i když host je online. provision.sh i emsbox-update mount obsahují.
 - **Tovární profil:** ensure_factory_wifi testuje existenci výpisem všech jmen (con show
   <name> není spolehlivé) a duplicity sám uklízí.
+
+
+## 7. Servisní konzole (od v0.82.x)
+
+Fleet → „🖥 konzole" u boxu otevře terminál v prohlížeči (admin-only, auditováno). Shell běží
+NA HOSTU (Raspberry) přes `nsenter` do PID 1 — technik má ps/top/dmesg/journalctl/systemctl/
+nmcli/df celého Pi, ne jen kontejneru. Vyžaduje `docker run … --pid host --cap-add SYS_ADMIN
+--cap-add SYS_PTRACE` a `util-linux` v image (nsenter); provision.sh i emsbox-update to nastavují.
+Když prostředí nsenter nedovolí, konzole spadne do shellu kontejneru (fallback). Tunel je odchozí
+z boxu (WS na server), takže nepotřebuje otevřené porty u klienta.
