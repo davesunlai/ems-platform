@@ -358,8 +358,24 @@ def create_app(state: dict) -> FastAPI:
     async def wifi_connect(body: WifiBody, _: None = Depends(require_auth)):
         if not _nm_ok():
             raise HTTPException(status_code=501, detail="vyžaduje NetworkManager na hostu (mount /run/dbus)")
-        rc, out = await _run(["nmcli", "dev", "wifi", "connect", body.ssid, "password", body.password], 60)
+        # `dev wifi connect` na netplan/NM kombinacích padá na „key-mgmt: property is missing"
+        # (lekce 9. 9.) → profil stavíme explicitně: úklid kolize → con add (s/bez security) → up.
+        rc, names = await _run(["nmcli", "-t", "-f", "UUID,NAME", "con", "show"], 10)
+        for ln in (names or "").splitlines():
+            uid, _, nm = ln.partition(":")
+            if nm == body.ssid:
+                await _run(["nmcli", "con", "delete", "uuid", uid], 10)
+        add = ["nmcli", "con", "add", "type", "wifi", "ifname", "wlan0",
+               "con-name", body.ssid, "ssid", body.ssid,
+               "connection.autoconnect", "yes", "connection.autoconnect-priority", "10"]
+        if body.password:
+            add += ["wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", body.password]
+        rc, out = await _run(add, 20)
         if rc != 0:
+            raise HTTPException(status_code=400, detail=out[-300:])
+        rc, out = await _run(["nmcli", "con", "up", body.ssid], 60)
+        if rc != 0:
+            await _run(["nmcli", "con", "delete", body.ssid], 10)   # nenechávat mrtvý profil
             raise HTTPException(status_code=400, detail=out[-300:])
         return {"ok": True, "detail": out[-200:]}
 

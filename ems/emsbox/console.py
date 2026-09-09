@@ -14,6 +14,7 @@ import secrets
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from ems.auth.models import ROLE_PERMISSIONS
 from ems.auth.security import decode_token
 from . import db
 
@@ -36,9 +37,11 @@ async def _pump(src: WebSocket, dst_key: str, sess: dict) -> None:
 async def console_user(ws: WebSocket, box_id: int, token: str = ""):
     try:
         user = decode_token(token)   # payload: {sub, role, exp}
-        if user.get("role") != "admin":
-            raise ValueError("bez admin oprávnění")
-    except Exception:
+        role = user.get("role")
+        if "admin" not in ROLE_PERMISSIONS.get(role, set()):
+            raise ValueError(f"role {role!r} nemá permission admin")
+    except Exception as exc:
+        logger.warning("konzole box #%s: WS odmítnut: %s", box_id, exc)
         await ws.close(code=4401)
         return
     await ws.accept()
