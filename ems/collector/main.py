@@ -368,15 +368,21 @@ async def tick_planner(state: dict) -> None:
     except Exception as exc:
         logger.debug("Planner winddown: %s", exc)
     try:
-        controlled = await planner_service.controlled_devices()
+        # v0.84.1: smyčka běží pro VŠECHNY lokality s povelovým povolením — ⏰ časový plán
+        # nesmí záviset na globálním vypínači 🧠 plánovače (dřív při enabled=false tiše neběžel)
+        controlled = await planner_service.controlled_devices(require_enabled=False)
         if not controlled:
             return
+        planner_on_set = set(await planner_db.all_enabled())
         all_devs = [d for ds in controlled.values() for d in ds]
         states = await control_db.get_states(all_devs)
         for lid, devs in controlled.items():
-            ca = await planner_db.current_action(lid)
-            if not ca:
+            planner_on = lid in planner_on_set
+            ca = await planner_db.current_action(lid) if planner_on else None
+            if planner_on and not ca:
                 continue
+            if not planner_on:   # plánovač vypnut → jeho „plán" je neutrální; řídí jen ⏰ (a ruční)
+                ca = {"action": "idle", "battery_kw": 0, "reason": "plánovač vypnut", "deferrable_on": False}
             # ⏰ Časový plán (priorita 2): aktivní pravidla přebíjí plánovač
             blocked_batt = []
             try:
@@ -474,6 +480,8 @@ async def tick_planner(state: dict) -> None:
                 plan_pick = ("idle", "stop", {"source": "planner"})
             if not batt_rule and blocked_batt:
                 plan_pick[2]["schedule_blocked"] = blocked_batt   # proč teď neřídí časový plán (okno aktivní, podmínky NE)
+            if not planner_on:
+                plan_pick = None          # vypnutý plánovač nikdy nevydává povely (ani stop) — jen ⏰ a úklid po sobě
             src_map = await _control_sources_map()
             for dev in devs:
                 st = states.get(dev) or {}
@@ -509,7 +517,7 @@ async def tick_planner(state: dict) -> None:
             # odložitelný výstup (spirála / bazén / cokoliv přes eWeLink/relé) dle plánu
             cfg = await planner_db.get_config(lid)
             sid = cfg.get("spiral_output_id")
-            if sid and int(sid) not in out_rules:      # spirálu v okně časového plánu řídí plán času
+            if sid and planner_on and int(sid) not in out_rules:   # spirálu v okně ⏰ řídí plán času; při vypnutém plánovači nic
                 try:
                     from ems.outputs.engine import force_output
                     from ems.outputs import db as out_db

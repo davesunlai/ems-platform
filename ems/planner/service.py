@@ -424,14 +424,19 @@ async def run_all() -> None:
             logger.warning("Planner lokalita %s: %s", lid, exc)
 
 
-async def controlled_devices() -> dict[int, list[str]]:
-    """{locality_id: [solis device_ids]} pro lokality se zapnutým plánovačem."""
+async def controlled_devices(require_enabled: bool = True) -> dict[int, list[str]]:
+    """{locality_id: [solis device_ids]} s povelovým povolením.
+    require_enabled=True: jen lokality se zapnutým 🧠 plánovačem (původní chování).
+    require_enabled=False: VŠECHNY — od v0.84.1 běží ⏰ časový plán i při vypnutém plánovači."""
     enabled = set(await pdb.all_enabled())
-    if not enabled:
+    if require_enabled and not enabled:
         return {}
     out: dict[int, list[str]] = {}
     for d in await list_devices():
         lid = d.get("locality_id")
-        if lid in enabled and d.get("adapter") == "solis" and (d.get("control_enabled") or []):
-            out.setdefault(lid, []).append(d["device_id"])
+        if lid is None or d.get("adapter") != "solis" or not (d.get("control_enabled") or []):
+            continue
+        if require_enabled and lid not in enabled:
+            continue
+        out.setdefault(lid, []).append(d["device_id"])
     return out

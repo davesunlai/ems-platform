@@ -198,7 +198,8 @@ async def check_time_rules(locality_id: int, _: dict = Depends(require_permissio
     hm, isoday = now.strftime("%H:%M"), str(now.isoweekday())
     rules = await pdb.list_time_rules(locality_id)
     # vstupy reality (stejné zdroje jako collector)
-    devs = (await service.controlled_devices()).get(locality_id, [])
+    devs = (await service.controlled_devices(require_enabled=False)).get(locality_id, [])
+    planner_on = locality_id in set(await pdb.all_enabled())
     soc_now = None
     try:
         soc_now = await service._soc_now(devs) if devs else None
@@ -256,7 +257,8 @@ async def check_time_rules(locality_id: int, _: dict = Depends(require_permissio
     for it in out:
         if it["action"] in ("force_charge", "force_discharge", "stop") and it["would_run"]:
             it["note"] = "▶ TOTO pravidlo teď řídí baterii" if it["id"] == winner_batt else "aktivní, ale přebito dřívějším pravidlem"
-    return {"now": now.isoformat(), "inputs": {"soc_pct": soc_now, "spot_czk_kwh": spot_kwh,
+    return {"now": now.isoformat(), "planner_enabled": planner_on,
+            "inputs": {"soc_pct": soc_now, "spot_czk_kwh": spot_kwh,
                                              "pv_today_kwh": day_pv.get("today"), "pv_tomorrow_kwh": day_pv.get("tomorrow")},
             "holder": holder, "rules": out}
 

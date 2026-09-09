@@ -737,6 +737,7 @@ function TimePlanBox({ locId, outputs }) {
           stav k {new Date(chk.now).toLocaleTimeString("cs-CZ")} · SoC {fmt(chk.inputs.soc_pct, 0)} % · spot {fmt(chk.inputs.spot_czk_kwh, 2)} Kč/kWh
           · výroba dnes {fmt(chk.inputs.pv_today_kwh, 0)} / zítra {fmt(chk.inputs.pv_tomorrow_kwh, 0)} kWh
           {chk.holder && <> · baterii teď řídí <b>{chk.holder.source || "nikdo"}</b>{chk.holder.action ? ` (${chk.holder.action})` : ""}</>}
+          {chk.planner_enabled === false && <> · <span style={{ color: "var(--amber)" }}>🧠 plánovač vypnut — ⏰ pravidla běží nezávisle</span></>}
           {" "}<span style={{ cursor: "pointer" }} onClick={() => setChk(null)}>✖</span>
         </span>}
       </div>
