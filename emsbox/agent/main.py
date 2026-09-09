@@ -221,24 +221,21 @@ class Agent:
         if pid == 0:   # dítě
             _os.environ["TERM"] = "xterm-256color"
             if host_ok:
-                # -t 1: cíl PID 1 hosta; -m/-u/-i/-n/-p: mount/uts/ipc/net/pid namespace hosta
+                # -t 1: cíl PID 1 hosta; -m/-u/-i/-n/-p: mount/uts/ipc/net/pid namespace hosta.
+                # `-i` (interaktivní), NE `-l` — login shell čte profil a když nikdo PTY hned
+                # nečte, doběhne a pošle EOF (session padala za ~370 ms). (lekce 9. 9.)
                 _os.execvp("nsenter", ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p",
-                                       "--", "/bin/bash", "-l"])
-                # kdyby bash na hostu nebyl, zkus sh
+                                       "--", "/bin/bash", "-i"])
                 _os.execvp("nsenter", ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p",
-                                       "--", "/bin/sh", "-l"])
-            _os.execvp("/bin/sh", ["/bin/sh", "-l"])   # fallback: kontejner
+                                       "--", "/bin/sh", "-i"])   # kdyby bash na hostu nebyl
+            _os.execvp("/bin/bash", ["/bin/bash", "-i"])         # fallback: kontejner
+            _os.execvp("/bin/sh", ["/bin/sh", "-i"])
             return
         logger.info("konzole: shell na %s (session %s…)", "HOSTU (nsenter)" if host_ok else "kontejneru", sid[:8])
         loop = asyncio.get_event_loop()
         stop = asyncio.Event()
         try:
-            async with websockets.connect(url, max_size=2 ** 20, ping_interval=20, ping_timeout=20) as ws:
-                # pošťouchni shell, ať hned vykreslí prompt (jinak uživatel vidí prázdno).
-                # Bez `clear` (na některých shellech způsobil EOF a pád session); jen \n.
-                await asyncio.sleep(0.2)
-                _os.write(fd, b"\n")
-
+            async with websockets.connect(url, max_size=2 ** 20, ping_interval=30, ping_timeout=30) as ws:
                 async def pty_to_ws():
                     try:
                         while not stop.is_set():
@@ -269,6 +266,11 @@ class Agent:
 
                 t1 = asyncio.create_task(pty_to_ws())
                 t2 = asyncio.create_task(ws_to_pty())
+                await asyncio.sleep(0.15)          # čtení PTY už běží → teď je bezpečné pobídnout prompt
+                try:
+                    _os.write(fd, b"\n")
+                except OSError:
+                    pass
                 await stop.wait()
                 for p in (t1, t2):
                     p.cancel()
