@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.81.6 — schéma dotaženo: (1) markery šipek se generují pro VŠECHNY barvy hran — #39c5cf (a rezerva #f85149) chyběl v seznamu, jeho tok byl bez šipky. (2) Energetické kolečko zvětšeno (r≥5,2, roste s výkonem) a nese uprostřed ⚡ blesk (animateMotion na <g>). Pozn. k v0.81.5: verze v hlavičce se nezměnila, protože deploy blok rebuildoval jen web — /api/version servíruje API kontejner; bloky se vrací k plné trojici api+collector+web.
+
 ## v0.81.5 — ⚡ schéma: zvýrazněné směry toků. (1) Šipky mají PEVNOU velikost nezávislou na tloušťce čáry (markerUnits=userSpaceOnUse — dřív se u slabých toků zmenšovaly do ztracena) a obrys v barvě pozadí pro čitelnost na čarách. (2) Tvar šipky protáhlý dart (16:10 s vykousnutým zadkem) místo rovnoramenného trojúhelníku — směr je zřejmý na první pohled. (3) Po každé aktivní čáře putují VE SMĚRU TOKU dvě „energetická kolečka" (animateMotion po stejné cestě, střídavě à 1,1 s, velikost dle výkonu, obrys pozadí) — pohyb už nesplývá s čárkováním. Jen rebuild webu.
 
 ## v0.81.4 — KRITICKÝ hotfix grid_charge_enabled: klíč chyběl v CONFIG_DEFAULTS (whitelist _CFG_KEYS) → upsert_config ukládaný stav TIŠE ZAHAZOVAL (checkbox se po uložení vracel na zaškrtnuto) a get_config ho nevracel → planner četl vždy default TRUE — nabíjení ze sítě při levném spotu NEŠLO reálně vypnout ani SQL UPDATEm (§4 z v0.73.1 byl bez účinku!). Vysvětluje pozorování „dost FVE, a přesto import + nabíjení": charge_grid force jede na plný výkon bez ohledu na výrobu. Oprava: klíč v defaults; regres: round-trip False projde whitelistem. Po nasazení flag konečně poslouchá DB/checkbox. Nasazení: franta (api+collector).

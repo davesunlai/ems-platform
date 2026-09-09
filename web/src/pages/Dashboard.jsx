@@ -320,11 +320,17 @@ function FlowEdge({ d, kw, color, active, label, lx, ly, m = 1 }) {
             strokeLinecap="round" className={active ? "eflow-anim" : ""}
             strokeDasharray={active ? `${9 * m} ${9 * m}` : `${3 * m} ${6 * m}`} opacity={active ? 0.9 : 0.45}
             markerEnd={active ? `url(#efarr-${color.replace("#", "")})` : undefined} />
-      {active && [0, 1].map((i) => (
-        <circle key={i} r={Math.max(2.6, wdt * 0.62)} fill={color} stroke="var(--bg)" strokeWidth={1.1 * m}>
-          <animateMotion dur="2.2s" begin={`${-1.1 * i}s`} repeatCount="indefinite" path={d} />
-        </circle>
-      ))}
+      {active && [0, 1].map((i) => {
+        const r = Math.max(5.2 * m, wdt * 0.95);
+        return (
+          <g key={i}>
+            <circle r={r} fill={color} stroke="var(--bg)" strokeWidth={1.2 * m} />
+            <text x="0" y="0" textAnchor="middle" dominantBaseline="central"
+                  fontSize={r * 1.45} style={{ pointerEvents: "none" }}>⚡</text>
+            <animateMotion dur="2.2s" begin={`${-1.1 * i}s`} repeatCount="indefinite" path={d} />
+          </g>
+        );
+      })}
       {active && <text x={lx} y={ly} textAnchor="middle" fontSize={11.5 * m} fontWeight="700" fill={color}
                        stroke="var(--bg)" strokeWidth={3 * m} paintOrder="stroke">{label}</text>}
     </g>
@@ -377,7 +383,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const outLabel = (o) => { const k = outKw(o); return k != null ? f1(k) : "ON"; };
   const outOn = (o) => (ewDev[o.target] ? !!ewDev[o.target].on : !!o.is_on);
   const outSub = (o) => (ewDev[o.target]?.online === false ? "offline" : null);
-  const COLORS = ["3fb950", "58a6ff", "a371f7", "d29922"];
+  // barvy VŠECH hran (39c5cf chyběl → tok byl bez šipky); drženo v jedné množině
+  const COLORS = ["3fb950", "58a6ff", "a371f7", "d29922", "39c5cf", "f85149"];
   const body = (
       <div onClick={(e) => e.stopPropagation()} className="panel"
            style={inline ? { padding: 14, marginTop: 8 }
