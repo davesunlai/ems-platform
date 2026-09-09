@@ -49,6 +49,7 @@ BYID=$(ls /dev/serial/by-id/ 2>/dev/null | head -1 || true)
 docker run -d --name emsbox --restart unless-stopped --network host \
   -e TZ=Europe/Prague $DEV_ARG \
   -v /etc:/host/etc:ro \
+  -v /etc/resolv.conf:/etc/resolv.conf:ro \
   -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
   -v emsbox-data:/data teraems/emsbox-agent
 
@@ -65,6 +66,7 @@ BYID=$(ls /dev/serial/by-id/ 2>/dev/null | head -1 || true)
 docker run -d --name emsbox --restart unless-stopped --network host \
   -e TZ=Europe/Prague $DEV_ARG \
   -v /etc:/host/etc:ro \
+  -v /etc/resolv.conf:/etc/resolv.conf:ro \
   -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
   -v emsbox-data:/data teraems/emsbox-agent
 echo "EMSBOX aktualizován: $(cd /opt/emsbox && git log --oneline -1)"

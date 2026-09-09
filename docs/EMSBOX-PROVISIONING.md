@@ -53,3 +53,16 @@ i agent sám při startu (ensure_factory_wifi — pokrývá i staré instalace p
   Davida — servisní přístup). Přenos jde přes HTTPS na teraems; ve fleet UI je za „okem".
 - Tovární síť `emsbox`/`emsbox123` je vědomě slabá (servisní kanál; WPA-PSK vyžaduje min. 8 znaků, proto ne jen 'emsbox') — box na ní pouze *klientsky
   visí*; lokální UI dál chrání heslo uživatele/topadmina.
+
+
+## 6. Síťové lekce z pilotu (9. 9. 2026)
+
+- **Netplan backend:** Raspberry Pi OS/Ubuntu image mohou mít NM řízený netplanem (profily
+  `netplan-*`). nmcli změny z lokálního UI se v tom režimu persistují přes netplan YAML
+  (`/etc/netplan/90-NM-*.yaml`) — statická IP i Wi-Fi PŘEŽÍVAJÍ reboot. Po přegenerování
+  profilů může NM při aktivaci chtít znovu vtisknout PSK (`nmcli con mod <p> wifi-sec.psk …`).
+- **DNS kontejneru:** agent MUSÍ mít mount `-v /etc/resolv.conf:/etc/resolv.conf:ro`, jinak si
+  po přepnutí sítě (Wi-Fi↔LAN) nese zatuchlé DNS a heartbeat umírá na name resolution,
+  i když host je online. provision.sh i emsbox-update mount obsahují.
+- **Tovární profil:** ensure_factory_wifi testuje existenci výpisem všech jmen (con show
+  <name> není spolehlivé) a duplicity sám uklízí.

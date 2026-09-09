@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.82.0 — síťová odolnost EMSBOXu (lekce z výpadku 9. 9.). (1) docker run agenta nově mountuje /etc/resolv.conf:ro — DNS kontejneru vždy kopíruje hosta; po přepnutí Wi-Fi↔LAN box přestává umírat na „Temporary failure in name resolution" (dnešní příčina offline stavu při zdravém hostu). provision.sh i emsbox-update aktualizovány. (2) ensure_factory_wifi: existence profilu se testuje výpisem všech jmen (con show <name> na netplan/NM systémech nespolehlivé — proto se na pilotu namnožilo 10 kopií emsbox-default, které po rebootu dusily wlan0) + samo-úklid duplicit při startu. (3) PROVISIONING doc: sekce „Síťové lekce" (netplan backend persistuje správně — statická IP reboot PŘEŽILA; PSK re-vtisknutí po přegenerování; DNS mount povinný). Rollback guard = v0.82.1. Nasazení: franta + na pilotu JEDNORÁZOVĚ přepsat /usr/local/bin/emsbox-update (nový mount) a pak ⬆ update z fleetu.
+
 ## v0.81.8 — vlastní SVG ikonky ve schématu. Šest Davidových SVG (fve, distribuce, dům, tepelné čerpadlo, baterie, topení) přidáno do ⚙️ výběru ikonek; nové klíče Baterie a Topné výstupy (♨️/🔥/SVG — použije se u výstupů s ohřevem v názvu). Zpracování při importu: odstraněna c2pa metadata (7,7 kB → ~0,5 kB na soubor) a ZAPEČENY barvy (<style> stroke #dbe4ee + akcent #e3b341) — uvnitř <image> nefunguje currentColor ani CSS proměnné stránky, bez zapečení by kresby byly černé na tmavém pozadí. FlowNode i picker umí cestu (/flow-icons/*.svg) vedle emoji; servírováno z web/public. Jen rebuild webu (+api verze).
 
 ## v0.81.7 — ⚡ schéma: volitelné ikonky + zítřek + opravy. (1) ⚙️ v hlavičce schématu otevře výběr ikonek pro FVE (☀️🌞🔆🌤️🔅), Distribuci (🗼⚡🔌🏭🛰️), Dům (🏠🏡🏢🛖🏰) a TČ (🌀♨️❄️🌡️💨) — volba per prohlížeč (localStorage), zvýrazněná aktivní. (2) FVE box ukazuje „plán dnes X · zítra Y kWh". (3) Energetická kolečka s bleskem +50 % (r≥7,8). (4) OPRAVA: kompaktní boxy (výstupy eWeLink, TČ v desktop layoutu, h=54) kreslily „zapnuto/vypnuto" MIMO box (layout počítal s h=84) — nový kompaktní režim FlowNode (ikona vlevo, texty uvnitř). Jen rebuild webu (+api pro verzi v hlavičce dle standardu trojice).
@@ -66,6 +68,7 @@ IP režim Wi-Fi: DHCP (default) nebo pevná IP — v lokálním UI. LAN port je 
   lokálního UI sken + připojení na klientskou síť → hotspot vypnout.
 - **Box „zmizel"** (klient vyměnil router): hotspot `emsbox`/`emsbox123` → fleet ukáže novou IP → UI → nová síť.
 - **Výpadek internetu:** box čte dál do bufferu, po obnově dohraje; fleet hlásí offline.
+- **Přepnutí sítě (Wi-Fi↔LAN):** DNS kontejneru sleduje hosta (mount resolv.conf) — box se chytí sám.
 - **Výroba karty:** čisté RPi OS Lite + `emsbox/provision.sh` přes SSH (hostname ze sériáku,
   tovární Wi-Fi, Docker, agent, `emsbox-update`). Malosérie: golden image — viz `docs/EMSBOX-PROVISIONING.md`.
 - **Aktualizace:** z teraems fleetu tlačítkem „⬆ update" u verze boxu (nebo `ssh root@box 'emsbox-update'`).

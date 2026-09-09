@@ -297,9 +297,14 @@ async def ensure_factory_wifi() -> None:
     if not (_sh.which("nmcli") and os.path.exists("/run/dbus/system_bus_socket")):
         return
     try:
-        rc = _sp.run(["nmcli", "-t", "-g", "NAME", "con", "show", "emsbox-default"],
-                     capture_output=True, text=True, timeout=8).returncode
-        if rc == 0:
+        # POZOR (lekce 9. 9.): `con show <name>` na některých NM/netplan systémech
+        # nefunguje spolehlivě jako test existence → výpis všech jmen + přesná shoda.
+        out = _sp.run(["nmcli", "-t", "-f", "UUID,NAME", "con", "show"],
+                      capture_output=True, text=True, timeout=8).stdout
+        mine = [ln.split(":")[0] for ln in out.splitlines() if ln.endswith(":emsbox-default")]
+        for uid in mine[1:]:   # samo-úklid duplicit (na pilotu se jich namnožilo 10)
+            _sp.run(["nmcli", "con", "delete", "uuid", uid], capture_output=True, text=True, timeout=8)
+        if mine:
             return
         r = _sp.run(["nmcli", "con", "add", "type", "wifi", "ifname", "*",
                      "con-name", "emsbox-default", "ssid", "emsbox",
