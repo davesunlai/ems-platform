@@ -422,6 +422,52 @@ async def ensure_factory_wifi() -> None:
         logger.debug("ensure_factory_wifi: %s", exc)
 
 
+async def wifi_watchdog() -> None:
+    """Pojistka proti uvíznutí NM v need-auth po transientním selhání handshake při bootu
+    (lekce 10. 9.): každých 60 s — je-li Wi-Fi profil s autoconnect, wlan0 nepřipojený a SSID
+    v dosahu, znovu vtiskne uložené psk (vynuluje příznak „neplatné secrets") a zkusí con up.
+    Max 1 pokus / 5 min na profil. Tovární emsbox-default se přeskakuje (má vlastní logiku)."""
+    import shutil as _sh
+    import subprocess as _sp
+    if not (_sh.which("nmcli") and os.path.exists("/run/dbus/system_bus_socket")):
+        return
+    last: dict[str, float] = {}
+    while True:
+        await asyncio.sleep(60)
+        try:
+            act = _sp.run(["nmcli", "-t", "-f", "TYPE,DEVICE", "con", "show", "--active"],
+                          capture_output=True, text=True, timeout=8).stdout
+            if any(ln.startswith("802-11-wireless:") and ln.split(":")[1] for ln in act.splitlines()):
+                continue   # Wi-Fi jede
+            cons = _sp.run(["nmcli", "-t", "-f", "NAME,TYPE,AUTOCONNECT", "con", "show"],
+                           capture_output=True, text=True, timeout=8).stdout
+            cands = [ln.split(":")[0] for ln in cons.splitlines()
+                     if ln.endswith(":802-11-wireless:yes") and ln.split(":")[0] != "emsbox-default"]
+            if not cands:
+                continue
+            seen = _sp.run(["nmcli", "-t", "-f", "SSID", "dev", "wifi", "list"],
+                           capture_output=True, text=True, timeout=15).stdout.splitlines()
+            now = time.monotonic()
+            for name in cands:
+                ssid = _sp.run(["nmcli", "-g", "802-11-wireless.ssid", "con", "show", name],
+                               capture_output=True, text=True, timeout=8).stdout.strip()
+                if ssid not in seen or now - last.get(name, -1e9) < 300:
+                    continue
+                last[name] = now
+                psk = _sp.run(["nmcli", "-s", "-g", "802-11-wireless-security.psk", "con", "show", name],
+                              capture_output=True, text=True, timeout=8).stdout.strip()
+                if psk:
+                    _sp.run(["nmcli", "con", "mod", name, "802-11-wireless-security.psk", psk],
+                            capture_output=True, text=True, timeout=8)
+                r = _sp.run(["nmcli", "con", "up", name], capture_output=True, text=True, timeout=45)
+                logger.warning("Wi-Fi watchdog: %s v dosahu, wlan0 odpojen → con up: %s",
+                               name, "OK" if r.returncode == 0 else (r.stderr or r.stdout).strip()[-120:])
+                if r.returncode == 0:
+                    break
+        except Exception as exc:
+            logger.debug("wifi_watchdog: %s", exc)
+
+
 async def run_with_ui() -> None:
     """Lokální web UI běží VŽDY (párovací wizard z mobilu); agent smyčky se
     spouštějí/zastavují podle přítomnosti credentials — vše bez restartu."""
@@ -430,7 +476,8 @@ async def run_with_ui() -> None:
     from .serverlink import ServerLink as SL
 
     await ensure_factory_wifi()
-    state: dict = {"cred": load_credentials(), "agent": None, "started": time.monotonic()}
+    _wd = asyncio.create_task(wifi_watchdog())   # reference držena (GC lekce)
+    state: dict = {"cred": load_credentials(), "agent": None, "started": time.monotonic(), "_wd": _wd}
     tasks: dict = {"agent": None}
 
     async def start_agent() -> None:

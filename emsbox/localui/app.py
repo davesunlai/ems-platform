@@ -367,7 +367,10 @@ def create_app(state: dict) -> FastAPI:
                 await _run(["nmcli", "con", "delete", "uuid", uid], 10)
         add = ["nmcli", "con", "add", "type", "wifi", "ifname", "wlan0",
                "con-name", body.ssid, "ssid", body.ssid,
-               "connection.autoconnect", "yes", "connection.autoconnect-priority", "10"]
+               "connection.autoconnect", "yes", "connection.autoconnect-priority", "10",
+               # boot-proof (lekce 10. 9.): transientní selhání handshake po startu → NM jinak skončí
+               # v need-auth a už to nezkusí; nekonečné pokusy o připojení i autentizaci
+               "connection.autoconnect-retries", "0", "connection.auth-retries", "0"]
         if body.password:
             add += ["wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", body.password]
         rc, out = await _run(add, 20)

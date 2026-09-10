@@ -76,3 +76,10 @@ nmcli/df celého Pi, ne jen kontejneru. Vyžaduje `docker run … --pid host --c
 --cap-add SYS_PTRACE` a `util-linux` v image (nsenter); provision.sh i emsbox-update to nastavují.
 Když prostředí nsenter nedovolí, konzole spadne do shellu kontejneru (fallback). Tunel je odchozí
 z boxu (WS na server), takže nepotřebuje otevřené porty u klienta.
+
+- **Wi-Fi po bootu (10. 9.):** transientní selhání 4-way handshake hned po startu (firmware/regdom)
+  → NM přejde do need-auth, „asking for new key", a bez agenta to vzdá — profil pak vypadá
+  „zapomenutý" (Secrets were required), ač psk je uložené (flags 0). Řešení: profily z UI mají
+  `autoconnect-retries 0` + `auth-retries 0` (nekonečné pokusy) a agent běží Wi-Fi watchdog
+  (wlan0 odpojen + SSID v dosahu → re-push psk + con up, 1×/5 min). Diagnostika:
+  `journalctl -b -u NetworkManager | grep -Ei "wlan0.*(4way|need-auth|activated)"`.
