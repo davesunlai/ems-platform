@@ -1,6 +1,7 @@
 // 📦 Přehled flotily EMSBOXů: spárované (vč. IP) + nespárované ohlášené boxy.
 import React, { useEffect, useState } from "react";
 import BoxConsole from "../components/BoxConsole";
+import { useAuth } from "../auth";
 import { api } from "../api";
 
 const gb = (mb) => (mb == null ? "—" : (mb / 1000).toFixed(mb < 10000 ? 1 : 0) + " GB");
@@ -102,6 +103,7 @@ function Psk({ value }) {
 }
 
 export default function Emsboxes() {
+  const { vis } = useAuth();
   const [d, setD] = useState({ boxes: [], unpaired: [] });
   const [err, setErr] = useState("");
   const load = () => api.emsboxOverview().then(setD).catch((e) => setErr(e.message));
@@ -129,13 +131,13 @@ export default function Emsboxes() {
                   <td>{b.public_ip || "—"}</td>
                   <td>{b.private_ip ? <a href={`http://${b.private_ip}`} target="_blank" rel="noreferrer">{b.private_ip}</a> : "—"}</td>
                   <td>{b.wifi_ssid ? `📶 ${b.wifi_ssid}` : "🔌 LAN"}
-                      {b.wifi_psk && <Psk value={b.wifi_psk} />}</td>
+                      {vis("box:psk") && b.wifi_psk && <Psk value={b.wifi_psk} />}</td>
                   <td style={lowDisk(b.disk_free_mb) ? { color: "#f85149", fontWeight: 700 } : {}}>{diskCell(b.disk_total_mb, b.disk_free_mb)}</td>
                   <td>{b.mem_total_mb != null ? `${gb(b.mem_used_mb)} / ${gb(b.mem_total_mb)}` : "—"}</td>
                   <td>{b.buffer_rows ?? "—"} ř.</td>
                   <td style={Math.abs(b.clock_drift_s || 0) > 60 ? { color: "#f85149" } : {}}>{b.clock_drift_s != null ? `${Math.round(b.clock_drift_s)} s` : "—"}</td>
-                  <td>{b.agent_version || "—"} <UpdateBtn box={b} /></td>
-                  <td style={{ whiteSpace: "nowrap" }}><ConsoleBtn box={b} /><ResetUiPw box={b} /></td>
+                  <td>{b.agent_version || "—"} {vis("box:actions") && <UpdateBtn box={b} />}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{vis("box:actions") && <><ConsoleBtn box={b} /><ResetUiPw box={b} /></>}</td>
                 </tr>
                 {b.last_action && <tr>
                   <td colSpan={99} style={{ paddingTop: 0, fontSize: 12 }}><ActionStatus box={b} /></td>

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { useAuth } from "../auth";
 
 // Mezipaměť načtených řídicích registrů per modul (v rámci session SPA),
 // ať se při každém otevření Řízení nečte znovu ze střídače.
@@ -385,6 +386,7 @@ function SelfHealToggle({ mod }) {
 }
 
 function SolisControl({ mod }) {
+  const { vis } = useAuth();
   const has = (k) => (mod.control_enabled || []).includes(k);
   const [power, setPower] = useState(5);
   const [chA, setChA] = useState("");
@@ -465,7 +467,7 @@ function SolisControl({ mod }) {
             color: "#0b0e13", background: b.bg, whiteSpace: "nowrap" }}>{b.t}{src}</span>;
         })()}
       </h3>
-      <ControlSourcesRow mod={mod} />
+      {vis("ctl:sources") && <ControlSourcesRow mod={mod} />}
       <p className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
         ⚠️ Reálně zapisuje do měniče. Výkon zadáváš v <b>kW pro celé úložiště</b> (obě baterie dohromady). Vybíjení jde do sítě jen nad rámec spotřeby domu. (nabíjení reg. 43136, vybíjení 43129; jednotka 10 W)
       </p>
@@ -900,6 +902,7 @@ function PrioRow({ item, idx, locked, open, onOpen, cfg, set, ...drag }) {
 }
 
 function PlannerPanel({ locId }) {
+  const { vis } = useAuth();
   const [data, setData] = useState(null);
   const [cfg, setCfg] = useState(null);
   const [sum, setSum] = useState(null);
@@ -1041,7 +1044,7 @@ function PlannerPanel({ locId }) {
             <div className="muted" style={{ fontSize: 11.5, textAlign: "center", marginBottom: 4 }}>
               tvoje pevné časy — vybíjení/nabíjení/stop baterie nebo spínání čehokoliv z eWeLinku; v okně přebíjí plánovač (jen podlaha je nad tím)
             </div>
-            <TimePlanBox locId={locId} outputs={outputs} />
+            {vis("ctl:schedule") && <TimePlanBox locId={locId} outputs={outputs} />}
           </div>
           {(() => {
             let arr; try { arr = JSON.parse(cfg.priority_order || "[]"); } catch { arr = []; }
@@ -1101,15 +1104,16 @@ function PlannerPanel({ locId }) {
 }
 
 function LocalitySection({ locId, locName, mods }) {
+  const { vis } = useAuth();
   return (
     <section style={{ marginBottom: 24 }}>
       <h2 style={{ fontSize: 17, margin: "0 0 8px" }}>📍 {locName || "Bez lokality"}</h2>
-      {locId && <LocalitySummary locId={locId} mods={mods} />}
-      {locId && <PlannerPanel locId={locId} />}
-      {mods.map((m) => m.adapter === "solis"
+      {vis("ctl:summary") && locId && <LocalitySummary locId={locId} mods={mods} />}
+      {vis("ctl:planner") && locId && <PlannerPanel locId={locId} />}
+      {vis("ctl:inverter") && mods.map((m) => m.adapter === "solis"
         ? <SolisControl key={m.id} mod={m} />
         : <GoodweControl key={m.id} mod={m} />)}
-      {locId && <OutputsPanel locId={locId} />}
+      {vis("ctl:outputs") && locId && <OutputsPanel locId={locId} />}
     </section>
   );
 }
@@ -1253,6 +1257,7 @@ function AuditPanel() {
 }
 
 export default function Control() {
+  const { vis } = useAuth();
   const [mods, setMods] = useState(null);
   const [err, setErr] = useState("");
 
@@ -1273,7 +1278,7 @@ export default function Control() {
 
   return (
     <main>
-      <HelpPanel />
+      {vis("ctl:help") && <HelpPanel />}
       <div className="panel" style={{ marginBottom: 18, borderColor: "var(--amber)" }}>
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>
           ⚠ Akce zde <b>reálně zapisují do měniče</b> (přes frontu, ověřeno čtením, zaznamenáno do auditu).
@@ -1284,7 +1289,7 @@ export default function Control() {
       {mods.length === 0 && <p className="muted">Žádný řiditelný modul.</p>}
       {groups.map((g, i) => <LocalitySection key={i} locId={g.id} locName={g.name} mods={g.mods} />)}
 
-      <AuditPanel />
+      {vis("ctl:audit") && <AuditPanel />}
     </main>
   );
 }

@@ -14,6 +14,7 @@ from ems.notify.email import send_email, smtp_configured
 from ems.notify.templates import html_mail
 from . import db
 from .deps import get_current_user, require_permission
+from . import roles as _roles
 from .models import (
     ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, ResetPasswordRequest,
     ROLE_PERMISSIONS, Token, UserCreate, UserOut, UserUpdate,
@@ -40,7 +41,8 @@ async def login(body: LoginRequest):
     return Token(
         access_token=create_token(user["username"], role),
         role=role,
-        permissions=sorted(ROLE_PERMISSIONS.get(role, set())),
+        permissions=sorted(_roles.permissions_for(role)),
+        hidden=_roles.hidden_for(role),
     )
 
 
@@ -50,6 +52,7 @@ async def me(user: dict = Depends(get_current_user)):
     return {
         "username": user["username"], "role": user["role"],
         "permissions": sorted(user["permissions"]),
+        "hidden": _roles.hidden_for(user["role"]),
         "email": full.get("email") if full else None,
         "full_name": full.get("full_name") if full else None,
         "theme": (full.get("theme") if full else None) or "midnight",
@@ -192,7 +195,9 @@ async def post_user(body: UserCreate, _: dict = Depends(require_permission("admi
     if await db.get_user(body.username):
         raise HTTPException(status_code=409, detail="Uživatel už existuje")
     pw = body.password if body.password else secrets.token_urlsafe(24)
-    user = await db.create_user(body.username, pw, body.role.value,
+    if not _roles.is_known_role(body.role):
+        raise HTTPException(status_code=400, detail=f"neznámá role '{body.role}'")
+    user = await db.create_user(body.username, pw, body.role,
                                 email=body.email, full_name=body.full_name,
                                 phone=body.phone, note=body.note)
     if body.email and smtp_configured():
@@ -254,10 +259,12 @@ async def admin_send_reset(user_id: int, _: dict = Depends(require_permission("a
 @router.patch("/admin/users/{user_id}", response_model=UserOut)
 async def patch_user(user_id: int, body: UserUpdate, _: dict = Depends(require_permission("admin"))):
     sent = body.model_fields_set
+    if body.role is not None and not _roles.is_known_role(body.role):
+        raise HTTPException(status_code=400, detail=f"neznámá role '{body.role}'")
     updated = await db.update_user(
         user_id,
         password=body.password,
-        role=body.role.value if body.role else None,
+        role=body.role if body.role else None,
         active=body.active,
         email=body.email, _email_set="email" in sent,
         full_name=body.full_name, _name_set="full_name" in sent,
@@ -273,3 +280,40 @@ async def patch_user(user_id: int, body: UserUpdate, _: dict = Depends(require_p
 async def remove_user(user_id: int, _: dict = Depends(require_permission("admin"))):
     if not await db.delete_user(user_id):
         raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+
+
+# ---------------- vlastní role (user1…n) + viditelnost prvků UI ----------------
+class RoleIn(BaseModel):
+    name: str
+    base: str = "viewer"
+    hidden: list[str] = []
+
+
+@router.get("/admin/roles")
+async def list_custom_roles(_: dict = Depends(require_permission("admin"))):
+    return {"builtin": [{"name": n, "base": n, "hidden": [], "custom": False} for n in ROLE_PERMISSIONS],
+            "custom": _roles.list_roles()}
+
+
+@router.post("/admin/roles", status_code=201)
+async def create_custom_role(body: RoleIn, _: dict = Depends(require_permission("admin"))):
+    try:
+        return await _roles.upsert(body.name, body.base, body.hidden)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/admin/roles/{name}")
+async def update_custom_role(name: str, body: RoleIn, _: dict = Depends(require_permission("admin"))):
+    try:
+        return await _roles.upsert(name, body.base, body.hidden)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/admin/roles/{name}", status_code=204)
+async def delete_custom_role(name: str, _: dict = Depends(require_permission("admin"))):
+    try:
+        await _roles.delete(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))

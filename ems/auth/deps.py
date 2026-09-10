@@ -4,7 +4,8 @@ from __future__ import annotations
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from .models import ROLE_PERMISSIONS
+from .models import ROLE_PERMISSIONS  # noqa: F401  (vestavěné role)
+from . import roles as _roles
 from .security import decode_token
 
 _bearer = HTTPBearer(auto_error=False)
@@ -23,7 +24,7 @@ async def get_current_user(
     return {
         "username": payload.get("sub"),
         "role": role,
-        "permissions": ROLE_PERMISSIONS.get(role, set()),
+        "permissions": _roles.permissions_for(role),
     }
 
 

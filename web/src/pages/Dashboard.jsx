@@ -765,6 +765,7 @@ function LocalityNow({ deviceIds, localityId }) {
 }
 
 function LocalitySection({ name, devs, open, onToggle }) {
+  const { vis } = useAuth();
   const ids = devs.map((d) => d.device_id);
   const locId = devs[0].locality_id;
   const [flow, setFlow] = useState(false);
@@ -798,21 +799,21 @@ function LocalitySection({ name, devs, open, onToggle }) {
             👁<input type="checkbox" checked={pinned} onChange={(e) => togglePin(e.target.checked)} />
           </label>)}
       </h2>
-      {flow && locId && !pinned && <EnergyFlow locId={locId} deviceIds={ids} name={name} onClose={() => setFlow(false)} />}
-      {pinned && locId && <EnergyFlow inline locId={locId} deviceIds={ids} name={name} onClose={() => {}} />}
-      <LocalityNow deviceIds={ids} localityId={locId} />
+      {vis("dash:flow") && flow && locId && !pinned && <EnergyFlow locId={locId} deviceIds={ids} name={name} onClose={() => setFlow(false)} />}
+      {vis("dash:flow") && pinned && locId && <EnergyFlow inline locId={locId} deviceIds={ids} name={name} onClose={() => {}} />}
+      {vis("dash:stats") && <LocalityNow deviceIds={ids} localityId={locId} />}
       {open && (<>
-        <ControlBanners deviceIds={ids} localityId={locId} />
-        <LocalityChart deviceIds={ids} />
+        {vis("dash:banners") && <ControlBanners deviceIds={ids} localityId={locId} />}
+        {vis("dash:chart") && <LocalityChart deviceIds={ids} />}
         {locId && (
           <div className="card" style={{ marginTop: 14 }}>
             <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>Predikce 24–48 h</h3>
-            <ForecastChart localityId={locId} />
+            {vis("dash:forecast") && <ForecastChart localityId={locId} />}
           </div>
         )}
-        {locId && <TempChart localityId={locId} deviceIds={ids} />}
-        {devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} adapter={d.adapter} control={d.control_enabled || []} />)}
-        {locId && <BillingTable localityId={locId} />}
+        {vis("dash:temp") && locId && <TempChart localityId={locId} deviceIds={ids} />}
+        {vis("dash:devices") && devs.map((d) => <DevicePanel key={d.device_id} id={d.device_id} locality={d.locality} lastSeen={d.last_seen} hidden={d.hidden_metrics || []} adapter={d.adapter} control={d.control_enabled || []} />)}
+        {vis("dash:billing") && locId && <BillingTable localityId={locId} />}
       </>)}
     </section>
   );

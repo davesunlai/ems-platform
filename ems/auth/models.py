@@ -35,6 +35,7 @@ class Token(BaseModel):
     token_type: str = "bearer"
     role: str
     permissions: list[str]
+    hidden: list[str] = []
 
 
 class UserOut(BaseModel):
@@ -51,7 +52,7 @@ class UserOut(BaseModel):
 class UserCreate(BaseModel):
     username: str
     password: str | None = None
-    role: Role = Role.VIEWER
+    role: str = "viewer"
     email: str | None = None
     full_name: str | None = None
     phone: str | None = None
@@ -60,7 +61,7 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     password: str | None = None
-    role: Role | None = None
+    role: str | None = None
     active: bool | None = None
     email: str | None = None
     full_name: str | None = None

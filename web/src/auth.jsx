@@ -20,13 +20,14 @@ export function AuthProvider({ children }) {
   const login = async (username, password) => {
     const res = await api.login(username, password);
     setToken(res.access_token);
-    setUser({ username, role: res.role, permissions: res.permissions });
+    setUser({ username, role: res.role, permissions: res.permissions, hidden: res.hidden || [] });
   };
 
   const has = (perm) => !!user && user.permissions.includes(perm);
+  const vis = (key) => !user || !(user.hidden || []).includes(key);   // viditelnost prvku UI dle role
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, logout, has }}>
+    <AuthCtx.Provider value={{ user, loading, login, logout, has, vis }}>
       {children}
     </AuthCtx.Provider>
   );

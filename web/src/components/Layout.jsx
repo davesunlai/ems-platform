@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
+import { PAGE_BY_PATH } from "../uiCatalog";
 import { api } from "../api";
 import Tour, { tourSeen } from "./Tour";
 import { hasLocalTheme, applyGlobalTheme } from "../theme";
@@ -109,7 +110,8 @@ function useVersion() {
 
 export default function Layout() {
   const ver = useVersion();
-  const { user, logout, has } = useAuth();
+  const { user, logout, has, vis } = useAuth();
+  const location = useLocation();
   const [tour, setTour] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => { if (!tourSeen()) setTour(true); }, []);
@@ -128,19 +130,19 @@ export default function Layout() {
           <span className="hide-sm" title="verze platformy">{ver}</span>
         </NavLink>
         <nav className={`nav ${menuOpen ? "open" : ""}`} onClick={close}>
-          <NavLink to="/" end>Dashboard</NavLink>
-          {has("control") && <NavLink to="/control">Řízení</NavLink>}
-          <NavLink to="/heatpump">🌀 TČ</NavLink>
-          <NavLink to="/emsboxes">📦 EMSBOXy</NavLink>
-          {has("admin") && <NavLink to="/automation">SPOT</NavLink>}
-          {has("admin") && <NavLink to="/ewelink">eWeLink</NavLink>}
-          {has("admin") && <NavLink to="/localities">Lokality</NavLink>}
-          {has("admin") && <NavLink to="/modules">Moduly</NavLink>}
-          {has("admin") && <NavLink to="/users">Uživatelé</NavLink>}
+          {vis("page:dashboard") && <NavLink to="/" end>Dashboard</NavLink>}
+          {has("control") && vis("page:control") && <NavLink to="/control">Řízení</NavLink>}
+          {vis("page:heatpump") && <NavLink to="/heatpump">🌀 TČ</NavLink>}
+          {vis("page:emsboxes") && <NavLink to="/emsboxes">📦 EMSBOXy</NavLink>}
+          {has("admin") && vis("page:automation") && <NavLink to="/automation">SPOT</NavLink>}
+          {has("admin") && vis("page:ewelink") && <NavLink to="/ewelink">eWeLink</NavLink>}
+          {has("admin") && vis("page:localities") && <NavLink to="/localities">Lokality</NavLink>}
+          {has("admin") && vis("page:modules") && <NavLink to="/modules">Moduly</NavLink>}
+          {has("admin") && vis("page:users") && <NavLink to="/users">Uživatelé</NavLink>}
           <div className="nav-account mobile-only">
             <div className="nav-id">{user?.username} · {user?.role}</div>
             <button className="navbtn" onClick={() => setTour(true)}>Průvodce</button>
-            <NavLink to="/vzhled">Vzhled</NavLink>
+            {vis("page:vzhled") && <NavLink to="/vzhled">Vzhled</NavLink>}
             <NavLink to="/change-password">Změnit heslo</NavLink>
             <button className="navbtn" onClick={logout}>Odhlásit</button>
           </div>
@@ -152,7 +154,7 @@ export default function Layout() {
           <span className="hide-sm">{user?.username}</span>
           <span className="role hide-sm">{user?.role}</span>
           <button className="btn desktop-only" onClick={() => setTour(true)} title="Průvodce systémem">Průvodce</button>
-          <NavLink to="/vzhled" className="btn desktop-only">Vzhled</NavLink>
+          {vis("page:vzhled") && <NavLink to="/vzhled" className="btn desktop-only">Vzhled</NavLink>}
           <NavLink to="/change-password" className="btn desktop-only">Změnit heslo</NavLink>
           <button className="btn desktop-only" onClick={logout}>Odhlásit</button>
           <button className="menu-toggle" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
@@ -160,7 +162,9 @@ export default function Layout() {
           </button>
         </div>
       </header>
-      <Outlet />
+      {(() => { const pk = PAGE_BY_PATH[location.pathname]; return pk && !vis(pk)
+          ? <main><div className="panel"><p className="muted">Tato stránka není pro tvou roli dostupná.</p></div></main>
+          : <Outlet />; })()}
       <Tour open={tour} onClose={() => setTour(false)} />
     </>
   );
