@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
+import { useAuth } from "../auth";
 import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
 import ForecastChart from "../components/ForecastChart";
