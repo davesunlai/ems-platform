@@ -156,7 +156,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* Hamburger nastupuje už od 1180 px: menu má ~11 položek + účet a v užším okně přetékalo doprava
    (nešlo se k němu dostat). Pod 820 px navíc mizí i drobné informační prvky. */
-@media (max-width: 1180px) {
+@media (max-width: 900px) {
   .desktop-only { display: none !important; }
   .menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
   .mobile-only { display: block; }
@@ -257,3 +257,31 @@ body {
 }
 /* pojistka: topbar nikdy nepřeteče viewport, obsah se schová za hamburger */
 .topbar { overflow: hidden; }
+
+/* ===== menu se sekcemi (v0.88.8) ===== */
+.navgrp { position: relative; }
+.navgrp-btn { background: transparent; border: 0; color: var(--muted); font: inherit; font-size: 14px;
+  padding: 6px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.navgrp-btn:hover, .navgrp.open > .navgrp-btn, .navgrp.active > .navgrp-btn { color: var(--fg); background: var(--panel); }
+.navgrp-caret { font-size: 10px; opacity: .6; margin-left: 2px; }
+.navgrp-items { display: none; }
+@media (min-width: 901px) {
+  .navgrp-items { position: absolute; top: 100%; left: 0; min-width: 230px; z-index: 50; padding: 6px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35); flex-direction: column; gap: 2px; }
+  .navgrp-items.right { left: auto; right: 0; }
+  .navgrp.open > .navgrp-items { display: flex; }
+  .navgrp-items a, .navgrp-items .navbtn { display: block; padding: 7px 10px; border-radius: 7px; color: var(--fg);
+    text-decoration: none; white-space: nowrap; background: transparent; border: 0; font: inherit; text-align: left; cursor: pointer; }
+  .navgrp-items a:hover, .navgrp-items .navbtn:hover { background: var(--panel-2, rgba(255,255,255,.06)); }
+  .navgrp-items a.active { background: var(--panel-2, rgba(255,255,255,.08)); font-weight: 600; }
+  .navgrp-items .nav-id { font-size: 12px; color: var(--muted); padding: 4px 10px 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .nav { display: flex; gap: 2px; min-width: 0; }
+  .userbox { flex-shrink: 0; }
+}
+@media (max-width: 900px) {
+  .navgrp-hdr { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 10px 12px 4px; }
+  .navgrp-items { display: flex; flex-direction: column; }
+  .navgrp-items a { padding-left: 22px; }
+}
+.topbar { overflow: visible; }   /* dropdowny musí vyjet ven z lišty */

@@ -100,6 +100,27 @@ function SpotChip() {
   </span>;
 }
 
+// Struktura menu (sekce → položky). perm = potřebné oprávnění, vk = klíč viditelnosti role.
+const NAV_GROUPS = [
+  { label: "Přehled", icon: "📊", items: [
+    { to: "/", end: true, label: "Dashboard", vk: "page:dashboard" },
+    { to: "/heatpump", label: "🌀 Tepelné čerpadlo", vk: "page:heatpump" },
+  ]},
+  { label: "Řízení", icon: "🎛", items: [
+    { to: "/control", label: "Řízení (plánovač, časový plán, spotřebiče)", perm: "control", vk: "page:control" },
+    { to: "/automation", label: "SPOT pravidla", perm: "admin", vk: "page:automation" },
+    { to: "/ewelink", label: "eWeLink spínače", perm: "admin", vk: "page:ewelink" },
+  ]},
+  { label: "Zařízení", icon: "🔌", items: [
+    { to: "/emsboxes", label: "📦 EMSBOXy (fleet)", vk: "page:emsboxes" },
+    { to: "/modules", label: "Moduly", perm: "admin", vk: "page:modules" },
+    { to: "/localities", label: "Lokality", perm: "admin", vk: "page:localities" },
+  ]},
+  { label: "Správa", icon: "⚙️", items: [
+    { to: "/users", label: "Uživatelé a role", perm: "admin", vk: "page:users" },
+  ]},
+];
+
 function useVersion() {
   const [v, setV] = useState("");
   useEffect(() => {
@@ -114,12 +135,14 @@ export default function Layout() {
   const location = useLocation();
   const [tour, setTour] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [grpOpen, setGrpOpen] = useState(null);
+  useEffect(() => { setGrpOpen(null); setMenuOpen(false); }, [location.pathname]);
   useEffect(() => { if (!tourSeen()) setTour(true); }, []);
   // Uživatel bez vlastního vzhledu zdědí globální (nastavený adminem).
   useEffect(() => {
     if (!hasLocalTheme()) api.getGlobalTheme().then(applyGlobalTheme).catch(() => {});
   }, []);
-  const close = () => setMenuOpen(false);
+  const close = () => { setMenuOpen(false); setGrpOpen(null); };
   return (
     <>
       <header className="topbar">
@@ -129,21 +152,29 @@ export default function Layout() {
           <b>TERA EMS</b>
           <span className="hide-sm" title="verze platformy">{ver}</span>
         </NavLink>
-        <nav className={`nav ${menuOpen ? "open" : ""}`} onClick={close}>
-          {vis("page:dashboard") && <NavLink to="/" end>Dashboard</NavLink>}
-          {has("control") && vis("page:control") && <NavLink to="/control">Řízení</NavLink>}
-          {vis("page:heatpump") && <NavLink to="/heatpump">🌀 TČ</NavLink>}
-          {vis("page:emsboxes") && <NavLink to="/emsboxes">📦 EMSBOXy</NavLink>}
-          {has("admin") && vis("page:automation") && <NavLink to="/automation">SPOT</NavLink>}
-          {has("admin") && vis("page:ewelink") && <NavLink to="/ewelink">eWeLink</NavLink>}
-          {has("admin") && vis("page:localities") && <NavLink to="/localities">Lokality</NavLink>}
-          {has("admin") && vis("page:modules") && <NavLink to="/modules">Moduly</NavLink>}
-          {has("admin") && vis("page:users") && <NavLink to="/users">Uživatelé</NavLink>}
+        <nav className={`nav ${menuOpen ? "open" : ""}`}>
+          {/* desktop: sekce s rozbalením · mobil/úzké okno: plochý seznam s nadpisy sekcí */}
+          {NAV_GROUPS.map((g) => {
+            const items = g.items.filter((it) => (!it.perm || has(it.perm)) && (!it.vk || vis(it.vk)));
+            if (!items.length) return null;
+            const activeIn = items.some((it) => (it.end ? location.pathname === it.to : location.pathname.startsWith(it.to)));
+            return (
+              <div key={g.label} className={`navgrp ${grpOpen === g.label ? "open" : ""} ${activeIn ? "active" : ""}`}
+                   onMouseEnter={() => setGrpOpen(g.label)} onMouseLeave={() => setGrpOpen(null)}>
+                <button className="navgrp-btn desktop-only" onClick={() => setGrpOpen(grpOpen === g.label ? null : g.label)}>
+                  {g.icon} {g.label} <span className="navgrp-caret">▾</span>
+                </button>
+                <div className="navgrp-hdr mobile-only">{g.icon} {g.label}</div>
+                <div className="navgrp-items">
+                  {items.map((it) => <NavLink key={it.to} to={it.to} end={it.end} onClick={close}>{it.label}</NavLink>)}
+                </div>
+              </div>);
+          })}
           <div className="nav-account mobile-only">
             <div className="nav-id">{user?.username} · {user?.role}</div>
-            <button className="navbtn" onClick={() => setTour(true)}>Průvodce</button>
-            {vis("page:vzhled") && <NavLink to="/vzhled">Vzhled</NavLink>}
-            <NavLink to="/change-password">Změnit heslo</NavLink>
+            <button className="navbtn" onClick={() => { close(); setTour(true); }}>Průvodce</button>
+            {vis("page:vzhled") && <NavLink to="/vzhled" onClick={close}>Vzhled</NavLink>}
+            <NavLink to="/change-password" onClick={close}>Změnit heslo</NavLink>
             <button className="navbtn" onClick={logout}>Odhlásit</button>
           </div>
         </nav>
@@ -151,12 +182,19 @@ export default function Layout() {
         <div className="userbox">
           <AlertsBell />
           <SpotChip />
-          <span className="hide-sm">{user?.username}</span>
-          <span className="role hide-sm">{user?.role}</span>
-          <button className="btn desktop-only" onClick={() => setTour(true)} title="Průvodce systémem">Průvodce</button>
-          {vis("page:vzhled") && <NavLink to="/vzhled" className="btn desktop-only">Vzhled</NavLink>}
-          <NavLink to="/change-password" className="btn desktop-only">Změnit heslo</NavLink>
-          <button className="btn desktop-only" onClick={logout}>Odhlásit</button>
+          <div className={`navgrp ${grpOpen === "účet" ? "open" : ""} desktop-only`}
+               onMouseEnter={() => setGrpOpen("účet")} onMouseLeave={() => setGrpOpen(null)}>
+            <button className="navgrp-btn" onClick={() => setGrpOpen(grpOpen === "účet" ? null : "účet")}>
+              👤 {user?.username} <span className="navgrp-caret">▾</span>
+            </button>
+            <div className="navgrp-items right">
+              <div className="nav-id">{user?.username} · {user?.role}</div>
+              <button className="navbtn" onClick={() => { setGrpOpen(null); setTour(true); }}>Průvodce</button>
+              {vis("page:vzhled") && <NavLink to="/vzhled" onClick={close}>Vzhled</NavLink>}
+              <NavLink to="/change-password" onClick={close}>Změnit heslo</NavLink>
+              <button className="navbtn" onClick={logout}>Odhlásit</button>
+            </div>
+          </div>
           <button className="menu-toggle" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
             {menuOpen ? "✕" : "☰"}
           </button>
