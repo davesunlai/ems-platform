@@ -154,9 +154,10 @@ td .role { font-family: var(--mono); font-size: 12px; }
 .mobile-only { display: none; }
 html, body { max-width: 100%; overflow-x: hidden; }
 
-@media (max-width: 820px) {
+/* Hamburger nastupuje už od 1180 px: menu má ~11 položek + účet a v užším okně přetékalo doprava
+   (nešlo se k němu dostat). Pod 820 px navíc mizí i drobné informační prvky. */
+@media (max-width: 1180px) {
   .desktop-only { display: none !important; }
-  .hide-sm { display: none !important; }
   .menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
   .mobile-only { display: block; }
 
@@ -250,3 +251,9 @@ body {
 .ctl-sect { background: var(--panel-2, rgba(127,127,127,.06)); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
 .ctl-sect > .ctl-h { font-weight: 700; font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; letter-spacing: .2px; }
 .ctl-sect .ctl-sub { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+
+@media (max-width: 820px) {
+  .hide-sm { display: none !important; }
+}
+/* pojistka: topbar nikdy nepřeteče viewport, obsah se schová za hamburger */
+.topbar { overflow: hidden; }

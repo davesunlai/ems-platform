@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.88.7 — responzivní menu: hamburger ☰ nastupuje už od šířky 1180 px (dřív 820 px) — menu s ~11 položkami + účtem v užším okně přetékalo doprava mimo dosah. Drobné info prvky (verze, spot, jméno) mizí až pod 820 px. Topbar má overflow: hidden jako pojistku. Jen web.
+
 ## v0.88.6 — stavové pruhy řízení (vynucené nabíjení, ohřev spirálou…) NAD schéma, hned pod nadpis lokality (vždy viditelné). Jen web.
 
 ## v0.88.5 — ikonky: explicitní uložení místo auto-save. Kliknutí = neuložený výběr (indikátor „● neuložený výběr"); dvě tlačítka s jasným textem: „💾 nastavit vybrané ikonky jako výchozí pro tento účet" (každý uživatel, per účet, všechna zařízení) a „💾 nastavit vybrané ikonky jako výchozí pro všechny" (jen admin, s potvrzením; zároveň smaže vlastní osobní odchylku, aby se sady nerozešly); „↩ výchozí" zahodí osobní volbu i rozpracovaný výběr. Jen web.
