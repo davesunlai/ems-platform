@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.88.4 — tlačítko NABÍT transparentněji: hlavní tlačítko už nenese předvyplněné hodnoty („na 100 % (20 kW)" působilo jako hotový příkaz) — říká „⚡ NABÍT BATERII ze sítě… (zvolíš cíl % a výkon)"; rozbalený panel má úvodní větu (nabíjení začne až po potvrzení, samo skončí při cíli), popisky „Cíl" / „Výkon" a potvrzovací tlačítko nese konkrétní volbu: „✅ Nabít na 60 % výkonem 12 kW". Jen web.
+
 ## v0.88.3 — 🧠 pokročilé: doplněno pole „Max nabíjení (kW)" (max_charge_kw) vedle „Max vybíjení" — dosud jen v žebříčku, pro uživatele neviditelné; přitom řídí velikost bloků nabíjení plánovače i výkon tlačítka NABÍT. Jen web.
 
 ## v0.88.2 — dashboard: stavové pruhy řízení (Vynucené nabíjení…) přesunuty MEZI schéma a souhrn lokality a jsou VŽDY vidět — i při sbalené lokalitě (dřív uvnitř sbalovacího bloku). Tlačítko NABÍT: druhý posuvník „Výkon 10–100 % z maxima" + editbox, přepočet na kW (z max_charge_kw), výkon v popisku tlačítka, v potvrzení i v žlutém stavu „NABÍJÍM na X % · Y kW · teď Z %". Jen web.

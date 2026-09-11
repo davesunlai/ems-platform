@@ -540,12 +540,16 @@ function ForceChargeBtn({ deviceIds, soc, maxKw }) {
           </button>
         : !open
           ? <button className="btn" onClick={() => setOpen(true)}
+                    title="Otevře volbu cílového nabití a výkonu — nic se neodešle bez potvrzení"
                     style={{ background: "#3fb950", color: "#000", fontWeight: 800, padding: "8px 14px", fontSize: 14, borderRadius: 10 }}>
-              ⚡ NABÍT BATERII na {target} % ({kwSel} kW)
+              ⚡ NABÍT BATERII ze sítě… <span style={{ fontWeight: 400, fontSize: 12 }}>(zvolíš cíl % a výkon)</span>
             </button>
           : <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 10px",
                           border: "2px solid #3fb950", borderRadius: 10 }}>
-              <b>Nabít ze sítě na</b>
+              <div style={{ flexBasis: "100%", fontSize: 12.5 }} className="muted">
+                Nastav <b>cílové nabití</b> a <b>výkon</b>; nabíjení začne až po potvrzení a samo skončí při dosažení cíle.
+              </div>
+              <b>Cíl</b>
               <input type="range" min="5" max="100" step="5" value={target} onChange={(e) => setTarget(Number(e.target.value))} style={{ width: 150 }} />
               <input type="number" min="5" max="100" value={target} onChange={(e) => setTarget(Math.max(5, Math.min(100, Number(e.target.value) || 5)))} style={{ width: 62 }} /> %
               <span className="muted" style={{ fontSize: 12 }}>(teď {soc != null ? Math.round(soc) : "?"} %)</span>
@@ -555,7 +559,9 @@ function ForceChargeBtn({ deviceIds, soc, maxKw }) {
               <input type="number" min="10" max="100" value={pct} onChange={(e) => setPct(Math.max(10, Math.min(100, Number(e.target.value) || 10)))} style={{ width: 62 }} /> %
               <span className="muted" style={{ fontSize: 12 }}>z maxima {maxK} kW = <b>{kwSel} kW</b></span>
               <button className="btn" disabled={busy || (soc != null && target <= soc)} onClick={go}
-                      style={{ background: "#3fb950", color: "#000", fontWeight: 800 }}>✅ Potvrdit</button>
+                      style={{ background: "#3fb950", color: "#000", fontWeight: 800 }}>
+                ✅ Nabít na {target} % výkonem {kwSel} kW
+              </button>
               <button className="btn" onClick={() => setOpen(false)}>zrušit</button>
             </div>}
       {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
