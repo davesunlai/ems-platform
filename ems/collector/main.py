@@ -266,6 +266,7 @@ async def run() -> None:
             await tick_alerts()
             await tick_force_keepalive(state)
             await tick_inverter_state(state)
+            await tick_soc_targets(state)
             await tick_notify(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
@@ -587,6 +588,53 @@ async def _self_heal_igfol(dev: str, state: dict, now: float) -> None:
         logger.warning("IGFOL-F samoléčba: %s stop→%s (výkon %s)", dev, last["action"], fp.get("power"))
     except Exception as exc:
         logger.debug("_self_heal_igfol: %s", exc)
+
+
+async def tick_soc_targets(state: dict) -> None:
+    """⚡ Cílové SoC ručního force (params.target_soc): nabíjení se zastaví při dosažení cíle
+    (vybíjení při poklesu pod cíl). Stop se zařadí jednou (guard v state)."""
+    try:
+        from ems.planner.service import list_devices as _list_devices
+        devs = [d["device_id"] for d in await _list_devices() if d.get("adapter") == "solis"]
+        if not devs:
+            return
+        states = await control_db.get_states(devs)
+        done = state.setdefault("soc_target_done", {})
+        for dev, st in states.items():
+            act = st.get("action")
+            p = st.get("params") or {}
+            if isinstance(p, str):
+                import json as _json
+                try:
+                    p = _json.loads(p)
+                except Exception:
+                    p = {}
+            tgt = p.get("target_soc")
+            if act not in ("force_charge", "force_discharge") or tgt is None:
+                done.pop(dev, None)
+                continue
+            key = f"{act}:{tgt}:{st.get('since')}"
+            if done.get(dev) == key:
+                continue
+            soc = await planner_service._soc_now([dev])
+            if soc is None:
+                continue
+            reached = (act == "force_charge" and soc >= float(tgt)) or (act == "force_discharge" and soc <= float(tgt))
+            if reached:
+                await control_db.enqueue(dev, "stop",
+                    {"source": "target", "reason": f"cíl SoC {tgt} % dosažen ({soc:.0f} %)"}, username="cíl-soc")
+                done[dev] = key
+                logger.info("SoC cíl: %s %s → stop (SoC %.0f %% / cíl %s %%)", dev, act, soc, tgt)
+                try:
+                    from ems.alerts import db as alerts_db
+                    lid = next((d.get("locality_id") for d in await _list_devices() if d["device_id"] == dev), None)
+                    if lid:
+                        await alerts_db.record_event(lid, "control", f"Baterie nabita na cíl {tgt} % – {dev}",
+                                                     f"ruční nucené nabíjení ukončeno (SoC {soc:.0f} %)")
+                except Exception:
+                    pass
+    except Exception as exc:
+        logger.debug("tick_soc_targets: %s", exc)
 
 
 async def tick_inverter_state(state: dict) -> None:

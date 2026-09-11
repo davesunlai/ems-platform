@@ -261,6 +261,9 @@ def _validate_command(action: str, params: dict) -> None:
         p = params.get("power")
         if p is not None and (not isinstance(p, int) or not (0 <= p <= 65535)):
             raise HTTPException(status_code=400, detail="power musí být celé číslo 0–65535 (syrová hodnota registru)")
+        t = params.get("target_soc")
+        if t is not None and (not isinstance(t, int) or not (5 <= t <= 100)):
+            raise HTTPException(status_code=400, detail="target_soc musí být celé číslo 5–100 (%)")
     if action == "set_work_mode" and not isinstance(params.get("word"), int):
         raise HTTPException(status_code=400, detail="set_work_mode vyžaduje celé číslo 'word'")
     if action in ("set_charge_current", "set_discharge_current"):

@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.87.1", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.88.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -213,6 +213,12 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
             try:
                 from ems.forecast import db as forecast_db
                 out["cloud_days"] = await forecast_db.cloud_days(loc)   # [{day, cloud_pct}] dnes, zítra
+            except Exception:
+                pass
+            try:
+                from ems.planner import db as planner_db
+                cfg = await planner_db.get_config(loc)
+                out["max_charge_kw"] = float((cfg or {}).get("max_charge_kw") or 10)
             except Exception:
                 pass
     return out

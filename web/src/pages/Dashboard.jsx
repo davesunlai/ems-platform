@@ -493,6 +493,63 @@ function cloudOverlay(cd, ic) {
   return { sun: ic.sun, cloud: ic.cloud, frac: p == null ? 0 : Math.max(0, Math.min(1, p / 100)) };
 }
 
+// ⚡ Nucené nabíjení baterie na cílové % — výrazné tlačítko ve schématu (jen s právem control)
+function ForceChargeBtn({ deviceIds, soc, maxKw }) {
+  const { has, vis } = useAuth();
+  const [target, setTarget] = useState(100);
+  const [open, setOpen] = useState(false);
+  const [st, setSt] = useState(null);      // control_state hlavního modulu
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const dev = (deviceIds || [])[0];
+  const refresh = () => { if (!dev) return; api.controlStates(dev).then((r) => setSt((r?.states || {})[dev] || null)).catch(() => {}); };
+  useEffect(() => { refresh(); const t = setInterval(refresh, 10000); return () => clearInterval(t); }, [dev]);
+  if (!dev || !has("control") || !vis("dash:forcecharge")) return null;
+  const active = st && st.action === "force_charge" && st.params?.target_soc != null;
+  const go = async () => {
+    const kw = Math.max(1, Math.min(50, Number(maxKw) || 10));
+    if (!window.confirm(`Nabít baterii ze sítě na ${target} %?\n\nVýkon ${kw} kW, aktuálně ${soc != null ? Math.round(soc) : "?"} %. ` +
+        "Po dosažení cíle se nabíjení samo zastaví. Plánovač a časový plán mezitím baterii neřídí.")) return;
+    setBusy(true); setMsg("");
+    try { await api.enqueueCommand(dev, "force_charge", { power: Math.round(kw * 100), target_soc: Number(target), source: "manual", reason: `nabít na ${target} %` });
+          setMsg("odesláno…"); setTimeout(refresh, 4000); setOpen(false); }
+    catch (e) { setMsg("Chyba: " + e.message); }
+    setBusy(false);
+  };
+  const stop = async () => {
+    if (!window.confirm("Zastavit nucené nabíjení?")) return;
+    setBusy(true);
+    try { await api.enqueueCommand(dev, "stop", { source: "manual", reason: "ruční zastavení" }); setTimeout(refresh, 4000); }
+    catch (e) { setMsg("Chyba: " + e.message); }
+    setBusy(false);
+  };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "4px 0 6px" }}>
+      {active
+        ? <button className="btn" disabled={busy} onClick={stop}
+                  style={{ background: "#d29922", color: "#000", fontWeight: 800, padding: "8px 14px", fontSize: 14, borderRadius: 10 }}>
+            ⚡ NABÍJÍM na {st.params.target_soc} % {soc != null ? `· teď ${Math.round(soc)} %` : ""} — ⏹ zastavit
+          </button>
+        : !open
+          ? <button className="btn" onClick={() => setOpen(true)}
+                    style={{ background: "#3fb950", color: "#000", fontWeight: 800, padding: "8px 14px", fontSize: 14, borderRadius: 10 }}>
+              ⚡ NABÍT BATERII na {target} %
+            </button>
+          : <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 10px",
+                          border: "2px solid #3fb950", borderRadius: 10 }}>
+              <b>Nabít ze sítě na</b>
+              <input type="range" min="5" max="100" step="5" value={target} onChange={(e) => setTarget(Number(e.target.value))} style={{ width: 150 }} />
+              <input type="number" min="5" max="100" value={target} onChange={(e) => setTarget(Math.max(5, Math.min(100, Number(e.target.value) || 5)))} style={{ width: 62 }} /> %
+              <span className="muted" style={{ fontSize: 12 }}>(teď {soc != null ? Math.round(soc) : "?"} %, výkon {Math.max(1, Math.min(50, Number(maxKw) || 10))} kW)</span>
+              <button className="btn" disabled={busy || (soc != null && target <= soc)} onClick={go}
+                      style={{ background: "#3fb950", color: "#000", fontWeight: 800 }}>✅ Potvrdit</button>
+              <button className="btn" onClick={() => setOpen(false)}>zrušit</button>
+            </div>}
+      {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+    </div>
+  );
+}
+
 function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [ic, pickIcon, icExtra] = useFlowIcons();
   const [icOpen, setIcOpen] = useState(false);
@@ -563,6 +620,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
           </div>
         )}
         {icOpen && <FlowIconPicker ic={ic} pick={pickIcon} extra={icExtra} onClose={() => setIcOpen(false)} />}
+        {d && <ForceChargeBtn deviceIds={deviceIds} soc={d.soc} maxKw={d.max_charge_kw} />}
         {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
           <svg viewBox="0 0 400 700" style={{ width: "100%", marginTop: 8 }}>
             <defs>

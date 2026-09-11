@@ -4,6 +4,7 @@ export const UI_CATALOG = [
   { page: "page:dashboard", label: "Dashboard", path: "/", items: [
     { key: "dash:stats", label: "Souhrnné karty (spotřeba, FVE, baterie, síť, TČ)" },
     { key: "dash:flow", label: "⚡ Schéma energetického toku" },
+    { key: "dash:forcecharge", label: "⚡ Tlačítko NABÍT BATERII (ruční nabíjení na %) ve schématu" },
     { key: "dash:banners", label: "Pruhy vynuceného řízení" },
     { key: "dash:chart", label: "Graf výkonů" },
     { key: "dash:forecast", label: "🔮 Graf predikce" },
