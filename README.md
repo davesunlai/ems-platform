@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.88.9 — schéma: FVE i Dům ukazují „aktuální výkon / dnešní energie" — FVE „1,5 kW / 28,3 kWh" (today_kwh = energy_today měniče), Dům „4,3 kW / 29,4 kWh" (cons_today_kwh); podtitulek domu „výkon / dnes celkem", FVE si ponechává plán dnes/zítra. Jen web.
+
 ## v0.88.8 — menu rozdělené do sekcí + nikdy mimo plochu. Desktop: 4 krátké sekce s rozbalením (hover i klik): 📊 Přehled (Dashboard, 🌀 Tepelné čerpadlo) · 🎛 Řízení (Řízení, SPOT pravidla, eWeLink spínače) · 🔌 Zařízení (EMSBOXy, Moduly, Lokality) · ⚙️ Správa (Uživatelé a role); vpravo 👤 účet (Průvodce, Vzhled, Změnit heslo, Odhlásit). Lišta má díky tomu ~5 krátkých tlačítek a vejde se do každého desktopového okna; hamburger ☰ od 900 px níže ukazuje plochý seznam s nadpisy sekcí. Aktivní sekce zvýrazněná, dropdown se zavře po navigaci. Položky respektují oprávnění i viditelnost rolí (NAV_GROUPS v Layout.jsx = jedno místo pro úpravy menu). Jen web.
 
 ## v0.88.7 — responzivní menu: hamburger ☰ nastupuje už od šířky 1180 px (dřív 820 px) — menu s ~11 položkami + účtem v užším okně přetékalo doprava mimo dosah. Drobné info prvky (verze, spot, jméno) mizí až pod 820 px. Topbar má overflow: hidden jako pojistku. Jen web.

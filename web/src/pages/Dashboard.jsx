@@ -681,15 +681,15 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={i === 0 ? 92 : 312} ly={470} />
             ))}
-            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} value={f1(pvKw)}
+            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} value={`${f1(pvKw)} / ${(d.today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
             <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce"
                       value={gridW >= 0 ? `${f1(kw(gridW))}` : `${f1(kw(gridW))}`}
                       sub={gridW >= 0 ? "odběr" : "dodávka"}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" value={f1(kw(d.load_w))}
-                      sub={`dnes ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} accent="var(--amber, #d29922)" />
+            <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
+                      sub="výkon / dnes celkem" accent="var(--amber, #d29922)" />
             {/* baterie — velký box s pod-boxy (mobil) */}
             <g>
               <rect x={10} y={354} width={230} height={176} rx="14" fill="var(--bg)" stroke="#a371f7" strokeWidth="2" />
@@ -762,13 +762,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={505} ly={330 + i * 55} />
             ))}
-            <FlowNode x={65} y={55} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} value={f1(pvKw)}
+            <FlowNode x={65} y={55} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} value={`${f1(pvKw)} / ${(d.today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
             <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode x={295} y={188} w={170} icon={ic.home} title="Dům" value={f1(kw(d.load_w))}
-                      sub={`dnes ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} accent="var(--amber, #d29922)" />
+            <FlowNode x={295} y={188} w={170} icon={ic.home} title="Dům" value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
+                      sub="výkon / dnes celkem" accent="var(--amber, #d29922)" />
             <g>
               <rect x={45} y={330} width={200} height={124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
               {ic.bat.startsWith("/")
