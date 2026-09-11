@@ -502,6 +502,7 @@ function cloudOverlay(cd, ic) {
 function ForceChargeBtn({ deviceIds, soc, maxKw }) {
   const { has, vis } = useAuth();
   const [target, setTarget] = useState(100);
+  const [pct, setPct] = useState(100);     // výkon v % z maxima
   const [open, setOpen] = useState(false);
   const [st, setSt] = useState(null);      // control_state hlavního modulu
   const [busy, setBusy] = useState(false);
@@ -511,9 +512,11 @@ function ForceChargeBtn({ deviceIds, soc, maxKw }) {
   useEffect(() => { refresh(); const t = setInterval(refresh, 10000); return () => clearInterval(t); }, [dev]);
   if (!dev || !has("control") || !vis("dash:forcecharge")) return null;
   const active = st && st.action === "force_charge" && st.params?.target_soc != null;
+  const maxK = Math.max(1, Math.min(50, Number(maxKw) || 10));
+  const kwSel = Math.max(0.5, Math.round(maxK * pct / 100 * 10) / 10);
   const go = async () => {
-    const kw = Math.max(1, Math.min(50, Number(maxKw) || 10));
-    if (!window.confirm(`Nabít baterii ze sítě na ${target} %?\n\nVýkon ${kw} kW, aktuálně ${soc != null ? Math.round(soc) : "?"} %. ` +
+    const kw = kwSel;
+    if (!window.confirm(`Nabít baterii ze sítě na ${target} %?\n\nVýkon ${kw} kW (${pct} % z ${maxK} kW), aktuálně ${soc != null ? Math.round(soc) : "?"} %. ` +
         "Po dosažení cíle se nabíjení samo zastaví. Plánovač a časový plán mezitím baterii neřídí.")) return;
     setBusy(true); setMsg("");
     try { await api.enqueueCommand(dev, "force_charge", { power: Math.round(kw * 100), target_soc: Number(target), source: "manual", reason: `nabít na ${target} %` });
@@ -533,19 +536,24 @@ function ForceChargeBtn({ deviceIds, soc, maxKw }) {
       {active
         ? <button className="btn" disabled={busy} onClick={stop}
                   style={{ background: "#d29922", color: "#000", fontWeight: 800, padding: "8px 14px", fontSize: 14, borderRadius: 10 }}>
-            ⚡ NABÍJÍM na {st.params.target_soc} % {soc != null ? `· teď ${Math.round(soc)} %` : ""} — ⏹ zastavit
+            ⚡ NABÍJÍM na {st.params.target_soc} % {st.params.power ? `· ${(st.params.power / 100).toFixed(1)} kW` : ""}{soc != null ? ` · teď ${Math.round(soc)} %` : ""} — ⏹ zastavit
           </button>
         : !open
           ? <button className="btn" onClick={() => setOpen(true)}
                     style={{ background: "#3fb950", color: "#000", fontWeight: 800, padding: "8px 14px", fontSize: 14, borderRadius: 10 }}>
-              ⚡ NABÍT BATERII na {target} %
+              ⚡ NABÍT BATERII na {target} % ({kwSel} kW)
             </button>
           : <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 10px",
                           border: "2px solid #3fb950", borderRadius: 10 }}>
               <b>Nabít ze sítě na</b>
               <input type="range" min="5" max="100" step="5" value={target} onChange={(e) => setTarget(Number(e.target.value))} style={{ width: 150 }} />
               <input type="number" min="5" max="100" value={target} onChange={(e) => setTarget(Math.max(5, Math.min(100, Number(e.target.value) || 5)))} style={{ width: 62 }} /> %
-              <span className="muted" style={{ fontSize: 12 }}>(teď {soc != null ? Math.round(soc) : "?"} %, výkon {Math.max(1, Math.min(50, Number(maxKw) || 10))} kW)</span>
+              <span className="muted" style={{ fontSize: 12 }}>(teď {soc != null ? Math.round(soc) : "?"} %)</span>
+              <span style={{ flexBasis: "100%" }} />
+              <b>Výkon</b>
+              <input type="range" min="10" max="100" step="5" value={pct} onChange={(e) => setPct(Number(e.target.value))} style={{ width: 150 }} />
+              <input type="number" min="10" max="100" value={pct} onChange={(e) => setPct(Math.max(10, Math.min(100, Number(e.target.value) || 10)))} style={{ width: 62 }} /> %
+              <span className="muted" style={{ fontSize: 12 }}>z maxima {maxK} kW = <b>{kwSel} kW</b></span>
               <button className="btn" disabled={busy || (soc != null && target <= soc)} onClick={go}
                       style={{ background: "#3fb950", color: "#000", fontWeight: 800 }}>✅ Potvrdit</button>
               <button className="btn" onClick={() => setOpen(false)}>zrušit</button>
@@ -966,9 +974,9 @@ function LocalitySection({ name, devs, open, onToggle }) {
       </h2>
       {vis("dash:flow") && flow && locId && !pinned && <EnergyFlow locId={locId} deviceIds={ids} name={name} onClose={() => setFlow(false)} />}
       {vis("dash:flow") && pinned && locId && <EnergyFlow inline locId={locId} deviceIds={ids} name={name} onClose={() => {}} />}
+      {vis("dash:banners") && <ControlBanners deviceIds={ids} localityId={locId} />}
       {vis("dash:stats") && <LocalityNow deviceIds={ids} localityId={locId} />}
       {open && (<>
-        {vis("dash:banners") && <ControlBanners deviceIds={ids} localityId={locId} />}
         {vis("dash:chart") && <LocalityChart deviceIds={ids} />}
         {locId && (
           <div className="card" style={{ marginTop: 14 }}>
