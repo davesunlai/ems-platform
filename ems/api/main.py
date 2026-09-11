@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.88.0", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.88.1", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -117,6 +117,41 @@ async def set_ui_default(key: str, body: dict, user: dict = Depends(require_perm
                            "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()",
                            key, _json.dumps(body))
     return {"key": key, "value": body, "by": user.get("username")}
+
+
+@app.get("/api/ui-prefs/{key}")
+async def get_ui_pref(key: str, user: dict = Depends(require_permission("read"))):
+    """Osobní UI volby uživatele (např. ikonky schématu) — sledují ho napříč zařízeními."""
+    from ems.api.db import get_pool
+    import json as _json
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("CREATE TABLE IF NOT EXISTS ui_defaults (key TEXT PRIMARY KEY, value JSONB NOT NULL, "
+                           "updated_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+        v = await conn.fetchval("SELECT value FROM ui_defaults WHERE key=$1", f"user:{user['username']}:{key}")
+    return {"key": key, "value": (_json.loads(v) if isinstance(v, str) else v) or {}}
+
+
+@app.put("/api/ui-prefs/{key}")
+async def set_ui_pref(key: str, body: dict, user: dict = Depends(require_permission("read"))):
+    from ems.api.db import get_pool
+    import json as _json
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("CREATE TABLE IF NOT EXISTS ui_defaults (key TEXT PRIMARY KEY, value JSONB NOT NULL, "
+                           "updated_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+        await conn.execute("INSERT INTO ui_defaults (key, value) VALUES ($1, $2::jsonb) "
+                           "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()",
+                           f"user:{user['username']}:{key}", _json.dumps(body))
+    return {"key": key, "value": body}
+
+
+@app.delete("/api/ui-prefs/{key}", status_code=204)
+async def del_ui_pref(key: str, user: dict = Depends(require_permission("read"))):
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM ui_defaults WHERE key=$1", f"user:{user['username']}:{key}")
 
 
 @app.get("/api/version")
@@ -219,6 +254,13 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
                 from ems.planner import db as planner_db
                 cfg = await planner_db.get_config(loc)
                 out["max_charge_kw"] = float((cfg or {}).get("max_charge_kw") or 10)
+            except Exception:
+                pass
+            try:   # který modul je řiditelný střídač (tlačítko NABÍT) — ne první zařízení lokality!
+                from ems.planner.service import list_devices as _ld
+                out["control_module"] = next((d["device_id"] for d in (await _ld())
+                                              if d.get("locality_id") == loc and d.get("adapter") == "solis"
+                                              and (d.get("control_enabled") or [])), None)
             except Exception:
                 pass
     return out

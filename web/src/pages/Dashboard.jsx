@@ -366,14 +366,18 @@ const FLOW_ICON_CHOICES = {
 };
 const FLOW_ICON_DEFAULT = { pv: "/flow-icons/fve.svg", sun: "☀️", grid: "🗼", home: "🏠", hp: "🌀", bat: "🔋", heat: "♨️", cloud: "☁️" };
 const FLOW_ICON_LABEL = { pv: "Znak FVE", sun: "Slunce", cloud: "Mrak (oblačnost)", grid: "Distribuce", home: "Dům", hp: "Tep. čerpadlo", bat: "Baterie", heat: "Topné výstupy" };
-// pořadí: vestavěné → výchozí pro všechny (server, nastaví admin) → osobní volba (prohlížeč)
+// pořadí: vestavěné → výchozí pro všechny (server, nastaví admin) → osobní volba (server, per uživatel,
+// sleduje tě na všech zařízeních; ukládá se automaticky při kliknutí)
 function useFlowIcons() {
   const [srv, setSrv] = useState({});
-  const [mine, setMine] = useState(() => { try { return JSON.parse(localStorage.getItem("ems.flow.icons") || "{}"); } catch { return {}; } });
-  useEffect(() => { api.getUiDefault("flow-icons").then((r) => setSrv(r.value || {})).catch(() => {}); }, []);
+  const [mine, setMine] = useState({});
+  useEffect(() => {
+    api.getUiDefault("flow-icons").then((r) => setSrv(r.value || {})).catch(() => {});
+    api.getUiPref("flow-icons").then((r) => setMine(r.value || {})).catch(() => {});
+  }, []);
   const ic = { ...FLOW_ICON_DEFAULT, ...srv, ...mine };
-  const pick = (k, v) => { const n = { ...mine, [k]: v }; setMine(n); localStorage.setItem("ems.flow.icons", JSON.stringify(n)); };
-  const resetMine = () => { setMine({}); localStorage.removeItem("ems.flow.icons"); };
+  const pick = (k, v) => { const n = { ...mine, [k]: v }; setMine(n); api.setUiPref("flow-icons", n).catch(() => {}); };
+  const resetMine = () => { setMine({}); api.delUiPref("flow-icons").catch(() => {}); };
   const saveAsDefault = async () => { await api.setUiDefault("flow-icons", ic); setSrv(ic); resetMine(); };
   return [ic, pick, { resetMine, saveAsDefault, hasMine: Object.keys(mine).length > 0 }];
 }
@@ -448,6 +452,7 @@ function FlowIconPicker({ ic, pick, onClose, extra }) {
         </span>
       ))}
       <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+        <span className="muted" style={{ fontSize: 11.5, alignSelf: "center" }}>volba se ukládá jen pro tebe (všechna tvá zařízení)</span>
         {extra?.hasMine && <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }} onClick={extra.resetMine}
                                    title="zahodit osobní volbu, použít výchozí pro všechny">↩ výchozí</button>}
         {has("admin") && <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }}
@@ -620,7 +625,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
           </div>
         )}
         {icOpen && <FlowIconPicker ic={ic} pick={pickIcon} extra={icExtra} onClose={() => setIcOpen(false)} />}
-        {d && <ForceChargeBtn deviceIds={deviceIds} soc={d.soc} maxKw={d.max_charge_kw} />}
+        {d && d.control_module && <ForceChargeBtn deviceIds={[d.control_module]} soc={d.soc} maxKw={d.max_charge_kw} />}
         {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
           <svg viewBox="0 0 400 700" style={{ width: "100%", marginTop: 8 }}>
             <defs>

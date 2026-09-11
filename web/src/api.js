@@ -123,6 +123,9 @@ export const api = {
   plannerTimeRules: (id) => request(`/api/planner/${id}/time-rules`),
   plannerTimeRulesCheck: (id) => request(`/api/planner/${id}/time-rules/check`),
   getUiDefault: (key) => request(`/api/ui-defaults/${key}`),
+  getUiPref: (key) => request(`/api/ui-prefs/${key}`),
+  setUiPref: (key, value) => request(`/api/ui-prefs/${key}`, { method: "PUT", body: value }),
+  delUiPref: (key) => request(`/api/ui-prefs/${key}`, { method: "DELETE" }),
   listUiIcons: () => request("/api/ui-icons"),
   deleteUiIcon: (id) => request(`/api/ui-icons/${id}`, { method: "DELETE" }),
   uploadUiIcon: async (element, blob, opts = {}) => {
