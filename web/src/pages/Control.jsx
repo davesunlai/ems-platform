@@ -1077,6 +1077,7 @@ function PlannerPanel({ locId }) {
             Parametry baterie, cen a spirály najdeš v žebříčku „🧭 Jak to chytře řídíme" (klik na řádek). Tady je jen zbytek:
           </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <F cfg={cfg} set={set} k="max_charge_kw" label="Max nabíjení (kW)" />
             <F cfg={cfg} set={set} k="max_discharge_kw" label="Max vybíjení (kW)" />
             <F cfg={cfg} set={set} k="horizon_h" label="Horizont (h)" />
             <div><label style={{ fontSize: 12, display: "block" }}>Sezóna</label>

@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.88.3 — 🧠 pokročilé: doplněno pole „Max nabíjení (kW)" (max_charge_kw) vedle „Max vybíjení" — dosud jen v žebříčku, pro uživatele neviditelné; přitom řídí velikost bloků nabíjení plánovače i výkon tlačítka NABÍT. Jen web.
+
 ## v0.88.2 — dashboard: stavové pruhy řízení (Vynucené nabíjení…) přesunuty MEZI schéma a souhrn lokality a jsou VŽDY vidět — i při sbalené lokalitě (dřív uvnitř sbalovacího bloku). Tlačítko NABÍT: druhý posuvník „Výkon 10–100 % z maxima" + editbox, přepočet na kW (z max_charge_kw), výkon v popisku tlačítka, v potvrzení i v žlutém stavu „NABÍJÍM na X % · Y kW · teď Z %". Jen web.
 
 ## v0.88.1 — (1) Osobní volba ikonek per UŽIVATEL na serveru (GET/PUT/DELETE /api/ui-prefs/{key}, klíč user:<jméno>:flow-icons v ui_defaults): ukládá se automaticky při kliknutí, sleduje uživatele na všech zařízeních (dřív jen localStorage prohlížeče); „↩ výchozí" osobní volbu smaže; admin „výchozí pro všechny" beze změny. (2) Oprava tlačítka NABÍT: řídilo první zařízení lokality (UVR/TČ → „Fronta povelů je zatím pro adaptér solis"); flow endpoint nově vrací control_module = řiditelný Solis lokality a tlačítko cílí na něj. Priorita: ruční nucené nabíjení přebíjí plánovač i ⏰, po dosažení cíle se řízení vrací automaticky. Nasazení: franta.
