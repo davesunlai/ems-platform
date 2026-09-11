@@ -302,7 +302,17 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
 // ⚡ Energetický tok lokality — animovaný diagram (FVE / síť / baterie / dům / spotřebiče)
 const ACT_CZ = { charge_pv: "nabíjení z FVE", charge_grid: "nabíjení ze sítě", discharge_grid: "vybíjení do sítě",
                  discharge_load: "vybíjení do domu", idle: "self-use", export: "prodej přebytku" };
-function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1 }) {
+// mrak přes sluníčko: frac 0 = žádný, 1 = zakryje celé slunce (posouvá se zprava do středu a roste)
+function CloudOverlay({ cx, cy, base, icon, frac, m }) {
+  if (!icon || !(frac > 0.04)) return null;
+  const size = base * (0.45 + 0.95 * frac);          // 45 % → 140 % velikosti slunce
+  const x = cx + (1 - frac) * base * 0.55;            // z pravého okraje do středu
+  return String(icon).startsWith("/")
+    ? <image href={icon} x={x - size / 2} y={cy - size / 2} width={size} height={size} style={{ pointerEvents: "none" }} />
+    : <text x={x} y={cy + size * 0.36} textAnchor="middle" fontSize={size} style={{ pointerEvents: "none" }}>{icon}</text>;
+}
+
+function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1, overlay }) {
   if (h < 80 * m) {   // kompaktní box (výstupy, TČ v desktop layoutu): ikona vlevo, texty se vejdou DOVNITŘ
     return (
       <g>
@@ -322,7 +332,9 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
       {String(icon).startsWith("/")
         ? <image href={icon} x={x + w / 2 - 15 * m} y={y + 7 * m} width={30 * m} height={30 * m} />
         : <text x={x + w / 2} y={y + 30 * m} textAnchor="middle" fontSize={24 * m}>{icon}</text>}
-      <text x={x + w / 2} y={y + 48 * m} textAnchor="middle" fontSize={11 * m} fill="var(--muted)">{title}</text>
+      {overlay && <CloudOverlay cx={x + w / 2} cy={y + 22 * m} base={30 * m} icon={overlay.icon} frac={overlay.frac} m={m} />}
+      <text x={x + w / 2} y={y + 48 * m} textAnchor="middle"
+            fontSize={(String(title).length > 30 ? 7.6 : String(title).length > 18 ? 9 : 11) * m} fill="var(--muted)">{title}</text>
       <text x={x + w / 2} y={y + 66 * m} textAnchor="middle" fontSize={13.5 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
       {sub && <text x={x + w / 2} y={y + 79 * m} textAnchor="middle" fontSize={10 * m} fill="var(--muted)">{sub}</text>}
     </g>
@@ -337,18 +349,23 @@ const FLOW_ICON_CHOICES = {
   hp: ["🌀", "♨️", "❄️", "🌡️", "💨", "/flow-icons/tepelne-cerpadlo.svg"],
   bat: ["🔋", "/flow-icons/baterie.svg"],
   heat: ["♨️", "🔥", "/flow-icons/topeni.svg"],
+  cloud: ["☁️", "🌥️", "🌫️", "/flow-icons/mrak.svg"],
 };
-const FLOW_ICON_DEFAULT = { pv: "☀️", grid: "🗼", home: "🏠", hp: "🌀", bat: "🔋", heat: "♨️" };
-const FLOW_ICON_LABEL = { pv: "FVE", grid: "Distribuce", home: "Dům", hp: "Tep. čerpadlo", bat: "Baterie", heat: "Topné výstupy" };
+const FLOW_ICON_DEFAULT = { pv: "☀️", grid: "🗼", home: "🏠", hp: "🌀", bat: "🔋", heat: "♨️", cloud: "☁️" };
+const FLOW_ICON_LABEL = { pv: "FVE", grid: "Distribuce", home: "Dům", hp: "Tep. čerpadlo", bat: "Baterie", heat: "Topné výstupy", cloud: "Mrak (oblačnost)" };
+// pořadí: vestavěné → výchozí pro všechny (server, nastaví admin) → osobní volba (prohlížeč)
 function useFlowIcons() {
-  const [ic, setIc] = useState(() => {
-    try { return { ...FLOW_ICON_DEFAULT, ...JSON.parse(localStorage.getItem("ems.flow.icons") || "{}") }; }
-    catch { return { ...FLOW_ICON_DEFAULT }; }
-  });
-  const pick = (k, v) => { const n = { ...ic, [k]: v }; setIc(n); localStorage.setItem("ems.flow.icons", JSON.stringify(n)); };
-  return [ic, pick];
+  const [srv, setSrv] = useState({});
+  const [mine, setMine] = useState(() => { try { return JSON.parse(localStorage.getItem("ems.flow.icons") || "{}"); } catch { return {}; } });
+  useEffect(() => { api.getUiDefault("flow-icons").then((r) => setSrv(r.value || {})).catch(() => {}); }, []);
+  const ic = { ...FLOW_ICON_DEFAULT, ...srv, ...mine };
+  const pick = (k, v) => { const n = { ...mine, [k]: v }; setMine(n); localStorage.setItem("ems.flow.icons", JSON.stringify(n)); };
+  const resetMine = () => { setMine({}); localStorage.removeItem("ems.flow.icons"); };
+  const saveAsDefault = async () => { await api.setUiDefault("flow-icons", ic); setSrv(ic); resetMine(); };
+  return [ic, pick, { resetMine, saveAsDefault, hasMine: Object.keys(mine).length > 0 }];
 }
-function FlowIconPicker({ ic, pick, onClose }) {
+function FlowIconPicker({ ic, pick, onClose, extra }) {
+  const { has } = useAuth();
   return (
     <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", padding: "6px 10px",
                   background: "var(--bg2, #161b22)", borderRadius: 8, margin: "6px 0", fontSize: 13 }}>
@@ -364,7 +381,14 @@ function FlowIconPicker({ ic, pick, onClose }) {
           ))}
         </span>
       ))}
-      <button className="btn" style={{ padding: "2px 8px", fontSize: 12, marginLeft: "auto" }} onClick={onClose}>hotovo</button>
+      <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+        {extra?.hasMine && <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }} onClick={extra.resetMine}
+                                   title="zahodit osobní volbu, použít výchozí pro všechny">↩ výchozí</button>}
+        {has("admin") && <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }}
+                                 onClick={() => extra.saveAsDefault().then(() => alert("Uloženo jako výchozí pro všechny uživatele.")).catch((e) => alert(e.message))}
+                                 title="tuto sadu ikonek uložit jako výchozí pro všechny uživatele">💾 nastavit jako výchozí pro všechny</button>}
+        <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }} onClick={onClose}>hotovo</button>
+      </span>
     </div>
   );
 }
@@ -392,8 +416,19 @@ function FlowEdge({ d, kw, color, active, label, lx, ly, m = 1 }) {
     </g>
   );
 }
+const CLOUD_WORD = (p) => (p == null ? null : p < 25 ? "slunečno" : p < 50 ? "polojasno" : p < 75 ? "zataženo" : "škaredě zataženo");
+function weatherTitle(cd) {
+  if (!cd || !cd.length) return "FVE";
+  const t = CLOUD_WORD(cd[0]?.cloud_pct), z = CLOUD_WORD(cd[1]?.cloud_pct);
+  return `dnes ${t}${z ? ` · zítra ${z}` : ""}`;
+}
+function cloudOverlay(cd, icon) {
+  const p = cd?.[0]?.cloud_pct;
+  return p == null ? null : { icon, frac: Math.max(0, Math.min(1, p / 100)) };
+}
+
 function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
-  const [ic, pickIcon] = useFlowIcons();
+  const [ic, pickIcon, icExtra] = useFlowIcons();
   const [icOpen, setIcOpen] = useState(false);
   const [d, setD] = useState(null);
   const [pl, setPl] = useState(null);
@@ -461,7 +496,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {cur.deferrable_on ? " · ♨️ spirála ON" : ""} <span className="muted">— {cur.reason}</span>
           </div>
         )}
-        {icOpen && <FlowIconPicker ic={ic} pick={pickIcon} onClose={() => setIcOpen(false)} />}
+        {icOpen && <FlowIconPicker ic={ic} pick={pickIcon} extra={icExtra} onClose={() => setIcOpen(false)} />}
         {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
           <svg viewBox="0 0 400 700" style={{ width: "100%", marginTop: 8 }}>
             <defs>
@@ -497,7 +532,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={i === 0 ? 92 : 312} ly={470} />
             ))}
-            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon={ic.pv} title="FVE" value={f1(pvKw)}
+            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic.cloud)} value={f1(pvKw)}
                       sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
             <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce"
@@ -578,7 +613,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={505} ly={330 + i * 55} />
             ))}
-            <FlowNode x={65} y={55} icon={ic.pv} title="FVE" value={f1(pvKw)}
+            <FlowNode x={65} y={55} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic.cloud)} value={f1(pvKw)}
                       sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
             <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}

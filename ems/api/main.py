@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.85.2", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.86.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -89,6 +89,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/api/ui-defaults/{key}")
+async def get_ui_default(key: str, _: dict = Depends(require_permission("read"))):
+    """Sdílené výchozí UI volby (např. ikonky schématu) — nastavuje admin, platí pro všechny."""
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("CREATE TABLE IF NOT EXISTS ui_defaults (key TEXT PRIMARY KEY, value JSONB NOT NULL, "
+                           "updated_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+        v = await conn.fetchval("SELECT value FROM ui_defaults WHERE key=$1", key)
+    import json as _json
+    return {"key": key, "value": (_json.loads(v) if isinstance(v, str) else v) or {}}
+
+
+@app.put("/api/ui-defaults/{key}")
+async def set_ui_default(key: str, body: dict, user: dict = Depends(require_permission("admin"))):
+    from ems.api.db import get_pool
+    import json as _json
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("CREATE TABLE IF NOT EXISTS ui_defaults (key TEXT PRIMARY KEY, value JSONB NOT NULL, "
+                           "updated_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+        await conn.execute("INSERT INTO ui_defaults (key, value) VALUES ($1, $2::jsonb) "
+                           "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()",
+                           key, _json.dumps(body))
+    return {"key": key, "value": body, "by": user.get("username")}
+
 
 @app.get("/api/version")
 async def api_version():
@@ -177,6 +204,11 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
                 if fdays:
                     out["pv_forecast_days"] = fdays
                     out["pv_forecast_kwh"] = fdays[0]["kwh"]   # zpětná kompat (dnešek)
+            except Exception:
+                pass
+            try:
+                from ems.forecast import db as forecast_db
+                out["cloud_days"] = await forecast_db.cloud_days(loc)   # [{day, cloud_pct}] dnes, zítra
             except Exception:
                 pass
     return out

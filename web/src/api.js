@@ -122,6 +122,8 @@ export const api = {
   localityBillingDays: (id, month) => request(`/api/localities/${id}/billing/days?month=${month}`),
   plannerTimeRules: (id) => request(`/api/planner/${id}/time-rules`),
   plannerTimeRulesCheck: (id) => request(`/api/planner/${id}/time-rules/check`),
+  getUiDefault: (key) => request(`/api/ui-defaults/${key}`),
+  setUiDefault: (key, value) => request(`/api/ui-defaults/${key}`, { method: "PUT", body: value }),
   plannerTimeRuleCreate: (id, body) => request(`/api/planner/${id}/time-rules`, { method: "POST", body }),
   plannerTimeRuleUpdate: (id, rid, body) => request(`/api/planner/${id}/time-rules/${rid}`, { method: "PUT", body }),
   plannerTimeRuleDelete: (id, rid) => request(`/api/planner/${id}/time-rules/${rid}`, { method: "DELETE" }),

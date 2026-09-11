@@ -208,3 +208,20 @@ async def latest_pv_all_sources(locality_id: int) -> dict[str, list[dict]]:
     for s in srcs:
         out[s["source"]] = await latest_pv(locality_id, s["source"])
     return out
+
+
+async def cloud_days(locality_id: int, source: str = "open-meteo") -> list[dict]:
+    """Průměrná oblačnost (%) přes denní hodiny 7–19 pro dnes a zítra (Europe/Prague)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT (ts AT TIME ZONE 'Europe/Prague')::date AS d, avg(cloud_pct) AS c
+               FROM weather_forecast
+               WHERE locality_id=$1 AND source=$2 AND cloud_pct IS NOT NULL
+                 AND fetched_at=(SELECT max(fetched_at) FROM weather_forecast WHERE locality_id=$1 AND source=$2)
+                 AND extract(hour FROM ts AT TIME ZONE 'Europe/Prague') BETWEEN 7 AND 19
+                 AND (ts AT TIME ZONE 'Europe/Prague')::date
+                     BETWEEN (now() AT TIME ZONE 'Europe/Prague')::date
+                         AND (now() AT TIME ZONE 'Europe/Prague')::date + 1
+               GROUP BY 1 ORDER BY 1""", locality_id, source)
+    return [{"day": r["d"].isoformat(), "cloud_pct": round(float(r["c"]), 1)} for r in rows]
