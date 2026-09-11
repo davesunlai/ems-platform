@@ -382,6 +382,8 @@ function FlowIconPicker({ ic, pick, onClose, extra }) {
   const [custom, setCustom] = useState({});       // element -> [{id,url,bytes}]
   const [target, setTarget] = useState(null);     // element čekající na Ctrl+V
   const [msg, setMsg] = useState("");
+  const [transp, setTransp] = useState(true);
+  const [tol, setTol] = useState(40);
   const loadCustom = () => api.listUiIcons().then((rows) => {
     const by = {}; rows.forEach((r) => (by[r.element] = by[r.element] || []).push(r)); setCustom(by);
   }).catch(() => {});
@@ -389,7 +391,7 @@ function FlowIconPicker({ ic, pick, onClose, extra }) {
   const upload = async (el, blob) => {
     setMsg("⏳ zpracovávám…");
     try {
-      const r = await api.uploadUiIcon(el, blob);
+      const r = await api.uploadUiIcon(el, blob, { transparent: transp, tol });
       pick(el, r.url); await loadCustom(); setMsg(`✓ uloženo (${r.bytes} B) a přiřazeno k „${FLOW_ICON_LABEL[el]}"`);
     } catch (e) { setMsg("Chyba: " + e.message); }
     setTarget(null);
@@ -412,6 +414,12 @@ function FlowIconPicker({ ic, pick, onClose, extra }) {
       {target && <div style={{ flexBasis: "100%", color: "var(--blue, #58a6ff)", fontSize: 12.5 }}>
         📋 Vlož obrázek ze schránky pro „{FLOW_ICON_LABEL[target]}": stiskni <b>Ctrl+V</b> (Windows: Win+Shift+S vybere výřez do schránky).
         Server ho zmenší na 64×64 a uloží jako WebP (~1–3 kB). <span style={{ cursor: "pointer" }} onClick={() => setTarget(null)}>✖ zrušit</span>
+        <div style={{ marginTop: 4, fontSize: 12 }} className="muted">
+          <label style={{ marginRight: 12 }}><input type="checkbox" checked={transp} onChange={(e) => setTransp(e.target.checked)} />{" "}
+            🧹 průhledné pozadí (barva okrajů se odebere — vnitřní plochy zůstanou)</label>
+          tolerance <input type="range" min="0" max="120" value={tol} onChange={(e) => setTol(Number(e.target.value))} disabled={!transp} style={{ verticalAlign: "middle", width: 110 }} /> {tol}
+          <span> · málo = jen přesná barva, hodně = i přechody/šum (JPG)</span>
+        </div>
       </div>}
       {msg && <div style={{ flexBasis: "100%", fontSize: 12 }} className="muted">{msg}</div>}
       {Object.keys(FLOW_ICON_CHOICES).map((k) => (

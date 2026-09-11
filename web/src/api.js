@@ -125,9 +125,10 @@ export const api = {
   getUiDefault: (key) => request(`/api/ui-defaults/${key}`),
   listUiIcons: () => request("/api/ui-icons"),
   deleteUiIcon: (id) => request(`/api/ui-icons/${id}`, { method: "DELETE" }),
-  uploadUiIcon: async (element, blob) => {
+  uploadUiIcon: async (element, blob, opts = {}) => {
     const fd = new FormData(); fd.append("file", blob, "clipboard.png");
-    const r = await fetch(`/api/ui-icons?element=${encodeURIComponent(element)}`,
+    const q = `element=${encodeURIComponent(element)}&transparent=${opts.transparent === false ? "false" : "true"}&tol=${opts.tol ?? 40}`;
+    const r = await fetch(`/api/ui-icons?${q}`,
       { method: "POST", body: fd, headers: { Authorization: `Bearer ${getToken()}` } });
     if (!r.ok) { let d = ""; try { d = (await r.json()).detail; } catch {} throw new Error(d || `HTTP ${r.status}`); }
     return r.json();
