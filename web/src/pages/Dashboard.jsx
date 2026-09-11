@@ -369,17 +369,19 @@ const FLOW_ICON_LABEL = { pv: "Znak FVE", sun: "Slunce", cloud: "Mrak (oblačnos
 // pořadí: vestavěné → výchozí pro všechny (server, nastaví admin) → osobní volba (server, per uživatel,
 // sleduje tě na všech zařízeních; ukládá se automaticky při kliknutí)
 function useFlowIcons() {
-  const [srv, setSrv] = useState({});
-  const [mine, setMine] = useState({});
+  const [srv, setSrv] = useState({});      // výchozí pro všechny (admin)
+  const [mine, setMine] = useState({});    // uložené pro tento účet
+  const [draft, setDraft] = useState({});  // rozpracovaný výběr (neuložený)
   useEffect(() => {
     api.getUiDefault("flow-icons").then((r) => setSrv(r.value || {})).catch(() => {});
     api.getUiPref("flow-icons").then((r) => setMine(r.value || {})).catch(() => {});
   }, []);
-  const ic = { ...FLOW_ICON_DEFAULT, ...srv, ...mine };
-  const pick = (k, v) => { const n = { ...mine, [k]: v }; setMine(n); api.setUiPref("flow-icons", n).catch(() => {}); };
-  const resetMine = () => { setMine({}); api.delUiPref("flow-icons").catch(() => {}); };
-  const saveAsDefault = async () => { await api.setUiDefault("flow-icons", ic); setSrv(ic); resetMine(); };
-  return [ic, pick, { resetMine, saveAsDefault, hasMine: Object.keys(mine).length > 0 }];
+  const ic = { ...FLOW_ICON_DEFAULT, ...srv, ...mine, ...draft };
+  const pick = (k, v) => setDraft({ ...draft, [k]: v });
+  const saveForMe = async () => { const n = { ...mine, ...draft }; await api.setUiPref("flow-icons", n); setMine(n); setDraft({}); };
+  const saveAsDefault = async () => { await api.setUiDefault("flow-icons", ic); setSrv(ic); await api.delUiPref("flow-icons").catch(() => {}); setMine({}); setDraft({}); };
+  const resetMine = async () => { await api.delUiPref("flow-icons").catch(() => {}); setMine({}); setDraft({}); };
+  return [ic, pick, { saveForMe, saveAsDefault, resetMine, dirty: Object.keys(draft).length > 0, hasMine: Object.keys(mine).length > 0 }];
 }
 function FlowIconPicker({ ic, pick, onClose, extra }) {
   const { has } = useAuth();
@@ -451,13 +453,17 @@ function FlowIconPicker({ ic, pick, onClose, extra }) {
           ))}
         </span>
       ))}
-      <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-        <span className="muted" style={{ fontSize: 11.5, alignSelf: "center" }}>volba se ukládá jen pro tebe (všechna tvá zařízení)</span>
-        {extra?.hasMine && <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }} onClick={extra.resetMine}
-                                   title="zahodit osobní volbu, použít výchozí pro všechny">↩ výchozí</button>}
+      <span style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {extra?.dirty && <span style={{ fontSize: 11.5, color: "var(--amber)" }}>● neuložený výběr</span>}
+        <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }} disabled={!extra?.dirty}
+                onClick={() => extra.saveForMe().then(() => setMsg("✓ Uloženo jako výchozí pro tento účet (všechna tvá zařízení).")).catch((e) => setMsg(e.message))}
+                title="vybrané ikonky uložit jen pro přihlášený účet">💾 nastavit vybrané ikonky jako výchozí pro tento účet</button>
         {has("admin") && <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }}
-                                 onClick={() => extra.saveAsDefault().then(() => alert("Uloženo jako výchozí pro všechny uživatele.")).catch((e) => alert(e.message))}
-                                 title="tuto sadu ikonek uložit jako výchozí pro všechny uživatele">💾 nastavit jako výchozí pro všechny</button>}
+                                 onClick={() => { if (window.confirm("Nastavit vybrané ikonky jako výchozí pro VŠECHNY uživatele?")) extra.saveAsDefault().then(() => setMsg("✓ Uloženo jako výchozí pro všechny uživatele.")).catch((e) => setMsg(e.message)); }}
+                                 title="vybrané ikonky uložit jako výchozí pro všechny uživatele (admin)">💾 nastavit vybrané ikonky jako výchozí pro všechny</button>}
+        {(extra?.hasMine || extra?.dirty) && <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }}
+                                   onClick={() => extra.resetMine().then(() => setMsg("Osobní volba zahozena — platí výchozí pro všechny."))}
+                                   title="zahodit osobní volbu i neuložený výběr, použít výchozí pro všechny">↩ výchozí</button>}
         <button className="btn" style={{ padding: "2px 8px", fontSize: 12 }} onClick={onClose}>hotovo</button>
       </span>
     </div>
