@@ -984,9 +984,9 @@ function LocalitySection({ name, devs, open, onToggle }) {
             👁<input type="checkbox" checked={pinned} onChange={(e) => togglePin(e.target.checked)} />
           </label>)}
       </h2>
+      {vis("dash:banners") && <ControlBanners deviceIds={ids} localityId={locId} />}
       {vis("dash:flow") && flow && locId && !pinned && <EnergyFlow locId={locId} deviceIds={ids} name={name} onClose={() => setFlow(false)} />}
       {vis("dash:flow") && pinned && locId && <EnergyFlow inline locId={locId} deviceIds={ids} name={name} onClose={() => {}} />}
-      {vis("dash:banners") && <ControlBanners deviceIds={ids} localityId={locId} />}
       {vis("dash:stats") && <LocalityNow deviceIds={ids} localityId={locId} />}
       {open && (<>
         {vis("dash:chart") && <LocalityChart deviceIds={ids} />}
