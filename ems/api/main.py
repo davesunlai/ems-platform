@@ -47,6 +47,8 @@ async def lifespan(app: FastAPI):
         await auth_db.seed_admin()
         from ems.auth import roles as auth_roles
         await auth_roles.ensure_schema()
+        from ems.ui import icons as ui_icons
+        await ui_icons.ensure_schema()
         await modules_db.ensure_schema()
         await control_db.ensure_schema()
         await control_db.ensure_queue_schema()
@@ -81,7 +83,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.86.2", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.87.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -135,6 +137,8 @@ app.include_router(emsbox_router)
 app.include_router(emsbox_ingest_router)
 from ems.emsbox.console import router as console_router
 app.include_router(console_router)
+from ems.ui.icons import router as ui_icons_router
+app.include_router(ui_icons_router)
 app.include_router(market_router)
 app.include_router(automation_router)
 app.include_router(ewelink_router)

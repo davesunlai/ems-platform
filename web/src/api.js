@@ -123,6 +123,15 @@ export const api = {
   plannerTimeRules: (id) => request(`/api/planner/${id}/time-rules`),
   plannerTimeRulesCheck: (id) => request(`/api/planner/${id}/time-rules/check`),
   getUiDefault: (key) => request(`/api/ui-defaults/${key}`),
+  listUiIcons: () => request("/api/ui-icons"),
+  deleteUiIcon: (id) => request(`/api/ui-icons/${id}`, { method: "DELETE" }),
+  uploadUiIcon: async (element, blob) => {
+    const fd = new FormData(); fd.append("file", blob, "clipboard.png");
+    const r = await fetch(`/api/ui-icons?element=${encodeURIComponent(element)}`,
+      { method: "POST", body: fd, headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!r.ok) { let d = ""; try { d = (await r.json()).detail; } catch {} throw new Error(d || `HTTP ${r.status}`); }
+    return r.json();
+  },
   setUiDefault: (key, value) => request(`/api/ui-defaults/${key}`, { method: "PUT", body: value }),
   plannerTimeRuleCreate: (id, body) => request(`/api/planner/${id}/time-rules`, { method: "POST", body }),
   plannerTimeRuleUpdate: (id, rid, body) => request(`/api/planner/${id}/time-rules/${rid}`, { method: "PUT", body }),

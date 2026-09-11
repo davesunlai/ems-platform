@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.87.0 — 📋 vlastní ikonky ze schránky (Ctrl+V). Ve ⚙️ výběru ikonek má každý prvek (Znak FVE, Slunce, Mrak, Distribuce, Dům, TČ, Baterie, Topné výstupy) tlačítko 📋 (admin): klik → Ctrl+V vloží obrázek ze schránky Windows (Win+Shift+S výřez, print screen) → POST /api/ui-icons?element=… → server (Pillow) ořízne prázdné okraje, zmenší na 64×64 se zachováním poměru na průhledný podklad a uloží jako WebP q80 (typicky 0,4–3 kB; test: 640×400 PNG → 384 B) do tabulky ui_icons → ikona se hned přiřadí a objeví v nabídce daného prvku (i pro ostatní uživatele; admin ji může ✖ smazat). Servírování GET /api/ui-icons/{id} veřejně s immutable cache (<image href> neposílá token). Cesta /api/ui-icons/N funguje v uzlech i v „výchozí pro všechny". Deps api: pillow, python-multipart (rebuild api). Nasazení: franta.
+
 ## v0.86.2 — FVE uzel jako trojice: znak FVE + slunce + mrak. Ikona „pv" je nyní ZNAK FVE (výchozí Davidův fve.svg; volby 🔆🔅🔋🏭), nový klíč „sun" = slunce (☀️🌞🌤️🔆) a mrak se překrývá pouze přes slunce podle oblačnosti (frac 0 = žádný). V uzlu: znak vlevo, slunce+mrak vpravo, titulek = slovní počasí. Pomocné komponenty Ico (emoji/SVG jednotně) a SunCloud. Ostatní uzly beze změny. ⚙️ výběr má nové řádky „Znak FVE" a „Slunce". Jen web.
 
 ## v0.86.1 — hotfix mraku: cloud_days filtroval source='open-meteo', v DB je 'open_meteo' → 0 řádků → žádný mrak ani text. Dotaz nově bere poslední fetch bez ohledu na zdroj. (Oblačnost v DB je: 2016 hodnot, průměr 55 %.) Nasazení: franta (api).

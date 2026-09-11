@@ -379,12 +379,57 @@ function useFlowIcons() {
 }
 function FlowIconPicker({ ic, pick, onClose, extra }) {
   const { has } = useAuth();
+  const [custom, setCustom] = useState({});       // element -> [{id,url,bytes}]
+  const [target, setTarget] = useState(null);     // element čekající na Ctrl+V
+  const [msg, setMsg] = useState("");
+  const loadCustom = () => api.listUiIcons().then((rows) => {
+    const by = {}; rows.forEach((r) => (by[r.element] = by[r.element] || []).push(r)); setCustom(by);
+  }).catch(() => {});
+  useEffect(() => { loadCustom(); }, []);
+  const upload = async (el, blob) => {
+    setMsg("⏳ zpracovávám…");
+    try {
+      const r = await api.uploadUiIcon(el, blob);
+      pick(el, r.url); await loadCustom(); setMsg(`✓ uloženo (${r.bytes} B) a přiřazeno k „${FLOW_ICON_LABEL[el]}"`);
+    } catch (e) { setMsg("Chyba: " + e.message); }
+    setTarget(null);
+  };
+  const onPaste = (e) => {
+    if (!target) return;
+    const it = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
+    if (!it) { setMsg("Ve schránce není obrázek (udělej print screen / kopii výřezu a Ctrl+V)."); return; }
+    e.preventDefault(); upload(target, it.getAsFile());
+  };
+  const delIcon = async (el, r) => {
+    if (!window.confirm("Smazat tuto vlastní ikonku?")) return;
+    try { await api.deleteUiIcon(r.id); if (ic[el] === r.url) pick(el, FLOW_ICON_DEFAULT[el]); await loadCustom(); } catch (e) { setMsg(e.message); }
+  };
   return (
-    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", padding: "6px 10px",
-                  background: "var(--bg2, #161b22)", borderRadius: 8, margin: "6px 0", fontSize: 13 }}>
+    <div tabIndex={0} onPaste={onPaste}
+         style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", padding: "6px 10px",
+                  background: "var(--bg2, #161b22)", borderRadius: 8, margin: "6px 0", fontSize: 13,
+                  outline: target ? "2px dashed var(--blue, #58a6ff)" : "none" }}>
+      {target && <div style={{ flexBasis: "100%", color: "var(--blue, #58a6ff)", fontSize: 12.5 }}>
+        📋 Vlož obrázek ze schránky pro „{FLOW_ICON_LABEL[target]}": stiskni <b>Ctrl+V</b> (Windows: Win+Shift+S vybere výřez do schránky).
+        Server ho zmenší na 64×64 a uloží jako WebP (~1–3 kB). <span style={{ cursor: "pointer" }} onClick={() => setTarget(null)}>✖ zrušit</span>
+      </div>}
+      {msg && <div style={{ flexBasis: "100%", fontSize: 12 }} className="muted">{msg}</div>}
       {Object.keys(FLOW_ICON_CHOICES).map((k) => (
         <span key={k}>
           <span className="muted" style={{ fontSize: 11.5, marginRight: 4 }}>{FLOW_ICON_LABEL[k]}:</span>
+          {has("admin") && <span title="vložit vlastní obrázek ze schránky (Ctrl+V)" onClick={() => { setTarget(k); setMsg(""); }}
+                                 style={{ cursor: "pointer", fontSize: 13, padding: "1px 4px", borderRadius: 6,
+                                          outline: target === k ? "2px solid var(--blue, #58a6ff)" : "1px dashed var(--border)", marginRight: 3 }}>📋</span>}
+          {(custom[k] || []).map((r) => (
+            <span key={"c" + r.id} style={{ position: "relative", display: "inline-block" }}>
+              <span onClick={() => pick(k, r.url)}
+                    style={{ cursor: "pointer", padding: "1px 3px", borderRadius: 6, display: "inline-block",
+                             outline: ic[k] === r.url ? "2px solid var(--blue, #58a6ff)" : "none" }}>
+                <img src={r.url} alt="" title={`vlastní · ${r.bytes} B`} style={{ width: 19, height: 19, verticalAlign: "-3px" }} />
+              </span>
+              {has("admin") && <span onClick={() => delIcon(k, r)} title="smazat" className="muted"
+                                     style={{ cursor: "pointer", fontSize: 9, position: "absolute", top: -6, right: -4 }}>✖</span>}
+            </span>))}
           {FLOW_ICON_CHOICES[k].map((e) => (
             <span key={e} onClick={() => pick(k, e)}
                   style={{ cursor: "pointer", fontSize: 17, padding: "1px 3px", borderRadius: 6, display: "inline-block",
