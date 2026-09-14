@@ -267,6 +267,7 @@ async def run() -> None:
             await tick_force_keepalive(state)
             await tick_inverter_state(state)
             await tick_soc_targets(state)
+            await tick_export_guard(state)
             await tick_notify(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
@@ -517,8 +518,9 @@ async def tick_planner(state: dict) -> None:
                         stp = _json.loads(stp)
                     except Exception:
                         stp = {}
+                running_req = stp.get("power_req", stp.get("power"))   # guard může výkon dočasně snížit
                 changed = (cur == desired and desired in ("force_charge", "force_discharge")
-                           and params.get("power") is not None and stp.get("power") != params.get("power")
+                           and params.get("power") is not None and running_req != params.get("power")
                            and st.get("source") != "manual")
                 if cur != desired or changed:
                     src = params.get("source", "planner")
@@ -617,6 +619,63 @@ async def _self_heal_igfol(dev: str, state: dict, now: float) -> None:
         logger.warning("IGFOL-F samoléčba: %s stop→%s (výkon %s)", dev, last["action"], fp.get("power"))
     except Exception as exc:
         logger.debug("_self_heal_igfol: %s", exc)
+
+
+async def tick_export_guard(state: dict) -> None:
+    """🛡 Strop exportu při vybíjení: baterie smí vybíjet max spotřeba + limit_exportu − FVE.
+    Platí pro force_discharge z jakéhokoli zdroje (⏰, plánovač, ruční). Při překročení sníží výkon
+    (power reg), při uvolnění stropu ho vrátí k původnímu požadavku (params.power_req).
+    Hystereze 0,3 kW, max 1 zásah / 20 s / modul. Limit = planner_config.grid_export_limit_kw."""
+    try:
+        from ems.api.db import aggregate_now
+        from ems.planner.service import list_devices as _list_devices
+        devs = [d for d in await _list_devices() if d.get("adapter") == "solis"]
+        if not devs:
+            return
+        states = await control_db.get_states([d["device_id"] for d in devs])
+        last = state.setdefault("export_guard_ts", {})
+        now = time.monotonic()
+        for d in devs:
+            dev = d["device_id"]
+            st = states.get(dev) or {}
+            if st.get("action") != "force_discharge":
+                continue
+            p = st.get("params") or {}
+            if isinstance(p, str):
+                import json as _json
+                try:
+                    p = _json.loads(p)
+                except Exception:
+                    p = {}
+            cur = p.get("power")
+            if cur is None:
+                continue
+            req = int(p.get("power_req") or cur)          # původní požadavek (reg, 10 W)
+            lid = d.get("locality_id")
+            cfg = await planner_db.get_config(lid) if lid else {}
+            limit_kw = float((cfg or {}).get("grid_export_limit_kw") or 0)
+            if limit_kw <= 0:
+                continue
+            agg = await aggregate_now([dev])
+            pv_kw = float(agg.get("pv_w") or 0) / 1000.0
+            load_kw = float(agg.get("load_w") or 0) / 1000.0
+            cap_kw = max(0.0, load_kw + limit_kw - pv_kw)
+            cap_reg = int(cap_kw * 100)
+            want = min(req, cap_reg)
+            if abs(want - int(cur)) < 30:                  # hystereze 0,3 kW
+                continue
+            if now - last.get(dev, -1e9) < 20:
+                continue
+            last[dev] = now
+            newp = {k: v for k, v in p.items() if k not in ("reason",)}
+            newp["power"] = want
+            newp["power_req"] = req
+            newp["reason"] = (f"strop exportu {limit_kw:g} kW: FVE {pv_kw:.1f} + baterie ≤ dům {load_kw:.1f} + limit → "
+                              f"{want/100:.1f} kW" if want < req else f"strop exportu uvolněn → zpět {req/100:.1f} kW")
+            await control_db.enqueue(dev, "force_discharge", newp, username="export-guard")
+            logger.info("Export guard %s: %s → %s reg (cap %.1f kW, req %.1f kW)", dev, cur, want, cap_kw, req / 100)
+    except Exception as exc:
+        logger.debug("tick_export_guard: %s", exc)
 
 
 async def tick_soc_targets(state: dict) -> None:
