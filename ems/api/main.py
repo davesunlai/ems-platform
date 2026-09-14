@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.88.10", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.89.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -254,6 +254,7 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
                 from ems.planner import db as planner_db
                 cfg = await planner_db.get_config(loc)
                 out["max_charge_kw"] = float((cfg or {}).get("max_charge_kw") or 10)
+                out["max_discharge_kw"] = float((cfg or {}).get("max_discharge_kw") or 10)
             except Exception:
                 pass
             try:   # který modul je řiditelný střídač (tlačítko NABÍT) — ne první zařízení lokality!
