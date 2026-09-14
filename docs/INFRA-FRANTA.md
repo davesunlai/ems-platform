@@ -62,3 +62,10 @@ zmizely by po updatu. Místo toho jdou do `/opt/ems/infra/sites/*.caddy`:
 - compose mountuje `./sites:/etc/caddy/sites:ro`,
 - deploy/tar tyto fragmenty NIKDY nepřepisuje (jsou vyloučené z balíčku).
 Po přidání/změně fragmentu: `docker restart infra-caddy-1`.
+
+
+## Docker Hub přes IPv6 (14. 9. 2026)
+`docker pull` na registry-1.docker.io padal na „TLS handshake timeout" — DNS vrací jen IPv6 adresy a
+IPv6 cesta z franty timeoutuje (curl umí spadnout na IPv4, docker daemon ne). Řešení:
+`echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf && systemctl restart docker` (preferuj IPv4).
+Nouzově mirror: `docker pull mirror.gcr.io/library/node:22-alpine && docker tag … node:22-alpine`.

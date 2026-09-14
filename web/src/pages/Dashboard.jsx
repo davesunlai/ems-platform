@@ -685,8 +685,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                       sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
             <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce"
-                      value={gridW >= 0 ? `${f1(kw(gridW))}` : `${f1(kw(gridW))}`}
-                      sub={gridW >= 0 ? "odběr" : "dodávka"}
+                      value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
+                      sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
             <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub="výkon / dnes celkem" accent="var(--amber, #d29922)" />
@@ -766,6 +766,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                       sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
             <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
+                      sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
             <FlowNode x={295} y={188} w={170} icon={ic.home} title="Dům" value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub="výkon / dnes celkem" accent="var(--amber, #d29922)" />
