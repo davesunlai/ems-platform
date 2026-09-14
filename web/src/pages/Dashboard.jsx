@@ -1039,7 +1039,7 @@ function LocalityChart({ deviceIds }) {
   const series = data ? [
     { label: "Výroba FVE", color: "#3fb950", points: data.pv_power || [] },
     { label: "Spotřeba lokality", color: "#d29922", points: data.load || [] },
-    { label: "Síť (export +/odběr −)", color: "#58a6ff", points: data.grid_power || [] },
+    { label: "Síť (odběr +/dodávka −)", color: "#58a6ff", points: data.grid_power || [] },
     { label: "Baterie (+ nabíjení)", color: "#a371f7", points: data.battery_power || [] },
     { label: "SoC baterie", color: "#a371f7", axis: "pct", points: data.battery_soc || [] },
   ].filter((x) => x.points.length >= 2) : [];

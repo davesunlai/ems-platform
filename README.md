@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.89.2 — oprava popisku sítě v grafu Souhrn lokality: „Síť (odběr +/dodávka −)" — data mají + = odběr ze sítě (grid_power kladné = import), − = dodávka; popisek byl obráceně (bod z fronty). Jen web.
+
 ## v0.89.1 — tlačítka ⚡ NABÍT / 🔻 VYBÍT přesunuta POD schéma, zarovnaná pod uzel Baterie (levý odsazený blok s fialovou linkou a popiskem „🔋 Ruční ovládání baterie"), aby bylo zřejmé, že patří k baterii. Jen web.
 
 ## v0.89.0 — 🔻 VYBÍT BATERII do sítě (ruční, na cílové %) vedle ⚡ NABÍT. Jedna obecná komponenta ForceBtn se dvěma režimy (FORCE_MODES): vybíjení červené tlačítko, běžící stav fialový; default cíl 20 %, výkon 100 % z max_discharge_kw (flow endpoint ho nově vrací); potvrzení blokuje cíl ≥ aktuální SoC; automatický stop při poklesu na cíl (tick_soc_targets už vybíjení uměl); běží-li jeden povel, tlačítko opačného se schová. Samostatný klíč v rolích: dash:forcedischarge („🔻 Tlačítko VYBÍT BATERII do sítě"). Nasazení: franta.
