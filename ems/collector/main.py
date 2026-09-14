@@ -541,6 +541,21 @@ async def tick_planner(state: dict) -> None:
                     await force_output(oid, want_on, f"časový plán: {lbl or ('ON' if want_on else 'OFF')}")
                 except Exception as exc:
                     logger.debug("Časový plán výstup %s lok %s: %s", oid, lid, exc)
+            # UVOLNĚNÍ (lekce 14. 9.): výstup sepnutý časovým plánem po konci okna / vypnutí pravidla
+            # / vypnutí zdroje nikdo nevypínal (winddown výstupy ⏰ záměrně nechává). Vypni ho, pokud
+            # jeho poslední rozhodnutí stále nese „časový plán" (ruční zásah nebo plánovač ho přebil → nech).
+            try:
+                from ems.outputs import db as outputs_db
+                from ems.outputs.engine import force_output
+                for o in await outputs_db.list_all():
+                    if o.get("locality_id") != lid:
+                        continue
+                    if o.get("is_on") and int(o["id"]) not in out_rules \
+                            and "časový plán" in str(o.get("last_decision") or ""):
+                        await force_output(int(o["id"]), False, "časový plán: konec okna / pravidlo neaktivní → vypnuto")
+                        logger.info("Časový plán: výstup %s (%s) uvolněn — pravidlo už neplatí", o["id"], o.get("name"))
+            except Exception as exc:
+                logger.debug("Časový plán uvolnění výstupů lok %s: %s", lid, exc)
     except Exception as exc:
         logger.debug("Planner výkon: %s", exc)
 

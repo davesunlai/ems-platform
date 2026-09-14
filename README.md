@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.89.3 — ⏰ výstupy se po konci pravidla VYPNOU. Výstup (spirála) sepnutý časovým plánem zůstával ON po konci okna, po vypnutí pravidla i po vypnutí plánovače — collector posílal jen aktivní pravidla a uvolnění chybělo (winddown výstupy ⏰ záměrně nechává od v0.84.2). Nově: každý cyklus projde výstupy lokality; je-li ON, není v aktivních ⏰ pravidlech a poslední rozhodnutí nese „časový plán" → force_output OFF s důvodem „konec okna / pravidlo neaktivní". Ruční zásah nebo plánovač (jiné rozhodnutí) se nepřebíjí. Nasazení: franta (collector).
+
 ## v0.89.2 — oprava popisku sítě v grafu Souhrn lokality: „Síť (odběr +/dodávka −)" — data mají + = odběr ze sítě (grid_power kladné = import), − = dodávka; popisek byl obráceně (bod z fronty). Jen web.
 
 ## v0.89.1 — tlačítka ⚡ NABÍT / 🔻 VYBÍT přesunuta POD schéma, zarovnaná pod uzel Baterie (levý odsazený blok s fialovou linkou a popiskem „🔋 Ruční ovládání baterie"), aby bylo zřejmé, že patří k baterii. Jen web.
