@@ -508,8 +508,22 @@ async def tick_planner(state: dict) -> None:
                     except Exception:
                         pass
                 cur = st.get("action", "idle")
-                if cur != desired:
+                # Re-force i při ZMĚNĚ PARAMETRŮ běžícího povelu (lekce 14. 9.: 10→15 kW v ⏰ pravidle
+                # se do měniče nepropsalo, protože akce byla stejná). Porovnává se power (reg) a zdroj.
+                stp = st.get("params") or {}
+                if isinstance(stp, str):
+                    import json as _json
+                    try:
+                        stp = _json.loads(stp)
+                    except Exception:
+                        stp = {}
+                changed = (cur == desired and desired in ("force_charge", "force_discharge")
+                           and params.get("power") is not None and stp.get("power") != params.get("power")
+                           and st.get("source") != "manual")
+                if cur != desired or changed:
                     src = params.get("source", "planner")
+                    if changed:
+                        params["reason"] = f"{params.get('reason') or ''} · změna výkonu {stp.get('power')}→{params.get('power')}".strip(" ·")
                     cid = await control_db.enqueue(dev, cmd, params, username=src)
                     await control_db.record(src, dev, cmd,
                                             {**params, "reason": params.get("reason") or ca.get("reason")}, True, {"queued": cid})

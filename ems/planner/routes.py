@@ -154,7 +154,9 @@ class TimeRuleIn(BaseModel):
 
 
 def _validate_rule(body: TimeRuleIn, require_all: bool) -> dict:
-    d = body.model_dump()
+    # Částečná aktualizace (PUT s {enabled:false}) NESMÍ přepsat ostatní pole defaulty modelu
+    # (lekce 14. 9.: toggle mazal název a výkon). Při update bereme jen pole, která klient poslal.
+    d = body.model_dump() if require_all else body.model_dump(exclude_unset=True)
     if d.get("action") is not None and d["action"] not in pdb.TIME_RULE_ACTIONS:
         raise HTTPException(status_code=400, detail=f"action musí být jedno z {pdb.TIME_RULE_ACTIONS}")
     for k in ("time_from", "time_to"):

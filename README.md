@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.89.4 — ⏰ pravidla: (1) přepnutí zapnuto/vypnuto už NEMAŽE název, výkon, dny: PUT s částečným tělem vracel přes model_dump() i DEFAULTY modelu (label "", power_kw 5, days 1234567) a update je bral jako zadané — nyní exclude_unset (jen skutečně poslaná pole); regres. (2) Změna parametrů BĚŽÍCÍHO pravidla se propíše do reality: collector re-forcuje i když akce zůstává stejná, ale liší se výkon (control_state.params.power vs požadovaný reg) — s důvodem „změna výkonu A→B"; ruční force se nepřebíjí (bod z fronty). Výstupy (eWeLink) už re-force řeší force_output každý cyklus. Nasazení: franta (api+collector).
+
 ## v0.89.3 — ⏰ výstupy se po konci pravidla VYPNOU. Výstup (spirála) sepnutý časovým plánem zůstával ON po konci okna, po vypnutí pravidla i po vypnutí plánovače — collector posílal jen aktivní pravidla a uvolnění chybělo (winddown výstupy ⏰ záměrně nechává od v0.84.2). Nově: každý cyklus projde výstupy lokality; je-li ON, není v aktivních ⏰ pravidlech a poslední rozhodnutí nese „časový plán" → force_output OFF s důvodem „konec okna / pravidlo neaktivní". Ruční zásah nebo plánovač (jiné rozhodnutí) se nepřebíjí. Nasazení: franta (collector).
 
 ## v0.89.2 — oprava popisku sítě v grafu Souhrn lokality: „Síť (odběr +/dodávka −)" — data mají + = odběr ze sítě (grid_power kladné = import), − = dodávka; popisek byl obráceně (bod z fronty). Jen web.
