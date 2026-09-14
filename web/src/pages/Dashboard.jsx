@@ -654,10 +654,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
           </div>
         )}
         {icOpen && <FlowIconPicker ic={ic} pick={pickIcon} extra={icExtra} onClose={() => setIcOpen(false)} />}
-        {d && d.control_module && <>
-          <ForceBtn mode="charge" dev={d.control_module} soc={d.soc} maxKw={d.max_charge_kw} />
-          <ForceBtn mode="discharge" dev={d.control_module} soc={d.soc} maxKw={d.max_discharge_kw} />
-        </>}
+
         {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
           <svg viewBox="0 0 400 700" style={{ width: "100%", marginTop: 8 }}>
             <defs>
@@ -818,6 +815,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         value={outOn(o) ? "zapnuto" : "vypnuto"} sub={outSub(o)} accent={outOn(o) ? "#d29922" : null} />
             ))}
           </svg>
+        )}
+        {d && d.control_module && (
+          <div style={{ marginLeft: mob ? "2.5%" : "5.9%", paddingLeft: 6, borderLeft: "3px solid #a371f7", marginTop: -2 }}>
+            <div className="muted" style={{ fontSize: 11.5, marginBottom: 2 }}>🔋 Ruční ovládání baterie</div>
+            <ForceBtn mode="charge" dev={d.control_module} soc={d.soc} maxKw={d.max_charge_kw} />
+            <ForceBtn mode="discharge" dev={d.control_module} soc={d.soc} maxKw={d.max_discharge_kw} />
+          </div>
         )}
         <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
           Animované čáry = aktuální tok energie (tloušťka ≈ výkon), šipka = směr. Obnovuje se každých 5 s.

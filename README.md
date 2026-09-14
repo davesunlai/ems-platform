@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.89.1 — tlačítka ⚡ NABÍT / 🔻 VYBÍT přesunuta POD schéma, zarovnaná pod uzel Baterie (levý odsazený blok s fialovou linkou a popiskem „🔋 Ruční ovládání baterie"), aby bylo zřejmé, že patří k baterii. Jen web.
+
 ## v0.89.0 — 🔻 VYBÍT BATERII do sítě (ruční, na cílové %) vedle ⚡ NABÍT. Jedna obecná komponenta ForceBtn se dvěma režimy (FORCE_MODES): vybíjení červené tlačítko, běžící stav fialový; default cíl 20 %, výkon 100 % z max_discharge_kw (flow endpoint ho nově vrací); potvrzení blokuje cíl ≥ aktuální SoC; automatický stop při poklesu na cíl (tick_soc_targets už vybíjení uměl); běží-li jeden povel, tlačítko opačného se schová. Samostatný klíč v rolích: dash:forcedischarge („🔻 Tlačítko VYBÍT BATERII do sítě"). Nasazení: franta.
 
 ## v0.88.10 — schéma: uzel Distribuce má pod aktuálním výkonem dnešní bilanci barevně: „▼ dnes 12,3 kWh" (odběr ze sítě, červeně) · „▲ 4,1 kWh" (dodávka do sítě, zeleně) — z import_kwh/export_kwh flow endpointu; obě rozložení. Jen web. Infra pozn.: Docker Hub přes IPv6 timeoutoval (gai.conf precedence IPv4 řeší).
