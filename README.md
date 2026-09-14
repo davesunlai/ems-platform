@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.90.1 — „Strop exportu do sítě (kW)" (grid_export_limit_kw) přidán i do ▼ Pokročilé karty 🧠 (dosud jen v žebříčku „Jak to chytře řídíme" pod řádkem prodeje přebytku); používá ho plánovač i export guard. Jen web.
+
 ## v0.90.0 — 🛡 Strop exportu při vybíjení (export guard). Motivace: pravidlo vybíjelo 12 kW do sítě 15 min přes strop 9,45 kW. Collector každý cyklus: běží-li force_discharge (⏰ / plánovač / ruční), spočte cap = spotřeba domu + grid_export_limit_kw − výroba FVE; je-li požadovaný výkon vyšší, pošle force_discharge s power = cap (reg), původní požadavek uloží do params.power_req; když strop povolí, vrátí výkon k požadavku. Hystereze 0,3 kW, max 1 zásah / 20 s / modul, username export-guard, důvod v auditu („strop exportu 9,45 kW: FVE 3,1 + baterie ≤ dům 2,5 + limit → 8,9 kW"). Smyčka pravidel bere power_req jako referenci (jinak by se s guardem přetahovala). Limit = 🧠 pole „Limit exportu (kW)". Nasazení: franta (collector).
 
 ## v0.89.4 — ⏰ pravidla: (1) přepnutí zapnuto/vypnuto už NEMAŽE název, výkon, dny: PUT s částečným tělem vracel přes model_dump() i DEFAULTY modelu (label "", power_kw 5, days 1234567) a update je bral jako zadané — nyní exclude_unset (jen skutečně poslaná pole); regres. (2) Změna parametrů BĚŽÍCÍHO pravidla se propíše do reality: collector re-forcuje i když akce zůstává stejná, ale liší se výkon (control_state.params.power vs požadovaný reg) — s důvodem „změna výkonu A→B"; ruční force se nepřebíjí (bod z fronty). Výstupy (eWeLink) už re-force řeší force_output každý cyklus. Nasazení: franta (api+collector).
