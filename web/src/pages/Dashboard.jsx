@@ -320,7 +320,9 @@ function SunCloud({ cx, cy, base, sun, cloud, frac }) {
   </>);
 }
 
-function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1, overlay }) {
+function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1, overlay, auditKey, onAudit }) {
+  const hov = auditKey && onAudit ? { onMouseEnter: (e) => onAudit(auditKey, e), onMouseLeave: () => onAudit(null),
+                                      style: { cursor: "help", textDecoration: "underline dotted" } } : {};
   if (h < 80 * m) {   // kompaktní box (výstupy, TČ v desktop layoutu): ikona vlevo, texty se vejdou DOVNITŘ
     return (
       <g>
@@ -329,7 +331,7 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
           ? <image href={icon} x={x + 7 * m} y={y + h / 2 - 11 * m} width={22 * m} height={22 * m} />
           : <text x={x + 16 * m} y={y + h / 2 + 7 * m} fontSize={19 * m}>{icon}</text>}
         <text x={x + w / 2 + 10 * m} y={y + 15 * m} textAnchor="middle" fontSize={9.5 * m} fill="var(--muted)">{title}</text>
-        <text x={x + w / 2 + 10 * m} y={y + 31 * m} textAnchor="middle" fontSize={12.5 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
+        <text x={x + w / 2 + 10 * m} y={y + 31 * m} textAnchor="middle" fontSize={12.5 * m} fontWeight="700" fill={accent || "var(--fg)"} {...hov}>{value}</text>
         {sub && <text x={x + w / 2 + 10 * m} y={y + 45 * m} textAnchor="middle" fontSize={9 * m} fill="var(--muted)">{sub}</text>}
       </g>
     );
@@ -347,7 +349,7 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
           : <text x={x + w / 2} y={y + 30 * m} textAnchor="middle" fontSize={24 * m}>{icon}</text>}
       <text x={x + w / 2} y={y + 48 * m} textAnchor="middle"
             fontSize={(String(title).length > 30 ? 7.6 : String(title).length > 18 ? 9 : 11) * m} fill="var(--muted)">{title}</text>
-      <text x={x + w / 2} y={y + 66 * m} textAnchor="middle" fontSize={13.5 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
+      <text x={x + w / 2} y={y + 66 * m} textAnchor="middle" fontSize={13.5 * m} fontWeight="700" fill={accent || "var(--fg)"} {...hov}>{value}</text>
       {sub && <text x={x + w / 2} y={y + 79 * m} textAnchor="middle" fontSize={10 * m} fill="var(--muted)">{sub}</text>}
     </g>
   );
@@ -587,6 +589,13 @@ function ForceBtn({ mode, dev, soc, maxKw }) {
 function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [ic, pickIcon, icExtra] = useFlowIcons();
   const [icOpen, setIcOpen] = useState(false);
+  const [tip, setTip] = useState(null);          // {key, x, y}
+  const [snap, setSnap] = useState(null);        // audit snapshot (markdown)
+  const onAudit = (key, e) => setTip(key && e ? { key, x: e.clientX, y: e.clientY } : null);
+  const takeSnapshot = async () => {
+    try { setSnap("⏳ sestavuji audit…"); const r = await api.auditSnapshot(locId); setSnap(r.markdown); }
+    catch (e) { setSnap("Chyba: " + e.message); }
+  };
   const [d, setD] = useState(null);
   const [pl, setPl] = useState(null);
   const [outs, setOuts] = useState([]);
@@ -644,6 +653,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
           <b style={{ fontSize: 15 }}>⚡ Energetický tok — {name}</b>
           <span title="vybrat ikonky uzlů" onClick={() => setIcOpen(!icOpen)}
                 style={{ cursor: "pointer", marginLeft: 8, fontSize: 14 }}>⚙️</span>
+          {d?.audit_mode && <button className="btn" onClick={takeSnapshot} style={{ marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
+                                    title="Kompletní soupis hodnot, vzorců, registrů a řídicí logiky k odeslání (režim auditu lokality)">📋 Audit snapshot</button>}
           {!inline && <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={onClose}>✕</button>}
         </div>
         {pl?.config?.enabled && cur && (
@@ -690,14 +701,14 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={i === 0 ? 92 : 312} ly={470} />
             ))}
-            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} value={`${f1(pvKw)} / ${(d.today_kwh ?? 0).toFixed(1)} kWh`}
+            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} auditKey="pv_w" onAudit={onAudit} value={`${f1(pvKw)} / ${(d.today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
-            <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce"
+            <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit}
                       value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
+            <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub="výkon / dnes celkem" accent="var(--amber, #d29922)" />
             {/* baterie — velký box s pod-boxy (mobil) */}
             <g>
@@ -706,7 +717,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 ? <image href={ic.bat} x={106} y={362} width={38} height={38} />
                 : <text x={125} y={388} textAnchor="middle" fontSize="30">{ic.bat}</text>}
               <text x={125} y={410} textAnchor="middle" fontSize="15" fill="var(--muted)">Baterie celkem</text>
-              <text x={125} y={434} textAnchor="middle" fontSize="19" fontWeight="700" fill="#a371f7">
+              <text x={125} y={434} textAnchor="middle" fontSize="19" fontWeight="700" fill="#a371f7" onMouseEnter={(e) => onAudit("battery_w", e)} onMouseLeave={() => onAudit(null)} style={d?.audit_mode ? { cursor: "help", textDecoration: "underline dotted" } : undefined}>
                 {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}
               </text>
               {d.soc != null && (
@@ -771,13 +782,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={505} ly={330 + i * 55} />
             ))}
-            <FlowNode x={65} y={55} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} value={`${f1(pvKw)} / ${(d.today_kwh ?? 0).toFixed(1)} kWh`}
+            <FlowNode x={65} y={55} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} auditKey="pv_w" onAudit={onAudit} value={`${f1(pvKw)} / ${(d.today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
                       accent={pvKw > 0.05 ? "#3fb950" : null} />
-            <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
+            <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit} value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode x={295} y={188} w={170} icon={ic.home} title="Dům" value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
+            <FlowNode x={295} y={188} w={170} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub="výkon / dnes celkem" accent="var(--amber, #d29922)" />
             <g>
               <rect x={45} y={330} width={200} height={124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
@@ -785,7 +796,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 ? <image href={ic.bat} x={132} y={334} width={26} height={26} />
                 : <text x={145} y={352} textAnchor="middle" fontSize="20">{ic.bat}</text>}
               <text x={145} y={368} textAnchor="middle" fontSize="11" fill="var(--muted)">Baterie celkem</text>
-              <text x={145} y={386} textAnchor="middle" fontSize="14" fontWeight="700" fill="#a371f7">
+              <text x={145} y={386} textAnchor="middle" fontSize="14" fontWeight="700" fill="#a371f7" onMouseEnter={(e) => onAudit("battery_w", e)} onMouseLeave={() => onAudit(null)} style={d?.audit_mode ? { cursor: "help", textDecoration: "underline dotted" } : undefined}>
                 {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}
               </text>
               {d.soc != null && (
@@ -823,8 +834,36 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             <ForceBtn mode="discharge" dev={d.control_module} soc={d.soc} maxKw={d.max_discharge_kw} />
           </div>
         )}
+        {tip && d?.audit?.[tip.key] && (() => { const a = d.audit[tip.key]; return (
+          <div style={{ position: "fixed", left: Math.min(tip.x + 12, window.innerWidth - 420), top: Math.min(tip.y + 12, window.innerHeight - 260),
+                        zIndex: 90, width: 400, maxHeight: 250, overflow: "auto", background: "var(--panel)", border: "1px solid var(--border)",
+                        borderRadius: 10, padding: "8px 10px", fontSize: 11.5, boxShadow: "0 8px 24px rgba(0,0,0,.4)", pointerEvents: "none" }}>
+            <div><b>🔎 {tip.key}</b> = <b>{a.value == null ? "?" : Number(a.value).toFixed(a.unit === "%" ? 0 : 1)} {a.unit}</b></div>
+            <div style={{ marginTop: 3 }}><span className="muted">vzorec:</span> <code style={{ fontSize: 11 }}>{a.formula}</code></div>
+            {a.note && <div className="muted" style={{ marginTop: 3 }}>⚠ {a.note}</div>}
+            <div style={{ marginTop: 4 }}>
+              {(a.sources || []).map((src, i) => src.derived_from
+                ? <div key={i} className="muted">odvozeno z: {src.derived_from.join(", ")}</div>
+                : <div key={i}>{src.device} · {src.metric} = <b>{src.value == null ? "?" : src.value}</b>
+                    <span className="muted"> @ {src.ts ? new Date(src.ts).toLocaleTimeString("cs-CZ") : "?"} · reg {src.register} · {src.decode}</span></div>)}
+            </div>
+          </div>); })()}
+        {snap != null && (
+          <div onClick={() => setSnap(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(960px, 96vw)", height: "min(720px, 90vh)", display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                <b>📋 Audit snapshot</b>
+                <button className="btn" style={{ padding: "3px 10px" }} onClick={() => navigator.clipboard.writeText(snap).then(() => alert("Zkopírováno do schránky."))}>📋 kopírovat</button>
+                <button className="btn" style={{ padding: "3px 10px" }} onClick={() => { const b = new Blob([snap], { type: "text/markdown" }); const u = URL.createObjectURL(b);
+                  const el = document.createElement("a"); el.href = u; el.download = `tera-audit-${name}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.md`; el.click(); URL.revokeObjectURL(u); }}>⬇ stáhnout .md</button>
+                <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={() => setSnap(null)}>zavřít</button>
+              </div>
+              <pre style={{ flex: 1, overflow: "auto", fontSize: 11.5, whiteSpace: "pre-wrap", margin: 0, background: "var(--bg)", padding: 10, borderRadius: 8 }}>{snap}</pre>
+            </div>
+          </div>)}
         <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
           Animované čáry = aktuální tok energie (tloušťka ≈ výkon), šipka = směr. Obnovuje se každých 5 s.
+          {d?.audit_mode && <> · <b>🔎 režim auditu:</b> najeď na libovolné číslo → vzorec, registry, surová data.</>}
         </p>
       </div>
   );

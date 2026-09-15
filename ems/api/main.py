@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.90.1", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.91.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -117,6 +117,26 @@ async def set_ui_default(key: str, body: dict, user: dict = Depends(require_perm
                            "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()",
                            key, _json.dumps(body))
     return {"key": key, "value": body, "by": user.get("username")}
+
+
+@app.get("/api/localities/{loc_id}/audit/snapshot")
+async def audit_snapshot(loc_id: int, user: dict = Depends(require_permission("read"))):
+    """🔎 Kompletní audit: hodnoty + vzorce + registry + řídicí logika + kontrola pravidel; markdown k odeslání."""
+    from ems.api.db import get_pool as _gp
+    pool = await _gp()
+    async with pool.acquire() as conn:
+        am = await conn.fetchval("SELECT audit_mode FROM localities WHERE id=$1", loc_id)
+    if not am:
+        raise HTTPException(status_code=400, detail="režim auditu není u lokality zapnutý")
+    from ems.audit.flow import build_audit, to_markdown
+    a = await build_audit(loc_id)
+    extra = None
+    try:
+        from ems.planner.routes import check_time_rules
+        extra = await check_time_rules(loc_id, user)
+    except Exception as exc:
+        extra = {"error": str(exc)}
+    return {"json": a, "rules": extra, "markdown": to_markdown(a, extra)}
 
 
 @app.get("/api/ui-prefs/{key}")
@@ -255,6 +275,17 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
                 cfg = await planner_db.get_config(loc)
                 out["max_charge_kw"] = float((cfg or {}).get("max_charge_kw") or 10)
                 out["max_discharge_kw"] = float((cfg or {}).get("max_discharge_kw") or 10)
+            except Exception:
+                pass
+            try:   # 🔎 režim auditu: vzorce/registry pro tooltipy ve schématu
+                from ems.api.db import get_pool as _gp
+                _pool = await _gp()
+                async with _pool.acquire() as _c:
+                    _am = await _c.fetchval("SELECT audit_mode FROM localities WHERE id=$1", loc)
+                if _am:
+                    from ems.audit.flow import build_audit
+                    out["audit"] = (await build_audit(loc))["values"]
+                    out["audit_mode"] = True
             except Exception:
                 pass
             try:   # který modul je řiditelný střídač (tlačítko NABÍT) — ne první zařízení lokality!

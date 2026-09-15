@@ -26,6 +26,7 @@ class LocalityUpdate(BaseModel):
     lat: float | None = None
     lon: float | None = None
     pv_kwp_total: float | None = None
+    audit_mode: bool | None = None
 
 
 class AssignUser(BaseModel):

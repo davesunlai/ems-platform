@@ -1,2 +1,2 @@
 """EMS Platform — univerzální energy management napříč portfoliem."""
-__version__ = "0.90.1"
+__version__ = "0.91.0"
