@@ -49,6 +49,9 @@ class Metric(str, Enum):
     BATTERY_CURRENT_2 = "battery_current_2"
     BATTERY_POWER_1 = "battery_power_1"
     BATTERY_POWER_2 = "battery_power_2"
+    HOUSE_LOAD_INV = "house_load_inv"          # zátěž domu podle měniče (křížová kontrola dopočtu)
+    BATTERY_POWER_INV = "battery_power_inv"    # výkon baterie podle měniče (křížová kontrola V×I)
+    INVERTER_AC_POWER = "inverter_ac_power"    # AC výkon měniče
     BATTERY_SOH_1 = "battery_soh_1"
     BATTERY_SOH_2 = "battery_soh_2"
     BATTERY_TEMP_1 = "battery_temp_1"
@@ -104,6 +107,9 @@ UNIT_OF: dict[Metric, str] = {
     Metric.BATTERY_CURRENT_2: "A",
     Metric.BATTERY_POWER_1: "W",
     Metric.BATTERY_POWER_2: "W",
+    Metric.HOUSE_LOAD_INV: "W",
+    Metric.BATTERY_POWER_INV: "W",
+    Metric.INVERTER_AC_POWER: "W",
     Metric.BATTERY_SOH_1: "%",
     Metric.BATTERY_SOH_2: "%",
     Metric.BATTERY_TEMP_1: "°C",

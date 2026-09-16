@@ -10,7 +10,8 @@ from .registers import METRIC_SOURCE, SOLIS_INPUT, SOLIS_HOLDING, describe
 
 _METRICS = ["pv_power", "energy_today", "energy_pv_total", "grid_power", "battery_power", "battery_power_1",
             "battery_power_2", "battery_soc", "battery_soc_1", "battery_soc_2", "battery_voltage_1", "battery_voltage_2",
-            "battery_current_1", "battery_current_2", "inverter_state", "temperature"]
+            "battery_current_1", "battery_current_2", "inverter_state", "temperature",
+            "house_load_inv", "battery_power_inv", "inverter_ac_power"]
 
 
 async def _latest_samples(device_ids: list[str]) -> dict[str, dict[str, dict]]:
@@ -56,13 +57,15 @@ async def build_audit(locality_id: int) -> dict:
     add("battery_w", agg.get("battery_w"), "W",
         "battery_w = Σ battery_power; battery_power = battery_power_1 + battery_power_2; "
         "battery_power_N = voltage_N × current_N × (−1 když direction_N = 1 vybíjení); + nabíjení / − vybíjení",
-        bsrc, note="Proud packů je MAGNITUDA (registry 33134/34290 vždy +); znaménko dává směrový registr. "
-                   "Křížová kontrola: registr 33149 (výkon baterie dle měniče) — ten EMS nepoužívá.")
+        bsrc + [_src(d, "battery_power_inv", samples) for d in solis],
+        note="Proud packů je MAGNITUDA (registry 33134/34290 vždy +); znaménko dává směrový registr. "
+             "KŘÍŽOVÁ KONTROLA: battery_power_inv = registr 33149 (výkon baterie podle měniče) — má odpovídat battery_power.")
     add("load_w", agg.get("load_w"), "W",
         "load_w = pv_w + grid_w − battery_w  (energetická bilance uzlu; záporný výsledek se ořízne na 0)",
-        [{"derived_from": ["pv_w", "grid_w", "battery_w"]}],
-        note="Spotřeba domu NENÍ měřená — je dopočítaná. Chyba v kterémkoli ze tří vstupů se promítne sem. "
-             "Křížová kontrola: registr 33147 (zátěž domu dle měniče).")
+        [{"derived_from": ["pv_w", "grid_w", "battery_w"]}] + [_src(d, "house_load_inv", samples) for d in solis]
+        + [_src(d, "inverter_ac_power", samples) for d in solis],
+        note="Spotřeba domu NENÍ měřená — je dopočítaná. KŘÍŽOVÁ KONTROLA: house_load_inv = registr 33147 "
+             "(zátěž domu podle měniče) má odpovídat load_w; inverter_ac_power = 33079.")
     add("soc", agg.get("soc"), "%", "soc = průměr battery_soc zařízení; battery_soc = průměr SoC packů (33139, 34278)",
         [_src(d, m, samples) for d in solis for m in ("battery_soc", "battery_soc_1", "battery_soc_2")])
     add("today_kwh", agg.get("today_kwh"), "kWh",
@@ -103,7 +106,7 @@ async def build_audit(locality_id: int) -> dict:
         control["outputs_error"] = str(exc)
 
     return {"generated_at": datetime.now(timezone.utc).isoformat(), "locality_id": locality_id,
-            "devices": [{"id": d["device_id"], "adapter": d.get("adapter"), "type": d.get("device_type"),
+            "devices": [{"id": d["device_id"], "adapter": d.get("adapter"), "type": d.get("device_type") or d.get("type"),
                          "emsbox_id": d.get("emsbox_id")} for d in devs],
             "values": V, "control": control,
             "registers": {"input": {a: describe(a) for a in SOLIS_INPUT}, "holding": {a: describe(a) for a in SOLIS_HOLDING}}}

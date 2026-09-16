@@ -241,7 +241,8 @@ async def check_time_rules(locality_id: int, _: dict = Depends(require_permissio
         day_ok = isoday in (rule.get("days") or "1234567")
         latched = ((rule.get("cond_spot_op") or "any") != "any" and not rule.get("cond_spot_hold", True)
                    and rule.get("latched_window") == wk)
-        soc_latched = ((rule.get("cond_soc_op") or "any") != "any" and not rule.get("cond_soc_hold", True)
+        soc_latched = (rule.get("action") not in ("force_charge", "force_discharge")
+                       and (rule.get("cond_soc_op") or "any") != "any" and not rule.get("cond_soc_hold", True)
                        and rule.get("latched_soc_window") == wk)
         ev = pdb.rule_conditions_explain(rule, day_pv.get(rule.get("cond_sun_day") or "today"),
                                          soc_now, spot_kwh, spot_latched=latched, soc_latched=soc_latched)

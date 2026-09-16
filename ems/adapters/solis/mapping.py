@@ -20,6 +20,10 @@ REG_GRID_V_L1 = (33073, "u16", 0.1)       # V
 REG_GRID_V_L2 = (33074, "u16", 0.1)       # V
 REG_GRID_V_L3 = (33075, "u16", 0.1)       # V
 REG_INV_TEMP = (33093, "s16", 0.1)        # °C — teplota měniče
+# Křížové kontroly (v bloku BLOCK_SYS2 / BLOCK_BAT1 — čtou se ZDARMA, žádný dotaz navíc):
+REG_INV_AC_POWER = (33079, "s32", 1.0)     # W  — činný AC výkon měniče
+REG_HOUSE_LOAD = (33147, "u16", 1.0)       # W  — zátěž domu podle měniče
+REG_BAT_POWER_INV = (33149, "s32", 1.0)    # W  — výkon baterie podle měniče (manuál: + nabíjení / − vybíjení)
 
 # --- Baterie: dva packy, KAŽDÝ MÁ JINÝ LAYOUT (ne offset!) viz brief §10 ---
 # voltage = napětí inv-side (0.1 V), current = proud (0.1 A, + nabíjení / − vybíjení)

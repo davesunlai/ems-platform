@@ -78,7 +78,7 @@ function fmt(metric, m) {
 
 const CONTROL_ACT = {
   force_charge: { label: "Vynucené nabíjení", color: "#3fb950", icon: "⚡" },
-  force_discharge: { label: "Vybíjení do sítě", color: "#d29922", icon: "🔻" },
+  force_discharge: { label: "Vynucené vybíjení baterie", color: "#d29922", icon: "🔻" },
   spiral: { label: "Spirála (vybíjení odběrem)", color: "#58a6ff", icon: "🌀" },
   set_work_mode: { label: "Změna režimu", color: "#58a6ff", icon: "⚙" },
 };
@@ -142,7 +142,9 @@ function ControlBanners({ deviceIds, localityId }) {
         return (
           <div key={id} className="ems-active-bar" style={{ color: act.color, background: `color-mix(in srgb, ${act.color} 14%, transparent)`, marginBottom: 6 }}>
             <span className="ems-pulse" style={{ fontSize: 16 }}>{act.icon}</span>
-            <span>{act.label}{actPower != null ? ` (${(actPower / 100).toFixed(1)} kW)` : ""}</span>
+            <span>{act.label}{actPower != null ? ` · požadováno ${(actPower / 100).toFixed(1)} kW` : ""}
+              {st.params?.power_req != null && st.params.power_req !== actPower ? ` (pravidlo ${(st.params.power_req / 100).toFixed(1)} kW, sníženo stropem exportu)` : ""}
+              {st.params?.target_soc != null ? ` · cíl ${st.params.target_soc} %` : ""}</span>
             <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: "auto" }}>
               {id} · od {sinceTxt}{st.source && st.source !== "manual" ? ` · ${st.source}` : ""}
             </span>

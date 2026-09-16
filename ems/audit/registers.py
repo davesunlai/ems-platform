@@ -20,8 +20,8 @@ SOLIS_INPUT = {
     33140: ("battery_soh_1", "u16", "%", "Zdraví baterie 1"),
     33144: ("battery_temp_1", "s16 ×0.1", "°C", "Teplota baterie 1"),
     33147: ("house_load", "u16", "W", "Zátěž domu podle měniče (backup/household load)"),
-    33149: ("battery_power_inv", "s32", "W", "Výkon baterie podle měniče (manuál: + nabíjení / − vybíjení) — NEPOUŽÍVÁME, "
-                                             "EMS počítá z V×I packů; vhodné pro křížovou kontrolu"),
+    33149: ("battery_power_inv", "s32", "W", "Výkon baterie podle měniče (manuál: + nabíjení / − vybíjení) — křížová kontrola "
+                                             "k EMS výpočtu z V×I packů (metrika battery_power_inv)"),
     34278: ("battery_soc_2", "u16", "%", "Stav nabití baterie 2"),
     34279: ("battery_soh_2", "u16", "%", "Zdraví baterie 2"),
     34282: ("battery_temp_2", "s16 ×0.1", "°C", "Teplota baterie 2 (34281 vracelo nesmysl)"),
@@ -53,6 +53,9 @@ METRIC_SOURCE = {
     "battery_power": ("packy 1+2", "battery_power_1 + battery_power_2 (+ nabíjení / − vybíjení)"),
     "inverter_state": ("33095", "u16"),
     "temperature": ("33093", "s16 × 0.1 → °C"),
+    "house_load_inv": ("33147", "u16 → W (zátěž domu podle měniče)"),
+    "battery_power_inv": ("33149–33150", "s32 → W (výkon baterie podle měniče)"),
+    "inverter_ac_power": ("33079–33080", "s32 → W (AC výkon měniče)"),
 }
 
 

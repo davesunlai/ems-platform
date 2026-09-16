@@ -421,7 +421,11 @@ async def tick_planner(state: dict) -> None:
                             if not latched and planner_db.spot_cond_ok(r, spot_kwh):
                                 await planner_db.set_rule_latch(r["id"], wk)   # cena OK na vstupu → drž celé okno
                                 latched = True
-                        if (r.get("cond_soc_op") or "any") != "any" and not r.get("cond_soc_hold", True):
+                        # SoC latch („OK na vstupu, drž celé okno") má smysl u spínaných výstupů; u nabíjení/vybíjení
+                        # baterie je práh SoC průběžná POJISTKA → nikdy nelatchovat (lekce z auditu 15. 9.:
+                        # vybíjení běželo dál pod 25 % jen díky latchi, zastavil ho až backup SoC měniče)
+                        soc_latchable = r.get("action") not in ("force_charge", "force_discharge")
+                        if soc_latchable and (r.get("cond_soc_op") or "any") != "any" and not r.get("cond_soc_hold", True):
                             soc_latched = (r.get("latched_soc_window") == wk)
                             if not soc_latched and planner_db.soc_cond_ok(r, soc_now):
                                 await planner_db.set_rule_latch(r["id"], wk, "latched_soc_window")  # SoC OK na vstupu
@@ -656,24 +660,30 @@ async def tick_export_guard(state: dict) -> None:
             limit_kw = float((cfg or {}).get("grid_export_limit_kw") or 0)
             if limit_kw <= 0:
                 continue
+            # MĚŘENÝ export z elektroměru (grid_power = −registr 33130; záporné = dodávka do sítě).
+            # Dopočítaná spotřeba nešla použít — je odvozená z výkonu baterie (kruh; lekce 15. 9.).
             agg = await aggregate_now([dev])
-            pv_kw = float(agg.get("pv_w") or 0) / 1000.0
-            load_kw = float(agg.get("load_w") or 0) / 1000.0
-            cap_kw = max(0.0, load_kw + limit_kw - pv_kw)
-            cap_reg = int(cap_kw * 100)
-            want = min(req, cap_reg)
+            export_kw = max(0.0, -float(agg.get("grid_w") or 0) / 1000.0)
+            over = export_kw - limit_kw                    # > 0 = překračujeme strop
+            if over > 0.3:                                 # nad stropem → ubrat přesně o překročení
+                want = max(0, int(cur) - int(over * 100))
+            elif over < -0.5 and int(cur) < req:           # pod stropem s rezervou → přidat, ale ne přes požadavek
+                want = min(req, int(cur) + int((-over - 0.3) * 100))
+            else:
+                continue
             if abs(want - int(cur)) < 30:                  # hystereze 0,3 kW
                 continue
+            cap_kw = want / 100.0
             if now - last.get(dev, -1e9) < 20:
                 continue
             last[dev] = now
             newp = {k: v for k, v in p.items() if k not in ("reason",)}
             newp["power"] = want
             newp["power_req"] = req
-            newp["reason"] = (f"strop exportu {limit_kw:g} kW: FVE {pv_kw:.1f} + baterie ≤ dům {load_kw:.1f} + limit → "
-                              f"{want/100:.1f} kW" if want < req else f"strop exportu uvolněn → zpět {req/100:.1f} kW")
+            newp["reason"] = (f"strop exportu {limit_kw:g} kW: měřená dodávka {export_kw:.1f} kW → baterie {want/100:.1f} kW"
+                              if want < int(cur) else f"dodávka {export_kw:.1f} kW pod stropem → baterie zpět na {want/100:.1f} kW")
             await control_db.enqueue(dev, "force_discharge", newp, username="export-guard")
-            logger.info("Export guard %s: %s → %s reg (cap %.1f kW, req %.1f kW)", dev, cur, want, cap_kw, req / 100)
+            logger.info("Export guard %s: %s → %s reg (export %.1f kW, limit %.1f, req %.1f kW)", dev, cur, want, export_kw, limit_kw, req / 100)
     except Exception as exc:
         logger.debug("tick_export_guard: %s", exc)
 
