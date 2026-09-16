@@ -150,15 +150,6 @@ function ForecastSection({ loc, onChange }) {
         </div>
         <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>Lat</label><input style={inp} value={lat} onChange={(e) => setLat(e.target.value)} /></div>
         <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>Lon</label><input style={inp} value={lon} onChange={(e) => setLon(e.target.value)} /></div>
-        <div style={{ flex: "1 1 220px" }}>
-          <label style={{ fontSize: 12, display: "block" }}>🔎 Režim auditu</label>
-          <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 6 }}
-                 title="Ve schématu se po najetí na libovolné číslo zobrazí přesný vzorec, zdrojové zařízení a registry (s významem z manuálu) a surové hodnoty; přibude tlačítko 📋 Audit snapshot s kompletním soupisem k odeslání.">
-            <input type="checkbox" checked={!!loc.audit_mode}
-                   onChange={(e) => api.updateLocality(loc.id, { audit_mode: e.target.checked }).then(onChange).catch((x) => setMsg(x.message))} />
-            zapnout (vzorce, registry, snapshot)
-          </label>
-        </div>
         <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>FVE kWp celkem</label><input style={{ ...inp, borderColor: kwpMissing ? "#e5534b" : "var(--border)" }} value={kwp} onChange={(e) => setKwp(e.target.value)} placeholder="např. 23" /></div>
       </div>
 
@@ -344,6 +335,14 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
         <h3 style={{ margin: 0 }}>{loc.name}</h3>
         <span className="muted" style={{ fontSize: 13 }}>{[loc.address, loc.region].filter(Boolean).join(" · ")}</span>
+        <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 5, marginLeft: 6,
+                        padding: "2px 8px", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer",
+                        color: loc.audit_mode ? "var(--amber)" : "var(--muted)" }}
+               title="Režim auditu: ve schématu se po najetí na číslo zobrazí přesný vzorec, zařízení, registry (význam z manuálu) a surová data; měřené křížové hodnoty přímo u dopočtů; tlačítko 📋 Audit snapshot.">
+          <input type="checkbox" checked={!!loc.audit_mode}
+                 onChange={(e) => api.updateLocality(loc.id, { audit_mode: e.target.checked }).then(onChange).catch(() => {})} />
+          🔎 audit {loc.audit_mode ? "zapnut" : "vypnut"}
+        </label>
         <div style={{ marginLeft: "auto" }}>
           <button className="btn" onClick={rename} style={{ marginRight: 8 }}>Upravit</button>
           <button className="btn danger" onClick={del}>Smazat</button>

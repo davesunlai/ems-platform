@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.91.3 — přepínač „🔎 audit zapnut/vypnut" přesunut do hlavičky karty lokality (hned za název a adresu), pryč z predikčního bloku; jantarově zvýrazněn, když je zapnutý. Jen web.
+
 ## v0.91.2 — audit ve schématu: měřené křížové hodnoty přímo u dopočtených čísel (jen při zapnutém auditu): Dům → podtitulek „měnič (33147): 1,50 kW · dopočet vs měřeno", Baterie → řádek „měnič (33149): −0,50 kW" (jantarově). Flow endpoint vrací `xcheck`. Nález z auditu 16. 9. 00:52 (noc, self-use): dopočet domu 1 558 W vs měnič 1 500 W / AC 1 600 W → sedí; V×I packů −1 522 W vs 33149 −500 W → 33149 hrubý/neúplný, V×I potvrzeno bilancí. Jen franta.
 
 ## v0.91.1 — z prvního auditu: měřené křížové kontroly, guard na měřený export, SoC latch, pruh. (1) Nové metriky ZDARMA z už čtených bloků Solisu: house_load_inv (33147 zátěž domu podle měniče), battery_power_inv (33149 výkon baterie podle měniče), inverter_ac_power (33079); audit u load_w a battery_w ukazuje MĚŘENO vs DOPOČTENO vedle sebe (konec sporu 20 vs 9,45 kW při příštím snapshotu). (2) Export guard řídí podle MĚŘENÉ dodávky z 33130 (dopočtená spotřeba byla odvozená z výkonu baterie → kruh): nad stropem +0,3 kW ubere přesně o překročení, pod stropem s rezervou 0,5 kW přidává zpět k požadavku. (3) SoC podmínka se u force_charge/force_discharge nikdy nelatchuje (průběžná pojistka; vybíjení pod 25 % běželo jen díky latchi) — collector i kontrola pravidel. (4) Stavový pruh: „Vynucené vybíjení baterie · požadováno 10,0 kW (pravidlo 12 kW, sníženo stropem exportu) · cíl X %" — záměr, ne tvrzení o toku. (5) Audit: type zařízení. Nasazení: franta + ⬆ box (adaptér Solis).
