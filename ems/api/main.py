@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.91.1", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.91.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -286,6 +286,14 @@ async def devices_aggregate_now(ids: str, loc: int | None = None, _: dict = Depe
                     from ems.audit.flow import build_audit
                     out["audit"] = (await build_audit(loc))["values"]
                     out["audit_mode"] = True
+                    # měřené křížové kontroly pro přímé zobrazení u dopočtených čísel
+                    xc = {}
+                    for key in ("house_load_inv", "battery_power_inv", "inverter_ac_power"):
+                        srcs = (out["audit"].get("load_w" if key != "battery_power_inv" else "battery_w") or {}).get("sources") or []
+                        v = next((s.get("value") for s in srcs if s.get("metric") == key), None)
+                        if v is not None:
+                            xc[key] = v
+                    out["xcheck"] = xc
             except Exception:
                 pass
             try:   # který modul je řiditelný střídač (tlačítko NABÍT) — ne první zařízení lokality!
