@@ -501,6 +501,18 @@ async def tick_planner(state: dict) -> None:
                         logger.info("planner lok %s modul %s: uvolněn (zdroje vypnuty, povel #%s)", lid, dev, cid)
                     continue
                 desired, cmd, params = pick[0], pick[1], dict(pick[2])
+                # 🛡 STROP EXPORTU MÁ NEJVYŠŠÍ PRIORITU (pokuty): vybíjení se ořeže/odmítne už při vydání
+                if desired == "force_discharge" and params.get("power") is not None:
+                    cap_reg, info = await discharge_cap(lid, dev)
+                    if cap_reg is not None:
+                        if cap_reg < 50:            # < 0,5 kW → vybíjet do sítě teď nelze
+                            desired, cmd = "idle", "stop"
+                            params = {"source": params.get("source", "planner"),
+                                      "reason": f"strop exportu {info['limit_kw']:g} kW: FVE {info['pv_kw']:.1f} kW ≥ strop → vybíjení do sítě zakázáno"}
+                        elif int(params["power"]) > cap_reg:
+                            params["power_req"] = int(params["power"])
+                            params["power"] = cap_reg
+                            params["reason"] = f"{params.get('reason') or ''} · ořez stropem exportu {info['limit_kw']:g} kW (FVE {info['pv_kw']:.1f}) → {cap_reg/100:.1f} kW".strip(" ·")
                 # Ruční přebití: po manuálním povelu nech plánovač modul 30 min na pokoji
                 # (jinak by planner okamžitě přebil tvůj Stop / ruční zásah).
                 since = st.get("since")
@@ -625,6 +637,25 @@ async def _self_heal_igfol(dev: str, state: dict, now: float) -> None:
         logger.debug("_self_heal_igfol: %s", exc)
 
 
+EXPORT_HOUSE_FLOOR_KW = 0.3   # jediná „spotřeba", se kterou strop počítá — dopočtu domu nevěříme
+
+
+async def discharge_cap(lid: int, dev: str) -> tuple[int | None, dict]:
+    """🛡 Maximální povolený výkon vybíjení (reg, 10 W) tak, aby export NEpřekročil strop:
+    cap = strop − FVE + 0,3 kW (bez dopočtené spotřeby — ta je odvozená z baterie/elektroměru).
+    Vrací (cap_reg | None když strop není nastaven, info). cap 0 = vybíjet do sítě teď nelze."""
+    from ems.api.db import aggregate_now
+    cfg = await planner_db.get_config(lid) if lid else {}
+    limit_kw = float((cfg or {}).get("grid_export_limit_kw") or 0)
+    if limit_kw <= 0:
+        return None, {}
+    agg = await aggregate_now([dev])
+    pv_kw = float(agg.get("pv_w") or 0) / 1000.0
+    export_kw = max(0.0, -float(agg.get("grid_w") or 0) / 1000.0)
+    cap_kw = max(0.0, limit_kw - pv_kw + EXPORT_HOUSE_FLOOR_KW)
+    return int(cap_kw * 100), {"limit_kw": limit_kw, "pv_kw": pv_kw, "export_kw": export_kw, "cap_kw": cap_kw}
+
+
 async def tick_export_guard(state: dict) -> None:
     """🛡 Strop exportu při vybíjení: baterie smí vybíjet max spotřeba + limit_exportu − FVE.
     Platí pro force_discharge z jakéhokoli zdroje (⏰, plánovač, ruční). Při překročení sníží výkon
@@ -656,31 +687,32 @@ async def tick_export_guard(state: dict) -> None:
                 continue
             req = int(p.get("power_req") or cur)          # původní požadavek (reg, 10 W)
             lid = d.get("locality_id")
-            cfg = await planner_db.get_config(lid) if lid else {}
-            limit_kw = float((cfg or {}).get("grid_export_limit_kw") or 0)
-            if limit_kw <= 0:
+            cap_reg, info = await discharge_cap(lid, dev)
+            if cap_reg is None:
                 continue
-            # MĚŘENÝ export z elektroměru (grid_power = −registr 33130; záporné = dodávka do sítě).
-            # Dopočítaná spotřeba nešla použít — je odvozená z výkonu baterie (kruh; lekce 15. 9.).
-            agg = await aggregate_now([dev])
-            export_kw = max(0.0, -float(agg.get("grid_w") or 0) / 1000.0)
-            over = export_kw - limit_kw                    # > 0 = překračujeme strop
-            if over > 0.3:                                 # nad stropem → ubrat přesně o překročení
-                want = max(0, int(cur) - int(over * 100))
-            elif over < -0.5 and int(cur) < req:           # pod stropem s rezervou → přidat, ale ne přes požadavek
-                want = min(req, int(cur) + int((-over - 0.3) * 100))
-            else:
+            limit_kw, export_kw = info["limit_kw"], info["export_kw"]
+            # dvě pojistky: (1) strop podle FVE (preventivní), (2) MĚŘENÝ export z 33130 (reaktivní);
+            # každý cyklus (10 s), bez čekacího intervalu — pokuty se počítají ze čtvrthodin
+            over = export_kw - limit_kw
+            want = min(req, cap_reg)
+            if over > 0.3:
+                want = min(want, max(0, int(cur) - int(over * 100)))
+            if want >= int(cur) and over > -0.5:           # zvyšovat jen s rezervou pod stropem
                 continue
             if abs(want - int(cur)) < 30:                  # hystereze 0,3 kW
                 continue
-            cap_kw = want / 100.0
-            if now - last.get(dev, -1e9) < 20:
+            if want < 50:                                  # pod 0,5 kW nemá vybíjení smysl → stop
+                await control_db.enqueue(dev, "stop", {"source": "target",
+                    "reason": f"strop exportu {limit_kw:g} kW: FVE {info['pv_kw']:.1f} kW / dodávka {export_kw:.1f} kW → vybíjení zastaveno"},
+                    username="export-guard")
+                logger.warning("Export guard %s: STOP (export %.1f kW, FVE %.1f, limit %.1f)", dev, export_kw, info["pv_kw"], limit_kw)
                 continue
+            cap_kw = want / 100.0
             last[dev] = now
             newp = {k: v for k, v in p.items() if k not in ("reason",)}
             newp["power"] = want
             newp["power_req"] = req
-            newp["reason"] = (f"strop exportu {limit_kw:g} kW: měřená dodávka {export_kw:.1f} kW → baterie {want/100:.1f} kW"
+            newp["reason"] = (f"strop exportu {limit_kw:g} kW: FVE {info['pv_kw']:.1f} kW, měřená dodávka {export_kw:.1f} kW → baterie {want/100:.1f} kW"
                               if want < int(cur) else f"dodávka {export_kw:.1f} kW pod stropem → baterie zpět na {want/100:.1f} kW")
             await control_db.enqueue(dev, "force_discharge", newp, username="export-guard")
             logger.info("Export guard %s: %s → %s reg (export %.1f kW, limit %.1f, req %.1f kW)", dev, cur, want, export_kw, limit_kw, req / 100)

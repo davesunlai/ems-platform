@@ -287,6 +287,28 @@ async def enqueue_command(module_id: str, body: CommandRequest,
     await _get_solis(module_id)
     _validate_command(body.action, body.params)
     await db.ensure_queue_schema()
+    if body.action == "force_discharge" and body.params.get("power") is not None:
+        # 🛡 strop exportu má nejvyšší prioritu i pro ruční povely (pokuty)
+        try:
+            from ems.collector.main import discharge_cap
+            from ems.api.db import get_pool as _gp
+            pool = await _gp()
+            async with pool.acquire() as conn:
+                lid = await conn.fetchval("SELECT locality_id FROM modules WHERE id=$1", module_id)
+            cap_reg, info = await discharge_cap(lid, module_id)
+            if cap_reg is not None:
+                if cap_reg < 50:
+                    raise HTTPException(status_code=409, detail=(
+                        f"Vybíjení do sítě teď nelze: FVE {info['pv_kw']:.1f} kW ≥ strop exportu {info['limit_kw']:g} kW "
+                        f"(dodávka by překročila povolený limit distributora)."))
+                if int(body.params["power"]) > cap_reg:
+                    body.params["power_req"] = int(body.params["power"])
+                    body.params["power"] = cap_reg
+                    body.params["reason"] = f"{body.params.get('reason') or ''} · ořez stropem exportu {info['limit_kw']:g} kW (FVE {info['pv_kw']:.1f}) → {cap_reg/100:.1f} kW".strip(" ·")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     cmd_id = await db.enqueue(module_id, body.action, body.params, user["username"])
     await db.record(user["username"], module_id, body.action, body.params, True, {"queued": cmd_id})
     return {"id": cmd_id, "status": "pending"}

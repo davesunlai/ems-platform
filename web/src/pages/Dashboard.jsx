@@ -517,7 +517,8 @@ const FORCE_MODES = {
   discharge: { action: "force_discharge", visKey: "dash:forcedischarge", defTarget: 20, color: "#f85149", runColor: "#a371f7", fg: "#fff",
             btn: "🔻 VYBÍT BATERII do sítě…", verb: "Vybít", run: "VYBÍJÍM", dir: "do", ok: (t, soc) => soc == null || t < soc,
             note: "vybíjení začne až po potvrzení a samo skončí při poklesu na cíl; přebytek nad spotřebu domu jde do sítě",
-            confirm: "Vybít baterii do sítě", maxKey: "max_discharge_kw" },
+            confirm: "Vybít baterii do sítě", maxKey: "max_discharge_kw",
+            guard: "🛡 Strop exportu má přednost: výkon se automaticky ořeže tak, aby dodávka do sítě nepřekročila povolený limit; při FVE nad stropem se vybíjení odmítne." },
 };
 function ForceBtn({ mode, dev, soc, maxKw }) {
   const M = FORCE_MODES[mode];
@@ -567,7 +568,7 @@ function ForceBtn({ mode, dev, soc, maxKw }) {
             </button>
           : <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 10px",
                           border: `2px solid ${M.color}`, borderRadius: 10 }}>
-              <div style={{ flexBasis: "100%", fontSize: 12.5 }} className="muted">Nastav <b>cíl</b> a <b>výkon</b>; {M.note}.</div>
+              <div style={{ flexBasis: "100%", fontSize: 12.5 }} className="muted">Nastav <b>cíl</b> a <b>výkon</b>; {M.note}.{M.guard && <> <span style={{ color: "var(--amber)" }}>{M.guard}</span></>}</div>
               <b>Cíl</b>
               <input type="range" min="5" max="100" step="5" value={target} onChange={(e) => setTarget(Number(e.target.value))} style={{ width: 150 }} />
               <input type="number" min="5" max="100" value={target} onChange={(e) => setTarget(Math.max(5, Math.min(100, Number(e.target.value) || 5)))} style={{ width: 62 }} /> %

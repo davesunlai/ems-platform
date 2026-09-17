@@ -7,6 +7,9 @@ SOLIS_INPUT = {
     33073: ("grid_voltage_l1", "u16 ×0.1", "V", "Síťové napětí fáze A"),
     33074: ("grid_voltage_l2", "u16 ×0.1", "V", "Síťové napětí fáze B"),
     33075: ("grid_voltage_l3", "u16 ×0.1", "V", "Síťové napětí fáze C"),
+    33076: ("inverter_current_l1", "u16 ×0.1", "A", "Proud měniče fáze A"),
+    33077: ("inverter_current_l2", "u16 ×0.1", "A", "Proud měniče fáze B"),
+    33078: ("inverter_current_l3", "u16 ×0.1", "A", "Proud měniče fáze C"),
     33079: ("inverter_ac_power", "s32", "W", "Činný výkon měniče na AC straně (celkem)"),
     33093: ("temperature", "s16 ×0.1", "°C", "Teplota měniče"),
     33095: ("inverter_state", "u16", "", "Stav měniče: 3 = generuje, 15 = normální/force; 4121 = alarm IGFOL-F (1019)"),
@@ -56,6 +59,8 @@ METRIC_SOURCE = {
     "house_load_inv": ("33147", "u16 → W (zátěž domu podle měniče)"),
     "battery_power_inv": ("33149–33150", "s32 → W (výkon baterie podle měniče)"),
     "inverter_ac_power": ("33079–33080", "s32 → W (AC výkon měniče)"),
+    "inverter_current_l1": ("33076", "u16 × 0.1 → A"), "inverter_current_l2": ("33077", "u16 × 0.1 → A"), "inverter_current_l3": ("33078", "u16 × 0.1 → A"),
+    "grid_voltage_l1": ("33073", "u16 × 0.1 → V"), "grid_voltage_l2": ("33074", "u16 × 0.1 → V"), "grid_voltage_l3": ("33075", "u16 × 0.1 → V"),
 }
 
 

@@ -11,7 +11,9 @@ from .registers import METRIC_SOURCE, SOLIS_INPUT, SOLIS_HOLDING, describe
 _METRICS = ["pv_power", "energy_today", "energy_pv_total", "grid_power", "battery_power", "battery_power_1",
             "battery_power_2", "battery_soc", "battery_soc_1", "battery_soc_2", "battery_voltage_1", "battery_voltage_2",
             "battery_current_1", "battery_current_2", "inverter_state", "temperature",
-            "house_load_inv", "battery_power_inv", "inverter_ac_power"]
+            "house_load_inv", "battery_power_inv", "inverter_ac_power",
+            "inverter_current_l1", "inverter_current_l2", "inverter_current_l3",
+            "grid_voltage_l1", "grid_voltage_l2", "grid_voltage_l3"]
 
 
 async def _latest_samples(device_ids: list[str]) -> dict[str, dict[str, dict]]:
@@ -82,6 +84,19 @@ async def build_audit(locality_id: int) -> dict:
         [{"derived_from": ["today_kwh", "import_kwh", "export_kwh", "battery_power vzorky dnes"]}],
         note="Dopočet; každá chyba v battery_power (např. špatný proud packu) se sem propíše.")
 
+    # per-fáze měniče (test hypotézy „elektroměr nevidí celý výkon", audit 16. 9.)
+    for d in solis:
+        sm = samples.get(d) or {}
+        try:
+            ph = [(sm[f"grid_voltage_l{i}"]["value"] * sm[f"inverter_current_l{i}"]["value"]) for i in (1, 2, 3)]
+            add("inverter_ac_per_phase", [round(x) for x in ph], "W",
+                "S_fáze ≈ U_fáze (33073–33075) × I_měniče fáze (33076–33078); Σ fází má odpovídat inverter_ac_power (33079); "
+                "elektroměr (33130) = Σ fází − dům. Chybí-li elektroměru fáze, ukáže ~⅔ Σ.",
+                [_src(d, m, samples) for m in ("inverter_current_l1", "inverter_current_l2", "inverter_current_l3",
+                                                 "grid_voltage_l1", "grid_voltage_l2", "grid_voltage_l3", "inverter_ac_power")],
+                note=f"Σ fází = {round(sum(ph))} W vs AC měniče = {sm.get('inverter_ac_power', {}).get('value')} W vs elektroměr (EMS znaménko) = {sm.get('grid_power', {}).get('value')} W")
+        except Exception:
+            pass
     # řídicí logika: kdo drží baterii, jaké parametry, čítač povelů
     control = {}
     try:

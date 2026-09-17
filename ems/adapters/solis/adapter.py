@@ -26,7 +26,7 @@ from .mapping import (
     CTRL_CHARGE_CURRENT_LIMIT, CTRL_DISCHARGE_CURRENT_LIMIT,
     CTRL_SOC_BACKUP, CTRL_SOC_FORCE,
     REG_ENERGY_TODAY, REG_ENERGY_TOTAL, REG_GRID_METER,
-    REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_INV_TEMP, REG_INV_AC_POWER, REG_HOUSE_LOAD, REG_BAT_POWER_INV, REG_PV_POWER,
+    REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_INV_TEMP, REG_INV_AC_POWER, REG_HOUSE_LOAD, REG_BAT_POWER_INV, REG_INV_I_L1, REG_INV_I_L2, REG_INV_I_L3, REG_PV_POWER,
 )
 
 logger = logging.getLogger(__name__)
@@ -372,6 +372,9 @@ class SolisAdapter:
             add(Metric.TEMPERATURE, self._dec(cache, REG_INV_TEMP))  # teplota měniče
             # křížové kontroly z už načtených bloků (audit: měřeno vs dopočteno)
             add(Metric.INVERTER_AC_POWER, self._dec(cache, REG_INV_AC_POWER))
+            add(Metric.INVERTER_CURRENT_L1, self._dec(cache, REG_INV_I_L1))
+            add(Metric.INVERTER_CURRENT_L2, self._dec(cache, REG_INV_I_L2))
+            add(Metric.INVERTER_CURRENT_L3, self._dec(cache, REG_INV_I_L3))
             add(Metric.HOUSE_LOAD_INV, self._dec(cache, REG_HOUSE_LOAD))
             add(Metric.BATTERY_POWER_INV, self._dec(cache, REG_BAT_POWER_INV))
 
