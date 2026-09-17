@@ -48,9 +48,34 @@ async def build_audit(locality_id: int) -> dict:
 
     add("pv_w", agg.get("pv_w"), "W", "pv_w = Σ pv_power všech zařízení lokality (poslední vzorek ≤ 15 min)",
         [_src(d, "pv_power", samples) for d in solis])
+    # limity exportu: TERA strop (planner_config) + limit měniče z posledního čtení 43070–43074
+    limits = {}
+    try:
+        from ems.planner import db as planner_db
+        cfg = await planner_db.get_config(locality_id) or {}
+        limits["tera_kw"] = cfg.get("grid_export_limit_kw")
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            r = await conn.fetchrow(
+                "SELECT result, COALESCE(executed_at, created_at) AS ts FROM control_queue "
+                "WHERE module_id = ANY($1::text[]) AND action='read_holding' AND status='done' "
+                "AND params->>'addr'='43070' ORDER BY id DESC LIMIT 1", solis)
+        if r and r["result"]:
+            import json as _json
+            res = r["result"] if isinstance(r["result"], dict) else _json.loads(r["result"])
+            vals = res.get("values") or []
+            if len(vals) >= 5:
+                limits.update({"inverter_kw": vals[4] / 10.0, "switch_43070": vals[0], "raw_43070_74": vals,
+                               "ts": r["ts"].isoformat() if hasattr(r["ts"], "isoformat") else str(r["ts"])})
+    except Exception:
+        pass
     add("grid_w", agg.get("grid_w"), "W",
         "grid_w = Σ grid_power; grid_power = −(registr 33130 s32) → + odběr ze sítě, − dodávka do sítě",
-        [_src(d, "grid_power", samples) for d in solis])
+        [_src(d, "grid_power", samples) for d in solis],
+        note=(f"🛡 strop exportu TERA {limits.get('tera_kw')} kW · limit měniče (43074) "
+              f"{limits.get('inverter_kw', '?')} kW · vypínač 43070 = {limits.get('switch_43070', '?')}"
+              f" (čteno {limits.get('ts', '—')[:16]}) · v nuceném vybíjení limiter měniče NEPLATÍ, hlídá TERA"))
+    V["grid_w"]["limits"] = limits
     bsrc = []
     for d in solis:
         bsrc += [_src(d, "battery_power", samples), _src(d, "battery_power_1", samples), _src(d, "battery_power_2", samples),

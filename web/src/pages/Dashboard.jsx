@@ -845,7 +845,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         borderRadius: 10, padding: "8px 10px", fontSize: 11.5, boxShadow: "0 8px 24px rgba(0,0,0,.4)", pointerEvents: "none" }}>
             <div><b>🔎 {tip.key}</b> = <b>{a.value == null ? "?" : Number(a.value).toFixed(a.unit === "%" ? 0 : 1)} {a.unit}</b></div>
             <div style={{ marginTop: 3 }}><span className="muted">vzorec:</span> <code style={{ fontSize: 11 }}>{a.formula}</code></div>
-            {a.note && <div className="muted" style={{ marginTop: 3 }}>⚠ {a.note}</div>}
+            {a.limits && <div style={{ marginTop: 3, color: "var(--amber)" }}>
+              🛡 strop TERA <b>{a.limits.tera_kw ?? "?"} kW</b> · limit měniče (43074) <b>{a.limits.inverter_kw ?? "?"} kW</b>
+              {a.limits.switch_43070 != null && <> · vypínač 43070 = {a.limits.switch_43070}</>}
+              {a.limits.ts && <span className="muted"> · čteno {new Date(a.limits.ts).toLocaleTimeString("cs-CZ")}</span>}
+            </div>}
+            {a.note && !a.limits && <div className="muted" style={{ marginTop: 3 }}>⚠ {a.note}</div>}
+            {a.note && a.limits && <div className="muted" style={{ marginTop: 2, fontSize: 11 }}>v nuceném vybíjení limiter měniče neplatí — hlídá TERA (v0.92.0)</div>}
             <div style={{ marginTop: 4 }}>
               {(a.sources || []).map((src, i) => src.derived_from
                 ? <div key={i} className="muted">odvozeno z: {src.derived_from.join(", ")}</div>

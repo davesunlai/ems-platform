@@ -268,6 +268,7 @@ async def run() -> None:
             await tick_inverter_state(state)
             await tick_soc_targets(state)
             await tick_export_guard(state)
+            await tick_inverter_limits(state)
             await tick_notify(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
@@ -718,6 +719,30 @@ async def tick_export_guard(state: dict) -> None:
             logger.info("Export guard %s: %s → %s reg (export %.1f kW, limit %.1f, req %.1f kW)", dev, cur, want, export_kw, limit_kw, req / 100)
     except Exception as exc:
         logger.debug("tick_export_guard: %s", exc)
+
+
+async def tick_inverter_limits(state: dict) -> None:
+    """🔎 Audit: každých 15 min přečte z měniče blok 43070–43074 (export limitation; 43074 = limit ×0,1 kW,
+    ověřeno 17. 9. 2026 proti SolisCloud 9,1 kW) — jen pro lokality se zapnutým auditem. Výsledek se
+    ukládá běžně do control_queue.result (audit ho odtud vezme)."""
+    try:
+        last = state.setdefault("inv_limits_ts", 0.0)
+        if time.monotonic() - last < 900:
+            return
+        state["inv_limits_ts"] = time.monotonic()
+        from ems.api.db import get_pool as _gp
+        from ems.planner.service import list_devices as _list_devices
+        pool = await _gp()
+        async with pool.acquire() as conn:
+            audit_lids = {r["id"] for r in await conn.fetch("SELECT id FROM localities WHERE audit_mode")}
+        if not audit_lids:
+            return
+        for d in await _list_devices():
+            if d.get("adapter") == "solis" and d.get("locality_id") in audit_lids:
+                await control_db.enqueue(d["device_id"], "read_holding", {"addr": 43070, "count": 5,
+                                         "source": "audit", "reason": "export limit měniče (43070–43074)"}, username="audit")
+    except Exception as exc:
+        logger.debug("tick_inverter_limits: %s", exc)
 
 
 async def tick_soc_targets(state: dict) -> None:
