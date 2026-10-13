@@ -535,14 +535,19 @@ async def tick_planner(state: dict) -> None:
                         stp = _json.loads(stp)
                     except Exception:
                         stp = {}
-                running_req = stp.get("power_req", stp.get("power"))   # guard může výkon dočasně snížit
+                # Porovnávej POŽADAVEK s požadavkem a OŘEZANÝ výkon s ořezaným (lekce 13. 10.: po ořezu stropem
+                # se srovnával požadavek 1000 s ořezaným 940 → re-force každých 10 s, „změna výkonu 940→940").
+                running_req = stp.get("power_req", stp.get("power"))
+                new_req = params.get("power_req", params.get("power"))
+                power_diff = (params.get("power") is not None and stp.get("power") is not None
+                              and abs(int(stp["power"]) - int(params["power"])) >= 30)   # hystereze 0,3 kW (ořez se mění s FVE)
                 changed = (cur == desired and desired in ("force_charge", "force_discharge")
-                           and params.get("power") is not None and running_req != params.get("power")
+                           and params.get("power") is not None and (running_req != new_req or power_diff)
                            and st.get("source") != "manual")
                 if cur != desired or changed:
                     src = params.get("source", "planner")
                     if changed:
-                        params["reason"] = f"{params.get('reason') or ''} · změna výkonu {stp.get('power')}→{params.get('power')}".strip(" ·")
+                        params["reason"] = f"{params.get('reason') or ''} · změna výkonu {stp.get('power')}→{params.get('power')} (požadavek {running_req}→{new_req})".strip(" ·")
                     cid = await control_db.enqueue(dev, cmd, params, username=src)
                     await control_db.record(src, dev, cmd,
                                             {**params, "reason": params.get("reason") or ca.get("reason")}, True, {"queued": cid})
