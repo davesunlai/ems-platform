@@ -1,5 +1,8 @@
 // Víceřadý spojnicový graf s osami (čas X, výkon Y v kW) + klikací legenda.
 // series: [{ label, color, points: [{time, value}] }] — hodnoty ve W → kW.
+// Rozšíření (v0.94.1): řada může mít `unit` (zobrazí se raw hodnota s touto jednotkou,
+// bez převodu W→kW) a `axis: "right"` (vlastní měřítko na pravé ose — např. V vedle W).
+// `axis: "pct"` = pravá osa pevně 0–100 % (SoC) jako dřív.
 // Hover: svislá čára u kurzoru + bublina s hodnotou viditelných řad.
 // Klik na popisek v legendě řadu skryje/zobrazí (přepočte i osu Y).
 import { useState } from "react";
@@ -22,25 +25,37 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
   });
 
   const isPct = (s) => s.axis === "pct";
+  const isRight = (s) => s.axis === "right";
   const hasPct = shown.some(isPct);
+  const hasRight = shown.some(isRight);
   const disp = (v) => v / 1000; // W → kW
-  const sval = (s, p) => (isPct(s) ? p.value : disp(p.value));
-  const allVals = shown.filter((s) => !isPct(s)).flatMap((s) => s.points.map((p) => disp(p.value)));
+  const dispS = (s, v) => (s.unit ? v : disp(v));          // řada s vlastní jednotkou = raw
+  const unitOf = (s) => (isPct(s) ? "%" : s.unit || "kW");
+  const sval = (s, p) => (isPct(s) ? p.value : dispS(s, p.value));
+  const allVals = shown.filter((s) => !isPct(s) && !isRight(s)).flatMap((s) => s.points.map((p) => dispS(s, p.value)));
   let lo = Math.min(0, ...(allVals.length ? allVals : [0]));
   let hi = Math.max(0, ...(allVals.length ? allVals : [1]));
   if (hi === lo) hi = lo + 1;
   const span = hi - lo;
+  const rVals = shown.filter(isRight).flatMap((s) => s.points.map((p) => dispS(s, p.value)));
+  let rlo = Math.min(0, ...(rVals.length ? rVals : [0]));
+  let rhi = Math.max(0, ...(rVals.length ? rVals : [1]));
+  if (rhi === rlo) rhi = rlo + 1;
+  const rspan = rhi - rlo;
+  const leftUnit = (shown.find((s) => !isPct(s) && !isRight(s)) || {}).unit || "kW";
+  const rightUnit = (shown.find(isRight) || {}).unit || "";
 
   const baseTs = (shown.length ? shown : valid).flatMap((s) => s.points.map((p) => new Date(p.time).getTime()));
   const t0 = Math.min(...baseTs), t1 = Math.max(...baseTs);
   const tspan = t1 - t0 || 1;
 
-  const W = 760, H = height, padL = 52, padR = hasPct ? 40 : 12, padT = 12, padB = 26;
+  const W = 760, H = height, padL = 52, padR = (hasPct || hasRight) ? 44 : 12, padT = 12, padB = 26;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const X = (t) => padL + ((t - t0) / tspan) * plotW;
   const Y = (v) => padT + plotH * (1 - (v - lo) / span);
   const Yp = (v) => padT + plotH * (1 - Math.max(0, Math.min(100, v)) / 100);
-  const Ys = (s, p) => (isPct(s) ? Yp(p.value) : Y(disp(p.value)));
+  const Yr = (v) => padT + plotH * (1 - (v - rlo) / rspan);
+  const Ys = (s, p) => (isPct(s) ? Yp(p.value) : isRight(s) ? Yr(dispS(s, p.value)) : Y(dispS(s, p.value)));
 
   const fmtY = (v) => (Math.abs(v) >= 100 ? Math.round(v) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
   const multiDay = tspan > 2 * 864e5;
@@ -80,12 +95,12 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
     <div>
       <div style={{ position: "relative" }} onMouseMove={onMove} onMouseLeave={() => setHovT(null)}>
         <ExportBtn onClick={() => exportRowsXlsx(name, mergeSeriesRows(shown.map((sr) => ({
-          col: `${sr.label} (${isPct(sr) ? "%" : "kW"})`,
+          col: `${sr.label} (${unitOf(sr)})`,
           points: sr.points.map((p) => ({ t: p.time, v: Math.round(sval(sr, p) * 1000) / 1000 })),
         }))))} />
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
           <text x={14} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
-                transform={`rotate(-90 14 ${padT + plotH / 2})`}>kW</text>
+                transform={`rotate(-90 14 ${padT + plotH / 2})`}>{leftUnit}</text>
           {yTicks.map((v, i) => (
             <g key={i}>
               <line x1={padL} y1={Y(v)} x2={W - padR} y2={Y(v)} stroke="var(--border)" strokeWidth="0.5" opacity="0.45" />
@@ -100,6 +115,15 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
                   fontSize="10" fill="var(--muted)">{fmtX(t)}</text>
           ))}
           <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="var(--border)" strokeWidth="0.8" />
+          {hasRight && !hasPct && (
+            <g>
+              <text x={W - 10} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
+                    transform={`rotate(90 ${W - 10} ${padT + plotH / 2})`}>{rightUnit}</text>
+              {[rlo, rlo + rspan / 2, rhi].map((v, i) => (
+                <text key={`r${i}`} x={W - padR + 6} y={Yr(v) + 3} textAnchor="start" fontSize="9.5" fill="var(--muted)">{fmtY(v)}</text>
+              ))}
+            </g>
+          )}
           {hasPct && (
             <g>
               <text x={W - 10} y={padT + plotH / 2} textAnchor="middle" fontSize="10" fill="var(--muted)"
@@ -111,7 +135,7 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
           )}
           {shown.map((s, i) => (
             <path key={i} d={pathFor(s)} fill="none" stroke={s.color} strokeWidth={isPct(s) ? 1.5 : 1.7}
-                  strokeDasharray={isPct(s) ? "5 4" : undefined} vectorEffect="non-scaling-stroke" />
+                  strokeDasharray={isPct(s) || isRight(s) ? "5 4" : undefined} vectorEffect="non-scaling-stroke" />
           ))}
 
           {hovT != null && shown.length > 0 && (
@@ -135,7 +159,7 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ display: "inline-block", width: 9, height: 3, background: r.color }} />
                 <span className="muted">{r.label}</span>
-                <strong style={{ marginLeft: "auto", paddingLeft: 10 }}>{isPct(r.s) ? `${Math.round(r.p.value)} %` : `${fmtY(disp(r.p.value))} kW`}</strong>
+                <strong style={{ marginLeft: "auto", paddingLeft: 10 }}>{isPct(r.s) ? `${Math.round(r.p.value)} %` : `${fmtY(dispS(r.s, r.p.value))} ${unitOf(r.s)}`}</strong>
               </div>
             ))}
           </div>

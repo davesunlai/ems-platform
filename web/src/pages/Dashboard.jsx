@@ -169,6 +169,66 @@ function ControlBanners({ deviceIds, localityId }) {
   );
 }
 
+// 🔬 Srovnávací graf MPPT: libovolná kombinace napětí/proud/výkon MPPT 1–4 v jednom grafu.
+// Výkon (W → kW) na levé ose; napětí/proud na pravé ose (vlastní měřítko, čárkovaně).
+const MPPT_COLORS = ["#3fb950", "#58a6ff", "#f0883e", "#d2a8ff"];
+const MPPT_KINDS = [["power", "výkon", "W"], ["voltage", "napětí", "V"], ["current", "proud", "A"]];
+function MpptChart({ id, present, win, offset }) {
+  const [sel, setSel] = useState(() => {
+    try { const s = localStorage.getItem("mppt_sel_" + id); if (s) return new Set(JSON.parse(s)); } catch (e) { /* */ }
+    return new Set(["pv_power_1", "pv_power_2", "pv_power_3", "pv_power_4"]);
+  });
+  const [hist, setHist] = useState({});
+  const toggle = (k) => setSel((s) => {
+    const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k);
+    try { localStorage.setItem("mppt_sel_" + id, JSON.stringify([...n])); } catch (e) { /* */ }
+    return n;
+  });
+  const keys = [...sel].filter((k) => present.includes(k));
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const out = {};
+      await Promise.all(keys.map(async (k) => {
+        try { out[k] = (await api.history(id, k, WIN[win].min, offset)).points; } catch (e) { out[k] = []; }
+      }));
+      if (alive) setHist(out);
+    };
+    load();
+    const t = offset === 0 ? setInterval(load, 60000) : null;
+    return () => { alive = false; if (t) clearInterval(t); };
+  }, [id, keys.join(","), win, offset]);
+  const series = keys.map((k) => {
+    const [, kind, n] = k.split("_");
+    const kd = MPPT_KINDS.find((x) => x[0] === kind) || MPPT_KINDS[0];
+    return { label: `MPPT ${n} ${kd[1]}`, color: MPPT_COLORS[(Number(n) - 1) % 4],
+             points: hist[k] || [], ...(kind === "power" ? {} : { unit: kd[2], axis: "right" }) };
+  });
+  return (
+    <div style={{ margin: "4px 0 10px", padding: "8px 10px", border: "1px dashed var(--border, #30363d)", borderRadius: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 12, marginBottom: 4 }}>
+        <span className="muted">Porovnat v grafu:</span>
+        {MPPT_KINDS.map(([kind, lab, unit]) => (
+          <span key={kind} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+            <span className="muted">{lab} ({unit}):</span>
+            {[1, 2, 3, 4].map((n) => { const k = `pv_${kind}_${n}`; const ok = present.includes(k); return (
+              <label key={k} style={{ display: "inline-flex", alignItems: "center", gap: 3, opacity: ok ? 1 : 0.35, cursor: ok ? "pointer" : "default" }}
+                     title={ok ? "" : "zatím bez dat"}>
+                <input type="checkbox" checked={sel.has(k)} disabled={!ok} onChange={() => toggle(k)} />
+                <span style={{ color: MPPT_COLORS[n - 1], fontWeight: 600 }}>{n}</span>
+              </label>); })}
+          </span>))}
+      </div>
+      {keys.length
+        ? <MultiChart series={series} height={220} name={`${id}-mppt`} />
+        : <p className="muted" style={{ fontSize: 12, margin: "6px 0" }}>Zaškrtni, co chceš porovnat.</p>}
+      <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>
+        Výkon na levé ose (kW), napětí a proud čárkovaně na pravé ose (sdílené měřítko). Okno a posun bere z grafu modulu níže.
+      </p>
+    </div>
+  );
+}
+
 function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [] }) {
   const [latest, setLatest] = useState(null);
   const [hist, setHist] = useState([]);
@@ -273,6 +333,7 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
           <div className="cards">
             {g.items.map(renderCard)}
           </div>
+          {g.id === "mppt" && <MpptChart id={id} present={present} win={win} offset={offset} />}
         </div>
       ))}
       {active && (
