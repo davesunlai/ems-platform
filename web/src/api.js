@@ -73,6 +73,7 @@ export const api = {
   emsboxResetUiPassword: (id) => request(`/api/emsboxes/${id}/reset-localui-password`, { method: "POST" }),
   emsboxUpdateAgent: (id) => request(`/api/emsboxes/${id}/update-agent`, { method: "POST" }),
   emsboxActions: (id) => request(`/api/emsboxes/${id}/actions`),
+  emsboxDetail: (id) => request(`/api/emsboxes/${id}/detail`),
   emsboxList: (locId) => request(`/api/localities/${locId}/emsboxes`),
   emsboxCreate: (locId, name) => request(`/api/localities/${locId}/emsboxes`, { method: "POST", body: { name } }),
   emsboxDelete: (boxId) => request(`/api/emsbox/${boxId}`, { method: "DELETE" }),

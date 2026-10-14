@@ -54,6 +54,12 @@ async def ingest_telemetry(body: TelemetryBody, box: dict = Depends(box_auth)) -
     accepted = await db.insert_rows(rows)
     await db.touch_ingest(box["id"], accepted)
     dup = len(rows) - accepted
+    try:
+        tss = [r[0] for r in rows]
+        await db.record_sync(box["id"], len(rows), accepted, dup,
+                             min(tss) if tss else None, max(tss) if tss else None)
+    except Exception as exc:                      # evidence nesmí shodit ingest
+        logger.warning("record_sync box %s: %s", box["id"], exc)
     if skipped:
         logger.warning("EMSBOX %s: %s řádků odmítnuto (cizí device_uid / vadný ts)", box["id"], skipped)
     return {"ack": body.batch_id, "accepted": accepted, "duplicates": dup, "skipped": skipped}

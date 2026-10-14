@@ -127,6 +127,36 @@ async def ensure_schema() -> None:
                 last_seen TIMESTAMPTZ DEFAULT now()
             )
             """)
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS uptime_s BIGINT")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS last_heartbeat_body JSONB")
+        await conn.execute("ALTER TABLE emsbox ADD COLUMN IF NOT EXISTS buffer_peak_rows INT DEFAULT 0")
+        # --- evidence bufferování (v0.93.0): epizody + hodinová statistika syncu ---
+        await conn.execute(
+            """CREATE TABLE IF NOT EXISTS emsbox_buffer_episodes (
+                 id BIGSERIAL PRIMARY KEY,
+                 box_id INT NOT NULL,
+                 data_from TIMESTAMPTZ NOT NULL,      -- nejstarší dohraný vzorek (≈ začátek výpadku)
+                 detected_at TIMESTAMPTZ NOT NULL,    -- první dávka z bufferu dorazila (≈ obnova spojení)
+                 ended_at TIMESTAMPTZ,                -- buffer dohrán (NULL = dohrává se)
+                 batches INT NOT NULL DEFAULT 0,
+                 rows_total INT NOT NULL DEFAULT 0,
+                 rows_accepted INT NOT NULL DEFAULT 0,
+                 rows_dup INT NOT NULL DEFAULT 0,
+                 peak_buffer_rows INT NOT NULL DEFAULT 0)""")
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS emsbox_buffer_episodes_box ON emsbox_buffer_episodes (box_id, id DESC)")
+        await conn.execute(
+            """CREATE TABLE IF NOT EXISTS emsbox_sync_hourly (
+                 box_id INT NOT NULL,
+                 hour TIMESTAMPTZ NOT NULL,
+                 batches INT NOT NULL DEFAULT 0,
+                 rows_total INT NOT NULL DEFAULT 0,
+                 rows_accepted INT NOT NULL DEFAULT 0,
+                 rows_dup INT NOT NULL DEFAULT 0,
+                 backfill_batches INT NOT NULL DEFAULT 0,
+                 backfill_rows INT NOT NULL DEFAULT 0,
+                 max_lag_s INT NOT NULL DEFAULT 0,
+                 PRIMARY KEY (box_id, hour))""")
         await conn.execute("ALTER TABLE modules ADD COLUMN IF NOT EXISTS emsbox_id INT REFERENCES emsbox(id)")
         await conn.execute("ALTER TABLE modules ADD COLUMN IF NOT EXISTS transport_params JSONB")
 
@@ -241,6 +271,61 @@ async def touch_ingest(box_id: int, accepted: int) -> None:
             "AND r.scope = 'emsbox' AND r.kind = 'offline' AND r.target_id = $1", box_id, accepted)
 
 
+BACKFILL_LAG_S = 180        # dávka s daty staršími než 3 min = dohrávání z bufferu
+SYNC_HOURLY_KEEP_DAYS = 90
+EPISODES_KEEP_DAYS = 365
+
+
+async def record_sync(box_id: int, rows_total: int, accepted: int, dup: int,
+                      oldest_ts: datetime | None, newest_ts: datetime | None) -> None:
+    """Evidence každé dávky telemetrie: hodinová statistika + detekce epizod bufferování.
+    Agent posílá nejnovější napřed, takže dávka se STARÝMI daty (lag > BACKFILL_LAG_S)
+    = box dohrává buffer po výpadku spojení. Epizoda se otevře první takovou dávkou
+    (data_from = nejstarší vzorek, detected_at = teď) a zavře první čerstvou dávkou."""
+    now = datetime.now(timezone.utc)
+    lag = int((now - oldest_ts).total_seconds()) if oldest_ts else 0
+    backfill = oldest_ts is not None and lag > BACKFILL_LAG_S
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """INSERT INTO emsbox_sync_hourly (box_id, hour, batches, rows_total, rows_accepted, rows_dup,
+                                               backfill_batches, backfill_rows, max_lag_s)
+               VALUES ($1, date_trunc('hour', now()), 1, $2, $3, $4, $5, $6, $7)
+               ON CONFLICT (box_id, hour) DO UPDATE SET
+                 batches = emsbox_sync_hourly.batches + 1,
+                 rows_total = emsbox_sync_hourly.rows_total + EXCLUDED.rows_total,
+                 rows_accepted = emsbox_sync_hourly.rows_accepted + EXCLUDED.rows_accepted,
+                 rows_dup = emsbox_sync_hourly.rows_dup + EXCLUDED.rows_dup,
+                 backfill_batches = emsbox_sync_hourly.backfill_batches + EXCLUDED.backfill_batches,
+                 backfill_rows = emsbox_sync_hourly.backfill_rows + EXCLUDED.backfill_rows,
+                 max_lag_s = GREATEST(emsbox_sync_hourly.max_lag_s, EXCLUDED.max_lag_s)""",
+            box_id, rows_total, accepted, dup, 1 if backfill else 0, accepted if backfill else 0, lag)
+        open_ep = await conn.fetchrow(
+            "SELECT id, data_from FROM emsbox_buffer_episodes WHERE box_id = $1 AND ended_at IS NULL "
+            "ORDER BY id DESC LIMIT 1", box_id)
+        if backfill:
+            if open_ep:
+                await conn.execute(
+                    "UPDATE emsbox_buffer_episodes SET batches = batches + 1, rows_total = rows_total + $2, "
+                    "rows_accepted = rows_accepted + $3, rows_dup = rows_dup + $4, "
+                    "data_from = LEAST(data_from, $5) WHERE id = $1",
+                    open_ep["id"], rows_total, accepted, dup, oldest_ts)
+            else:
+                peak = await conn.fetchval("SELECT COALESCE(buffer_rows, 0) FROM emsbox WHERE id = $1", box_id) or 0
+                await conn.execute(
+                    "INSERT INTO emsbox_buffer_episodes (box_id, data_from, detected_at, batches, rows_total, "
+                    "rows_accepted, rows_dup, peak_buffer_rows) VALUES ($1, $2, now(), 1, $3, $4, $5, $6)",
+                    box_id, oldest_ts, rows_total, accepted, dup, max(peak, rows_total))
+        elif open_ep:
+            await conn.execute("UPDATE emsbox_buffer_episodes SET ended_at = now() WHERE id = $1", open_ep["id"])
+        # úklid (levný, jednou za čas by stačilo — ale je to jeden DELETE na dávku)
+        if now.minute == 0 and now.second < 5:
+            await conn.execute("DELETE FROM emsbox_sync_hourly WHERE hour < now() - interval '%s days'"
+                               % SYNC_HOURLY_KEEP_DAYS)
+            await conn.execute("DELETE FROM emsbox_buffer_episodes WHERE detected_at < now() - interval '%s days'"
+                               % EPISODES_KEEP_DAYS)
+
+
 async def announce(fingerprint: str, private_ip: str | None, public_ip: str | None,
                    agent_version: str | None, hw: dict | None) -> None:
     pool = await get_pool()
@@ -348,6 +433,8 @@ async def heartbeat(box_id: int, body: dict) -> None:
             "hostname = COALESCE($9, hostname), wifi_ssid = $10, wifi_psk = $11, "
             "disk_total_mb = COALESCE($12, disk_total_mb), disk_free_mb = COALESCE($13, disk_free_mb), "
             "mem_total_mb = COALESCE($14, mem_total_mb), mem_used_mb = COALESCE($15, mem_used_mb), "
+            "uptime_s = COALESCE($16, uptime_s), last_heartbeat_body = $17, "
+            "buffer_peak_rows = GREATEST(COALESCE(buffer_peak_rows, 0), COALESCE($2, 0)), "
             "status = CASE WHEN status = 'offline' THEN 'online' ELSE status END WHERE id = $1",
             box_id, body.get("buffer_rows"),
             datetime.fromisoformat(body["buffer_oldest_ts"].replace("Z", "+00:00")) if body.get("buffer_oldest_ts") else None,
@@ -355,7 +442,13 @@ async def heartbeat(box_id: int, body: dict) -> None:
             body.get("private_ip"), body.get("_public_ip"),
             body.get("hostname"), body.get("wifi_ssid"), body.get("wifi_psk"),
             body.get("disk_total_mb"), body.get("disk_free_mb"),
-            body.get("mem_total_mb"), body.get("mem_used_mb"))
+            body.get("mem_total_mb"), body.get("mem_used_mb"),
+            body.get("uptime_s"),
+            json.dumps({k: v for k, v in body.items() if k not in ("action_result", "wifi_psk")}, default=str))
+        if (body.get("buffer_rows") or 0) > 0:      # vrchol bufferu do otevřené epizody
+            await conn.execute(
+                "UPDATE emsbox_buffer_episodes SET peak_buffer_rows = GREATEST(peak_buffer_rows, $2) "
+                "WHERE box_id = $1 AND ended_at IS NULL", box_id, int(body["buffer_rows"]))
         # --- životní cyklus servisních akcí ---
         ar = body.get("action_result")
         if isinstance(ar, dict) and ar.get("action"):
@@ -389,6 +482,73 @@ async def list_boxes(locality_id: int) -> list[dict]:
             except Exception:
                 d["heartbeat_devices"] = []
         out.append(d)
+    return out
+
+
+async def box_detail(box_id: int, include_actions: bool) -> dict | None:
+    """🔎 Vše, co o boxu víme: identita, HW, poslední heartbeat, moduly, epizody bufferování,
+    statistika syncu (24 h / 7 d / 30 d), alertové události, servisní akce (admin)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        box = await conn.fetchrow(
+            "SELECT e.*, l.name AS locality_name FROM emsbox e LEFT JOIN localities l ON l.id = e.locality_id "
+            "WHERE e.id = $1", box_id)
+        if not box:
+            return None
+        mods = await conn.fetch(
+            "SELECT id, name, adapter, device_type, transport_params FROM modules WHERE emsbox_id = $1 ORDER BY id",
+            box_id)
+        eps = await conn.fetch(
+            "SELECT id, data_from, detected_at, ended_at, batches, rows_total, rows_accepted, rows_dup, "
+            "peak_buffer_rows FROM emsbox_buffer_episodes WHERE box_id = $1 ORDER BY id DESC LIMIT 100", box_id)
+        stats = {}
+        for key, days in (("24h", 1), ("7d", 7), ("30d", 30), ("90d", 90)):
+            r = await conn.fetchrow(
+                "SELECT COALESCE(SUM(batches),0) AS batches, COALESCE(SUM(rows_total),0) AS rows_total, "
+                "COALESCE(SUM(rows_accepted),0) AS rows_accepted, COALESCE(SUM(rows_dup),0) AS rows_dup, "
+                "COALESCE(SUM(backfill_batches),0) AS backfill_batches, COALESCE(SUM(backfill_rows),0) AS backfill_rows, "
+                "COALESCE(MAX(max_lag_s),0) AS max_lag_s, COUNT(*) AS hours "
+                "FROM emsbox_sync_hourly WHERE box_id = $1 AND hour >= now() - interval '%s days'" % days, box_id)
+            stats[key] = dict(r)
+        hourly = await conn.fetch(
+            "SELECT hour, batches, rows_total, rows_accepted, backfill_rows, max_lag_s FROM emsbox_sync_hourly "
+            "WHERE box_id = $1 AND hour >= now() - interval '7 days' ORDER BY hour", box_id)
+        ep_sum = await conn.fetchrow(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(rows_accepted),0) AS rows_accepted, "
+            "COALESCE(SUM(EXTRACT(EPOCH FROM (detected_at - data_from))),0) AS offline_s, "
+            "MIN(detected_at) AS since FROM emsbox_buffer_episodes WHERE box_id = $1", box_id)
+        alerts = await conn.fetch(
+            "SELECT ev.id, r.kind, ev.opened_at, ev.closed_at, ev.detail FROM alert_events ev "
+            "JOIN alert_rules r ON r.id = ev.rule_id WHERE r.scope = 'emsbox' AND r.target_id = $1 "
+            "ORDER BY ev.id DESC LIMIT 30", box_id)
+        first_sync = await conn.fetchval(
+            "SELECT MIN(hour) FROM emsbox_sync_hourly WHERE box_id = $1", box_id)
+
+    def iso(v):
+        return v.isoformat() if isinstance(v, datetime) else v
+
+    def jl(v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return v
+        return v
+
+    b = {k: iso(v) for k, v in dict(box).items() if k != "token_hash"}
+    for k in ("hw_info", "heartbeat_devices", "last_heartbeat_body"):
+        b[k] = jl(b.get(k))
+    out = {
+        "box": b,
+        "modules": [{**dict(m), "transport_params": jl(m["transport_params"])} for m in mods],
+        "episodes": [{k: iso(v) for k, v in dict(e).items()} for e in eps],
+        "episodes_summary": {k: iso(v) for k, v in dict(ep_sum).items()},
+        "sync_stats": stats,
+        "sync_hourly": [{k: iso(v) for k, v in dict(h).items()} for h in hourly],
+        "sync_since": iso(first_sync),
+        "alerts": [{**{k: iso(v) for k, v in dict(a).items()}, "detail": jl(a["detail"])} for a in alerts],
+        "actions": await action_log(box_id, 50) if include_actions else None,
+    }
     return out
 
 

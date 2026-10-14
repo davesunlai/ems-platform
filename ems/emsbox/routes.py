@@ -173,6 +173,15 @@ async def rules_delete(rule_id: int, _: dict = Depends(control)) -> dict:
     return {"ok": True}
 
 
+@router.get("/emsboxes/{box_id}/detail")
+async def box_detail(box_id: int, user: dict = Depends(read)):
+    """🔎 Detail boxu: vše, co o něm víme + evidence bufferování (epizody, dohrané řádky)."""
+    d = await db.box_detail(box_id, include_actions="admin" in user.get("permissions", ()))
+    if not d:
+        raise HTTPException(status_code=404, detail="box nenalezen")
+    return d
+
+
 @router.get("/emsboxes/{box_id}/actions")
 async def box_action_log(box_id: int, _: dict = Depends(require_permission("admin"))):
     """📜 Historie servisních akcí boxu (posledních 30)."""

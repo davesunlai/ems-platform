@@ -25,6 +25,7 @@ export const UI_CATALOG = [
   ]},
   { page: "page:heatpump", label: "🌀 TČ", path: "/heatpump", items: [] },
   { page: "page:emsboxes", label: "📦 EMSBOXy", path: "/emsboxes", items: [
+    { key: "box:detail", label: "🔎 Detail boxu (vše, co o něm víme + evidence bufferování)" },
     { key: "box:actions", label: "Servisní akce (update / reset / konzole)" },
     { key: "box:psk", label: "Wi-Fi heslo boxu" },
   ]},

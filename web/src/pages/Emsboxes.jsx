@@ -102,6 +102,196 @@ function Psk({ value }) {
   );
 }
 
+// --- 🔎 Detail boxu -----------------------------------------------------------
+const dt = (iso) => (iso ? new Date(iso).toLocaleString("cs-CZ") : "—");
+const dur = (s) => {
+  if (s == null || isNaN(s)) return "—";
+  s = Math.round(s);
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ${s % 60} s`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
+  return `${Math.floor(s / 86400)} d ${Math.floor((s % 86400) / 3600)} h`;
+};
+const secs = (a, b) => (a && b ? (new Date(b) - new Date(a)) / 1000 : null);
+const num = (n) => (n == null ? "—" : Number(n).toLocaleString("cs-CZ"));
+const ALERT_CZ = { offline: "offline", fault: "chyba čtení", rtc_drift: "posun hodin", buffer_high: "plný buffer" };
+
+function KV({ rows }) {
+  return (
+    <table style={{ fontSize: 12.5 }}><tbody>
+      {rows.filter(([, v]) => v !== undefined).map(([k, v]) => (
+        <tr key={k}><td className="muted" style={{ whiteSpace: "nowrap", paddingRight: 12 }}>{k}</td><td>{v ?? "—"}</td></tr>))}
+    </tbody></table>);
+}
+
+function Section({ title, children }) {
+  return (<div style={{ marginTop: 14 }}>
+    <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 6, borderBottom: "1px solid var(--border, #30363d)", paddingBottom: 3 }}>{title}</div>
+    {children}
+  </div>);
+}
+
+function BoxDetail({ box, onClose }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+  const [raw, setRaw] = useState(false);
+  useEffect(() => {
+    const load = () => api.emsboxDetail(box.id).then(setD).catch((e) => setErr(e.message));
+    load(); const t = setInterval(load, 30000); return () => clearInterval(t);
+  }, [box.id]);
+  const b = d?.box || {};
+  const hb = b.last_heartbeat_body || {};
+  const es = d?.episodes_summary || {};
+  const st = d?.sync_stats || {};
+  const openEp = (d?.episodes || []).find((e) => !e.ended_at);
+  const online = b.last_heartbeat && (Date.now() - new Date(b.last_heartbeat)) < 3 * 60000;
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="panel"
+           style={{ width: "min(960px, 96vw)", maxHeight: "92vh", overflow: "auto", padding: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>🔎 {b.name || box.name} <span className="muted">#{box.id}</span>
+            {" "}<span style={{ fontSize: 12, color: online ? "var(--green)" : "#f85149" }}>{online ? "● online" : "● offline"}</span></div>
+          <div><span className="muted" style={{ cursor: "pointer", fontSize: 12, marginRight: 12 }} onClick={() => setRaw(!raw)}>{raw ? "skrýt" : "surový"} heartbeat</span>
+               <button className="btn" onClick={onClose}>✕ zavřít</button></div>
+        </div>
+        {err && <p className="error">{err}</p>}
+        {!d && !err && <p className="muted">načítám…</p>}
+        {d && (<>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+            <Section title="Identita">
+              <KV rows={[
+                ["Lokalita", b.locality_name || b.locality_id],
+                ["Stav", b.status],
+                ["Hostname", b.hostname],
+                ["Spárováno", dt(b.created_at)],
+                ["Verze agenta", b.agent_version],
+                ["Běží od startu", dur(b.uptime_s)],
+                ["Otisk HW", hb.fingerprint ? <span style={{ fontFamily: "monospace", fontSize: 11 }}>{hb.fingerprint}</span> : null],
+                ...(b.hw_info && Object.keys(b.hw_info).length ? Object.entries(b.hw_info).map(([k, v]) => [`HW · ${k}`, typeof v === "object" ? JSON.stringify(v) : String(v)]) : []),
+              ]} />
+            </Section>
+            <Section title="Síť">
+              <KV rows={[
+                ["Veřejná IP", b.public_ip],
+                ["Privátní IP", b.private_ip ? <a href={`http://${b.private_ip}`} target="_blank" rel="noreferrer">{b.private_ip}</a> : null],
+                ["Připojení", b.wifi_ssid ? `📶 Wi-Fi „${b.wifi_ssid}"` : "🔌 LAN"],
+                ["Poslední heartbeat", `${dt(b.last_heartbeat)} (${ago(b.last_heartbeat)})`],
+                ["Poslední ingest", `${dt(b.last_ingest)} (${ago(b.last_ingest)})`],
+                ["Posun hodin", b.clock_drift_s != null ? `${Math.round(b.clock_drift_s)} s` : null],
+              ]} />
+            </Section>
+            <Section title="Systém">
+              <KV rows={[
+                ["Disk", diskCell(b.disk_total_mb, b.disk_free_mb)],
+                ["RAM", b.mem_total_mb != null ? `${gb(b.mem_used_mb)} / ${gb(b.mem_total_mb)}` : null],
+                ["Buffer teď", `${num(b.buffer_rows)} řádků${b.buffer_oldest_ts ? ` · nejstarší ${dt(b.buffer_oldest_ts)}` : ""}`],
+                ["Buffer maximum (kdy koliv)", `${num(b.buffer_peak_rows)} řádků`],
+              ]} />
+            </Section>
+          </div>
+
+          <Section title={`📥 Evidence bufferování — ${es.n || 0} epizod${d.sync_since ? ` (evidence od ${dt(d.sync_since)})` : " (evidence začíná touto verzí)"}`}>
+            <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+              Epizoda = box po výpadku spojení dohrává data z lokálního bufferu (dávka se vzorky staršími než 3 min).
+              „Výpadek" je doba od nejstaršího dohraného vzorku do první dávky po obnově; „dohrání" je doba, než se buffer vyprázdnil.
+              Celkem dohráno z bufferu: <b>{num(es.rows_accepted)}</b> řádků, součet výpadků <b>{dur(es.offline_s)}</b>.
+              {openEp && <span style={{ color: "var(--amber)" }}> ⏳ Právě se dohrává (od {dt(openEp.detected_at)}).</span>}
+            </p>
+            {(d.episodes || []).length ? (
+              <table style={{ fontSize: 12 }}>
+                <thead><tr><th>Výpadek od</th><th>Obnova spojení</th><th>Trvání výpadku</th><th>Dohráno</th><th>Dohrání trvalo</th><th>Řádků z bufferu</th><th>Duplicit</th><th>Dávek</th><th>Vrchol bufferu</th></tr></thead>
+                <tbody>{d.episodes.map((e) => (
+                  <tr key={e.id}>
+                    <td>{dt(e.data_from)}</td>
+                    <td>{dt(e.detected_at)}</td>
+                    <td><b>{dur(secs(e.data_from, e.detected_at))}</b></td>
+                    <td>{e.ended_at ? dt(e.ended_at) : <span style={{ color: "var(--amber)" }}>⏳ probíhá</span>}</td>
+                    <td>{e.ended_at ? dur(secs(e.detected_at, e.ended_at)) : "—"}</td>
+                    <td><b>{num(e.rows_accepted)}</b></td>
+                    <td className="muted">{num(e.rows_dup)}</td>
+                    <td className="muted">{num(e.batches)}</td>
+                    <td className="muted">{num(e.peak_buffer_rows)}</td>
+                  </tr>))}
+                </tbody></table>
+            ) : <p className="muted" style={{ fontSize: 12 }}>Zatím žádná epizoda bufferování nebyla zaznamenána.</p>}
+          </Section>
+
+          <Section title="📊 Statistika syncu (dávky telemetrie box → teraems)">
+            <table style={{ fontSize: 12 }}>
+              <thead><tr><th>Období</th><th>Dávek</th><th>Řádků</th><th>Přijato</th><th>Duplicit</th><th>Z bufferu (dávek)</th><th>Z bufferu (řádků)</th><th>Max. zpoždění dat</th></tr></thead>
+              <tbody>{["24h", "7d", "30d", "90d"].map((k) => { const r = st[k] || {}; return (
+                <tr key={k}><td><b>{k}</b></td><td>{num(r.batches)}</td><td>{num(r.rows_total)}</td><td>{num(r.rows_accepted)}</td>
+                  <td className="muted">{num(r.rows_dup)}</td><td>{num(r.backfill_batches)}</td><td><b>{num(r.backfill_rows)}</b></td><td>{dur(r.max_lag_s)}</td></tr>); })}
+              </tbody></table>
+            <p className="muted" style={{ fontSize: 11.5, marginBottom: 0 }}>
+              „Z bufferu" = dávky s daty staršími než 3 min (dohrávání po výpadku). Duplicity = řádky, které server už měl (opakovaná dávka po přerušeném potvrzení) — nic se neztrácí ani nezdvojuje.
+            </p>
+          </Section>
+
+          <Section title={`🔌 Zařízení na boxu (${(d.modules || []).length})`}>
+            {(d.modules || []).length ? (
+              <table style={{ fontSize: 12 }}>
+                <thead><tr><th>ID</th><th>Název</th><th>Adaptér</th><th>Typ</th><th>Transport</th><th>Poslední čtení</th><th>Stav</th></tr></thead>
+                <tbody>{d.modules.map((m) => {
+                  const hd = (b.heartbeat_devices || []).find((x) => x.device_uid === m.id) || {};
+                  const tp = m.transport_params || {};
+                  return (<tr key={m.id}>
+                    <td style={{ fontFamily: "monospace", fontSize: 11 }}>{m.id}</td><td>{m.name}</td><td>{m.adapter}</td><td>{m.device_type || "—"}</td>
+                    <td className="muted">{tp.host ? `TCP ${tp.host}:${tp.port || 502}` : tp.port ? `${tp.port}${tp.baudrate ? " @ " + tp.baudrate : ""}` : "—"}</td>
+                    <td>{hd.last_read_ts ? `${dt(hd.last_read_ts)} (${ago(hd.last_read_ts)})` : "—"}</td>
+                    <td>{hd.ok === true ? <span style={{ color: "var(--green)" }}>✅ čte</span> : hd.ok === false ? <span style={{ color: "#f85149" }} title={hd.error || ""}>❌ {hd.error || "chyba"}</span> : "—"}</td>
+                  </tr>); })}
+                </tbody></table>
+            ) : <p className="muted" style={{ fontSize: 12 }}>Žádné zařízení není tomuto boxu přiřazeno (Moduly → EMSBOX).</p>}
+          </Section>
+
+          <Section title={`🔔 Alertové události (${(d.alerts || []).length})`}>
+            {(d.alerts || []).length ? (
+              <table style={{ fontSize: 12 }}>
+                <thead><tr><th>Typ</th><th>Otevřeno</th><th>Uzavřeno</th><th>Trvání</th><th>Detail</th></tr></thead>
+                <tbody>{d.alerts.map((a) => (
+                  <tr key={a.id}><td>{ALERT_CZ[a.kind] || a.kind}</td><td>{dt(a.opened_at)}</td>
+                    <td>{a.closed_at ? dt(a.closed_at) : <span style={{ color: "#f85149" }}>otevřeno</span>}</td>
+                    <td>{dur(secs(a.opened_at, a.closed_at || new Date().toISOString()))}</td>
+                    <td className="muted">{a.detail && typeof a.detail === "object"
+                      ? Object.entries(a.detail).map(([k, v]) => `${k}: ${v}`).join(" · ") : a.detail || ""}</td></tr>))}
+                </tbody></table>
+            ) : <p className="muted" style={{ fontSize: 12 }}>Žádné alertové události (nebo pro box není alertové pravidlo — Lokality → alerty).</p>}
+          </Section>
+
+          {d.actions && (
+            <Section title={`🛠 Servisní akce (${d.actions.length})`}>
+              {d.actions.length ? (
+                <table style={{ fontSize: 12 }}>
+                  <thead><tr><th>Kdy</th><th>Akce</th><th>Zadal</th><th>Stav</th><th>Detail</th></tr></thead>
+                  <tbody>{d.actions.map((h) => (
+                    <tr key={h.id}><td>{dt(h.created_at)}</td><td>{ACTION_CZ_DYN(h.action)}</td><td>{h.username || "—"}</td>
+                      <td>{{ pending: "⏳", delivered: "📨", done: "✅", failed: "❌" }[h.status] || h.status}</td>
+                      <td className="muted">{h.detail || ""}</td></tr>))}
+                  </tbody></table>
+              ) : <p className="muted" style={{ fontSize: 12 }}>Žádné servisní akce.</p>}
+            </Section>)}
+
+          {raw && (
+            <Section title="Surový poslední heartbeat (vše, co box poslal)">
+              <pre style={{ fontSize: 11, whiteSpace: "pre-wrap", margin: 0 }}>{JSON.stringify(hb, null, 2)}</pre>
+            </Section>)}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+function DetailBtn({ box }) {
+  const [open, setOpen] = useState(false);
+  return (<>
+    <button className="btn" title="Detail boxu — vše, co o něm víme, vč. evidence bufferování"
+            style={{ padding: "3px 8px", fontSize: 12, marginRight: 6 }} onClick={() => setOpen(true)}>🔎 detail</button>
+    {open && <BoxDetail box={box} onClose={() => setOpen(false)} />}
+  </>);
+}
+
 export default function Emsboxes() {
   const { vis } = useAuth();
   const [d, setD] = useState({ boxes: [], unpaired: [] });
@@ -137,7 +327,7 @@ export default function Emsboxes() {
                   <td>{b.buffer_rows ?? "—"} ř.</td>
                   <td style={Math.abs(b.clock_drift_s || 0) > 60 ? { color: "#f85149" } : {}}>{b.clock_drift_s != null ? `${Math.round(b.clock_drift_s)} s` : "—"}</td>
                   <td>{b.agent_version || "—"} {vis("box:actions") && <UpdateBtn box={b} />}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>{vis("box:actions") && <><ConsoleBtn box={b} /><ResetUiPw box={b} /></>}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{vis("box:detail") && <DetailBtn box={b} />}{vis("box:actions") && <><ConsoleBtn box={b} /><ResetUiPw box={b} /></>}</td>
                 </tr>
                 {b.last_action && <tr>
                   <td colSpan={99} style={{ paddingTop: 0, fontSize: 12 }}><ActionStatus box={b} /></td>
