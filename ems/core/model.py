@@ -51,6 +51,20 @@ class Metric(str, Enum):
     BATTERY_POWER_2 = "battery_power_2"
     HOUSE_LOAD_INV = "house_load_inv"          # zátěž domu podle měniče (křížová kontrola dopočtu)
     BATTERY_POWER_INV = "battery_power_inv"    # výkon baterie podle měniče (křížová kontrola V×I)
+    # 🔬 Diagnostika MPPT (Solis 33049–33056, čteno zdarma v bloku SYS1; ukládá se jen po dobu
+    # zapnuté diagnostiky modulu — params.mppt_diag_until)
+    PV_VOLTAGE_1 = "pv_voltage_1"
+    PV_CURRENT_1 = "pv_current_1"
+    PV_POWER_1 = "pv_power_1"
+    PV_VOLTAGE_2 = "pv_voltage_2"
+    PV_CURRENT_2 = "pv_current_2"
+    PV_POWER_2 = "pv_power_2"
+    PV_VOLTAGE_3 = "pv_voltage_3"
+    PV_CURRENT_3 = "pv_current_3"
+    PV_POWER_3 = "pv_power_3"
+    PV_VOLTAGE_4 = "pv_voltage_4"
+    PV_CURRENT_4 = "pv_current_4"
+    PV_POWER_4 = "pv_power_4"
     INVERTER_AC_POWER = "inverter_ac_power"    # AC výkon měniče
     INVERTER_CURRENT_L1 = "inverter_current_l1"
     INVERTER_CURRENT_L2 = "inverter_current_l2"
@@ -112,6 +126,10 @@ UNIT_OF: dict[Metric, str] = {
     Metric.BATTERY_POWER_2: "W",
     Metric.HOUSE_LOAD_INV: "W",
     Metric.BATTERY_POWER_INV: "W",
+    Metric.PV_VOLTAGE_1: "V", Metric.PV_CURRENT_1: "A", Metric.PV_POWER_1: "W",
+    Metric.PV_VOLTAGE_2: "V", Metric.PV_CURRENT_2: "A", Metric.PV_POWER_2: "W",
+    Metric.PV_VOLTAGE_3: "V", Metric.PV_CURRENT_3: "A", Metric.PV_POWER_3: "W",
+    Metric.PV_VOLTAGE_4: "V", Metric.PV_CURRENT_4: "A", Metric.PV_POWER_4: "W",
     Metric.INVERTER_AC_POWER: "W",
     Metric.INVERTER_CURRENT_L1: "A", Metric.INVERTER_CURRENT_L2: "A", Metric.INVERTER_CURRENT_L3: "A",
     Metric.BATTERY_SOH_1: "%",

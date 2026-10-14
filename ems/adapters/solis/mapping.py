@@ -10,6 +10,14 @@ from __future__ import annotations
 
 # --- Systémové registry (společné pro celý měnič) ---
 REG_PV_POWER = (33057, "u32", 1.0)        # W  — celkový DC výkon FVE
+# 🔬 MPPT 1–4: DC napětí / proud (standardní Solis mapa, v bloku SYS1 — čtou se zdarma).
+# Výkon MPPT = U × I (měnič ho zvlášť nedává). Stringy v rámci MPPT měnič nerozlišuje.
+REG_MPPT = {
+    1: ((33049, "u16", 0.1), (33050, "u16", 0.1)),
+    2: ((33051, "u16", 0.1), (33052, "u16", 0.1)),
+    3: ((33053, "u16", 0.1), (33054, "u16", 0.1)),
+    4: ((33055, "u16", 0.1), (33056, "u16", 0.1)),
+}
 REG_ENERGY_TOTAL = (33029, "u32", 1.0)    # kWh — celkem vyrobeno
 REG_ENERGY_TODAY = (33035, "u16", 0.1)    # kWh — vyrobeno dnes
 # Činný výkon sítě (meter). POZOR: Solis používá + = DO sítě (export),

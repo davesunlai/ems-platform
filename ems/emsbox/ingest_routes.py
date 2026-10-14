@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ems.core.model import Metric, UNIT_OF
+from ems.core.diag import keep_metric
 from . import db
 from .auth import box_auth
 
@@ -38,18 +39,22 @@ async def ingest_telemetry(body: TelemetryBody, box: dict = Depends(box_auth)) -
         raise HTTPException(status_code=413, detail=f"max {db.MAX_BATCH_ROWS} řádků / batch")
     if await db.batch_already_seen(body.batch_id, box["id"]):
         return {"ack": body.batch_id, "accepted": 0, "duplicates": len(body.rows), "note": "batch už přijat"}
-    allowed = {m["id"] for m in await db.modules_for_box(box["id"])}
+    mods = await db.modules_for_box(box["id"])
+    allowed = {m["id"]: (m.get("params") or {}) for m in mods}
     rows, skipped = [], 0
     for r in body.rows:
         if r.device_uid not in allowed:          # bezpečnost: jen moduly tohoto boxu
             skipped += 1
             continue
+        mparams = allowed[r.device_uid]
         try:
             ts = datetime.fromisoformat(r.ts.replace("Z", "+00:00"))
         except ValueError:
             skipped += 1
             continue
         for metric, val in r.metrics.items():
+            if not keep_metric(metric, mparams):     # 🔬 diagnostika mimo okno → zahodit
+                continue
             rows.append((ts, r.device_uid, metric, val, _UNITS.get(metric, "")))
     accepted = await db.insert_rows(rows)
     await db.touch_ingest(box["id"], accepted)

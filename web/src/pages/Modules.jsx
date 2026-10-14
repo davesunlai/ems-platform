@@ -1,7 +1,40 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import Icon from "../components/Icon";
-import { MAX_TRACKED, METRIC_LABEL, iconFor, groupMetrics, metricsFor, controlFor } from "../metrics";
+import { MAX_TRACKED, METRIC_LABEL, iconFor, groupMetrics, metricsFor, controlFor, countsToLimit, DIAG_METRICS, MPPT_ADAPTERS, DIAG_HOURS } from "../metrics";
+
+// 🔬 Diagnostika MPPT: ukládání veličin MPPT 1–4 na omezenou dobu (params.mppt_diag_until).
+function MpptDiag({ mod, onChanged }) {
+  const until = mod.params?.mppt_diag_until ? new Date(mod.params.mppt_diag_until) : null;
+  const active = until && until > new Date();
+  const [busy, setBusy] = useState(false);
+  const set = async (h) => {
+    setBusy(true);
+    try { await api.setMpptDiag(mod.id, h); onChanged && onChanged(); }
+    catch (e) { alert("Uložení selhalo: " + e.message); }
+    setBusy(false);
+  };
+  return (
+    <div className="field" style={{ marginBottom: 8, padding: "8px 10px", border: "1px solid var(--border, #30363d)", borderRadius: 6 }}>
+      <label>🔬 Diagnostika MPPT (napětí / proud / výkon MPPT 1–4)</label>
+      <div style={{ fontSize: 12.5, marginBottom: 6 }}>
+        {active
+          ? <span style={{ color: "var(--amber)" }}>● aktivní do {until.toLocaleString("cs-CZ")} — veličiny se ukládají a zobrazují v kartě modulu</span>
+          : <span className="muted">○ vypnuto — měnič hodnoty posílá, ale neukládají se (nezatěžují DB)</span>}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+        <span className="muted" style={{ fontSize: 12 }}>zapnout na:</span>
+        {DIAG_HOURS.map(([h, l]) => (
+          <button key={h} type="button" className="btn" disabled={busy} style={{ padding: "2px 8px", fontSize: 12 }} onClick={() => set(h)}>{l}</button>))}
+        {active && <button type="button" className="btn" disabled={busy} style={{ padding: "2px 8px", fontSize: 12, marginLeft: 8 }} onClick={() => set(0)}>■ vypnout</button>}
+      </div>
+      <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
+        Registry 33049–33056 jsou v bloku, který už čteme — žádný dotaz na měnič navíc. Měnič rozlišuje jen MPPT (ne jednotlivé stringy v rámci MPPT).
+        Data se po 30 dnech automaticky mažou. Nepočítá se do limitu sledovaných veličin.
+      </p>
+    </div>
+  );
+}
 
 const ADAPTERS = ["goodwe", "solis", "stiebel_isg", "uvr_cmi", "mock"];
 // který model podporuje který typ zařízení (filtr výběru; mock umí vše — vývoj)
@@ -306,8 +339,8 @@ export default function Modules() {
             </div>
           </>)}
           {editing && (() => {
-            const shown = metricsFor(f.adapter, f.device_type, avail);
-            const checked = shown.filter((k) => !f.hidden.includes(k)).length;
+            const shown = metricsFor(f.adapter, f.device_type, avail).filter((k) => !DIAG_METRICS.has(k));
+            const checked = shown.filter((k) => !f.hidden.includes(k) && countsToLimit(k)).length;
             const groups = groupMetrics(shown);
             return (
               <div className="field" style={{ marginBottom: 8 }}>
@@ -329,7 +362,7 @@ export default function Modules() {
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "6px 14px" }}>
                         {g.items.map((k) => {
                           const on = !f.hidden.includes(k);
-                          const blocked = !on && checked >= MAX_TRACKED;
+                          const blocked = !on && checked >= MAX_TRACKED && countsToLimit(k);
                           return (
                             <label key={k} title={blocked ? `Limit ${MAX_TRACKED} veličin — odeber jinou nebo přikup příplatek` : ""}
                                    style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400,
@@ -345,10 +378,15 @@ export default function Modules() {
                   ))}
                   <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
                     Sledování až <strong>{MAX_TRACKED}</strong> veličin je v základu. Další veličiny nad rámec {MAX_TRACKED} jsou za příplatek — ozvi se nám.
+                    Technické / křížové kontroly a diagnostika se do limitu nepočítají.
                   </p>
                 </>)}
               </div>
             );
+          })()}
+          {editing && MPPT_ADAPTERS.includes(`${f.adapter}:${f.device_type}`) && (() => {
+            const mod = mods.find((m) => m.id === editing);
+            return mod ? <MpptDiag mod={mod} onChanged={load} /> : null;
           })()}
           {editing && (() => {
             const ctrl = controlFor(f.adapter, f.device_type);

@@ -26,7 +26,7 @@ from .mapping import (
     CTRL_CHARGE_CURRENT_LIMIT, CTRL_DISCHARGE_CURRENT_LIMIT,
     CTRL_SOC_BACKUP, CTRL_SOC_FORCE,
     REG_ENERGY_TODAY, REG_ENERGY_TOTAL, REG_GRID_METER,
-    REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_INV_TEMP, REG_INV_AC_POWER, REG_HOUSE_LOAD, REG_BAT_POWER_INV, REG_INV_I_L1, REG_INV_I_L2, REG_INV_I_L3, REG_PV_POWER,
+    REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_INV_TEMP, REG_INV_AC_POWER, REG_HOUSE_LOAD, REG_BAT_POWER_INV, REG_INV_I_L1, REG_INV_I_L2, REG_INV_I_L3, REG_PV_POWER, REG_MPPT,
 )
 
 logger = logging.getLogger(__name__)
@@ -377,6 +377,13 @@ class SolisAdapter:
             add(Metric.INVERTER_CURRENT_L3, self._dec(cache, REG_INV_I_L3))
             add(Metric.HOUSE_LOAD_INV, self._dec(cache, REG_HOUSE_LOAD))
             add(Metric.BATTERY_POWER_INV, self._dec(cache, REG_BAT_POWER_INV))
+            # 🔬 MPPT 1–4 (zdarma z bloku SYS1; uložení gatuje server dle mppt_diag_until)
+            for n, (rv, ri) in REG_MPPT.items():
+                v, i = self._dec(cache, rv), self._dec(cache, ri)
+                add(Metric(f"pv_voltage_{n}"), v)
+                add(Metric(f"pv_current_{n}"), i)
+                if v is not None and i is not None:
+                    add(Metric(f"pv_power_{n}"), round(v * i, 1))
 
         def pack_fields(pid: int) -> dict:
             return {f: self._dec(cache, spec) for f, spec in (BATTERY_PACKS.get(pid) or {}).items()}

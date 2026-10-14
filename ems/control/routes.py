@@ -90,6 +90,40 @@ async def set_self_heal(module_id: str, body: SelfHealBody,
     return {"module_id": module_id, "self_heal_igfol": body.enabled}
 
 
+class MpptDiagBody(BaseModel):
+    hours: float = 0        # 0 = vypnout
+
+
+@router.put("/modules/{module_id}/mppt-diag")
+async def set_mppt_diag(module_id: str, body: MpptDiagBody,
+                        user: dict = Depends(require_permission("control"))):
+    """🔬 Diagnostika MPPT na omezenou dobu: params.mppt_diag_until = now + hours (max 30 dní).
+    Veličiny pv_voltage/current/power_1–4 se ukládají jen v tomto okně; po 30 dnech se mažou."""
+    from datetime import datetime, timedelta, timezone
+    from ems.api.db import get_pool
+    hours = max(0.0, min(float(body.hours or 0), 24 * 30))
+    until = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat() if hours > 0 else None
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT locality_id FROM modules WHERE id = $1", module_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="modul neexistuje")
+        if until:
+            await conn.execute(
+                "UPDATE modules SET params = COALESCE(params,'{}'::jsonb) || jsonb_build_object('mppt_diag_until', $2::text) "
+                "WHERE id = $1", module_id, until)
+        else:
+            await conn.execute("UPDATE modules SET params = COALESCE(params,'{}'::jsonb) - 'mppt_diag_until' WHERE id = $1",
+                               module_id)
+    try:
+        from ems.alerts import db as alerts_db
+        await alerts_db.record_event(row["locality_id"], "config", f"Diagnostika MPPT – {module_id}",
+                                     (f"ZAPNUTA na {hours:g} h" if until else "VYPNUTA") + f" · uživatel {user.get('username', '?')}")
+    except Exception:
+        pass
+    return {"module_id": module_id, "mppt_diag_until": until}
+
+
 @router.get("/modules")
 async def controllable_modules(_: dict = Depends(require_permission("control"))):
     """Řiditelné moduly s lokalitou — Solis (control_enabled) i goodwe (s baterií)."""

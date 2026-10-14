@@ -14,6 +14,13 @@ export const METRIC_LABEL = {
   energy_today: "FVE dnes", energy_pv_total: "FVE celkem",
   energy_import: "Import celkem", energy_export: "Export celkem",
   grid_voltage_l1: "Síť napětí L1", grid_voltage_l2: "Síť napětí L2", grid_voltage_l3: "Síť napětí L3",
+  pv_voltage_1: "MPPT 1 napětí", pv_current_1: "MPPT 1 proud", pv_power_1: "MPPT 1 výkon",
+  pv_voltage_2: "MPPT 2 napětí", pv_current_2: "MPPT 2 proud", pv_power_2: "MPPT 2 výkon",
+  pv_voltage_3: "MPPT 3 napětí", pv_current_3: "MPPT 3 proud", pv_power_3: "MPPT 3 výkon",
+  pv_voltage_4: "MPPT 4 napětí", pv_current_4: "MPPT 4 proud", pv_power_4: "MPPT 4 výkon",
+  battery_power_inv: "Výkon baterie dle měniče (33149)", house_load_inv: "Zátěž domu dle měniče (33147)",
+  inverter_ac_power: "AC výkon měniče (33079)", inverter_current_l1: "Proud měniče L1", inverter_current_l2: "Proud měniče L2",
+  inverter_current_l3: "Proud měniče L3", inverter_fault: "Porucha měniče", inverter_state: "Stav měniče",
   active_power: "Činný výkon", reactive_power: "Jalový výkon",
   voltage: "Napětí", current: "Proud", frequency: "Frekvence", temperature: "Teplota měniče",
 };
@@ -43,7 +50,21 @@ export const METRIC_GROUPS = [
   { id: "battery", label: "Baterie — souhrn", icon: "battery", metrics: ["battery_soc", "battery_power"] },
   { id: "bat1", label: "Baterie 1", icon: "battery", metrics: ["battery_soc_1", "battery_voltage_1", "battery_current_1", "battery_power_1", "battery_soh_1", "battery_temp_1"] },
   { id: "bat2", label: "Baterie 2", icon: "battery", metrics: ["battery_soc_2", "battery_voltage_2", "battery_current_2", "battery_power_2", "battery_soh_2", "battery_temp_2"] },
+  { id: "mppt", label: "🔬 MPPT (diagnostika, časově omezená)", icon: "sun", metrics: [
+    "pv_voltage_1", "pv_current_1", "pv_power_1", "pv_voltage_2", "pv_current_2", "pv_power_2",
+    "pv_voltage_3", "pv_current_3", "pv_power_3", "pv_voltage_4", "pv_current_4", "pv_power_4"] },
+  { id: "tech", label: "Technické / křížové kontroly", icon: "sliders", metrics: [
+    "inverter_state", "inverter_fault", "inverter_ac_power", "inverter_current_l1", "inverter_current_l2", "inverter_current_l3",
+    "house_load_inv", "battery_power_inv"] },
 ];
+
+// Veličiny, které se NEPOČÍTAJÍ do limitu sledovaných (diagnostika a technické křížové kontroly —
+// čtou se zdarma z už načtených bloků, slouží auditu/servisu, ne zákaznickému sledování).
+export const DIAG_METRICS = new Set(METRIC_GROUPS.find((g) => g.id === "mppt").metrics);
+export const TECH_METRICS = new Set(METRIC_GROUPS.find((g) => g.id === "tech").metrics);
+export const countsToLimit = (k) => !DIAG_METRICS.has(k) && !TECH_METRICS.has(k);
+export const MPPT_ADAPTERS = ["solis:hybrid", "solis:generation"];
+export const DIAG_HOURS = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [72, "3 dny"], [168, "7 dní"], [720, "30 dní"]];
 
 const _GROUP_OF = {};
 METRIC_GROUPS.forEach((g) => g.metrics.forEach((m) => { _GROUP_OF[m] = g.id; }));

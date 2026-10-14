@@ -60,10 +60,14 @@ def _module_sig(m) -> str:
     return json.dumps({"adapter": m.adapter, "params": m.params}, sort_keys=True, default=str)
 
 
-async def poll_device(adapter, sink) -> None:
+async def poll_device(adapter, sink, params: dict | None = None) -> None:
     try:
         reading = await adapter.read()
-        await sink.write(reading_to_samples(reading))
+        samples = reading_to_samples(reading)
+        if params is not None:          # 🔬 diagnostické veličiny jen v aktivním okně
+            from ems.core.diag import keep_metric
+            samples = [s for s in samples if keep_metric(str(getattr(s.metric, "value", s.metric)), params)]
+        await sink.write(samples)
         if reading.states and hasattr(sink, "write_states"):
             await sink.write_states(reading.device_id, reading.states)
         # heat_pump: plný snapshot do hp_telemetry (podklad karty, běhů a denních agregací)
@@ -181,7 +185,7 @@ async def reconcile(active: dict, sink) -> None:
         if cur is None:
             try:
                 active[mid] = {"adapter": await _connect_module(m), "sig": sig,
-                               "control_only": mid in control_only_ids}
+                               "control_only": mid in control_only_ids, "params": dict(m.params or {})}
                 logger.info("Modul připojen: %s (adaptér=%s%s)", mid, m.adapter,
                             ", jen povely — čte EMSBOX" if mid in control_only_ids else "")
             except Exception as exc:
@@ -194,7 +198,7 @@ async def reconcile(active: dict, sink) -> None:
                 pass
             try:
                 active[mid] = {"adapter": await _connect_module(m), "sig": sig,
-                               "control_only": mid in control_only_ids}
+                               "control_only": mid in control_only_ids, "params": dict(m.params or {})}
                 logger.info("Modul přenastaven za běhu: %s%s", mid,
                             " (jen povely — čte EMSBOX)" if mid in control_only_ids else " (nové parametry)")
             except Exception as exc:
@@ -257,7 +261,7 @@ async def run() -> None:
         while not stop.is_set():
             await reconcile(active, sink)
             if active:
-                await asyncio.gather(*(poll_device(e["adapter"], sink)
+                await asyncio.gather(*(poll_device(e["adapter"], sink, e.get("params"))
                                        for e in active.values() if not e.get("control_only")))
                 await process_queue(active)
             await tick_market_and_automation(state)
@@ -269,6 +273,7 @@ async def run() -> None:
             await tick_soc_targets(state)
             await tick_export_guard(state)
             await tick_inverter_limits(state)
+            await tick_diag_purge(state)
             await tick_notify(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
@@ -724,6 +729,28 @@ async def tick_export_guard(state: dict) -> None:
             logger.info("Export guard %s: %s → %s reg (export %.1f kW, limit %.1f, req %.1f kW)", dev, cur, want, export_kw, limit_kw, req / 100)
     except Exception as exc:
         logger.debug("tick_export_guard: %s", exc)
+
+
+async def tick_diag_purge(state: dict) -> None:
+    """🔬 Jednou za hodinu smaže diagnostické veličiny (MPPT) starší než DIAG_KEEP_DAYS —
+    diagnostika je časově omezená a nemá plnit DB natrvalo."""
+    import time as _tm
+    now = _tm.monotonic()
+    if now - state.get("_diag_purge_ts", 0) < 3600:
+        return
+    state["_diag_purge_ts"] = now
+    try:
+        from ems.core.diag import DIAG_METRICS, DIAG_KEEP_DAYS
+        from ems.api.db import get_pool
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "DELETE FROM samples WHERE metric = ANY($1::text[]) AND time < now() - interval '%s days'"
+                % DIAG_KEEP_DAYS, list(DIAG_METRICS))
+        if res and not res.endswith(" 0"):
+            logger.info("diag purge: %s", res)
+    except Exception as exc:
+        logger.debug("tick_diag_purge: %s", exc)
 
 
 async def tick_inverter_limits(state: dict) -> None:

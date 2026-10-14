@@ -60,6 +60,7 @@ export const api = {
   controlModules: () => request("/api/control/modules"),
   setControlSources: (id, body) => request(`/api/control/modules/${id}/control-sources`,
     { method: "PUT", body }),
+  setMpptDiag: (id, hours) => request(`/api/control/modules/${id}/mppt-diag`, { method: "PUT", body: { hours } }),
   setSelfHeal: (id, enabled) => request(`/api/control/modules/${id}/self-heal`,
     { method: "PUT", body: { enabled } }),
   enqueueCommand: (id, action, params = {}) =>
