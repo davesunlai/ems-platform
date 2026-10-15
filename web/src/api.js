@@ -66,6 +66,7 @@ export const api = {
   enqueueCommand: (id, action, params = {}) =>
     request(`/api/control/${encodeURIComponent(id)}/command`, { method: "POST", body: { action, params } }),
   commandStatus: (cmdId) => request(`/api/control/command/${cmdId}`),
+  scanRegisters: (id, body) => request(`/api/control/modules/${id}/scan`, { method: "POST", body }),
   listOutputs: () => request("/api/outputs"),
   syncEwelink: () => request("/api/outputs/sync-ewelink", { method: "POST" }),
   emsboxAll: () => request("/api/emsboxes"),

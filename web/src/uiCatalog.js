@@ -22,6 +22,7 @@ export const UI_CATALOG = [
     { key: "ctl:sources", label: "Zdroje řízení modulu (🧠/⏰/⚡) + samoléčba" },
     { key: "ctl:outputs", label: "🔌 Spotřebiče / spínané výstupy" },
     { key: "ctl:audit", label: "📜 Audit povelů" },
+    { key: "ctl:scan", label: "🔬 Sken registrů měniče (diagnostika BMS/článků)" },
   ]},
   { page: "page:heatpump", label: "🌀 TČ", path: "/heatpump", items: [] },
   { page: "page:emsboxes", label: "📦 EMSBOXy", path: "/emsboxes", items: [

@@ -385,6 +385,119 @@ function SelfHealToggle({ mod }) {
   );
 }
 
+// 🔬 Sken registrů měniče: přečte rozsah input/holding registrů (dávky ve frontě povelů),
+// ukáže hodnoty dec/hex/×0.1/×0.01 a zvýrazní bloky, které vypadají jako napětí článků
+// (běh ≥ 8 po sobě jdoucích hodnot v pásmu LFP 2,5–3,8 V při ×0,001 nebo ×0,01).
+const SCAN_PRESETS = [
+  ["BMS / články pack 1 (33150–33260)", "input", 33150, 33260],
+  ["pack 2 oblast (34292–34420)", "input", 34292, 34420],
+  ["baterie 1 blok (33133–33150)", "input", 33133, 33150],
+  ["baterie 2 blok (34275–34291)", "input", 34275, 34291],
+];
+function cellCandidates(rows) {
+  const out = [];
+  for (const [scale, lo, hi] of [[0.001, 2500, 3800], [0.01, 250, 380]]) {
+    let run = [];
+    const flush = () => { if (run.length >= 8) out.push({ scale, from: run[0].addr, to: run[run.length - 1].addr, n: run.length,
+      min: Math.min(...run.map((r) => r.v)) * scale, max: Math.max(...run.map((r) => r.v)) * scale,
+      minAddr: run.reduce((a, b) => (b.v < a.v ? b : a)).addr }); run = []; };
+    for (const r of rows) {
+      if (r.v != null && r.v >= lo && r.v <= hi && (!run.length || r.addr === run[run.length - 1].addr + 1)) run.push(r);
+      else { flush(); if (r.v != null && r.v >= lo && r.v <= hi) run.push(r); }
+    }
+    flush();
+  }
+  return out;
+}
+function RegisterScan({ mod }) {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState("input");
+  const [start, setStart] = useState(33150);
+  const [end, setEnd] = useState(33260);
+  const [rows, setRows] = useState([]);
+  const [prog, setProg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const run = async (k = kind, s = start, e = end) => {
+    setBusy(true); setRows([]); setProg("zařazuji…");
+    try {
+      const r = await api.scanRegisters(mod.id, { kind: k, start: Number(s), end: Number(e) });
+      const pending = new Map(r.commands.map((c) => [c.id, c]));
+      const got = [];
+      const t0 = Date.now();
+      while (pending.size && Date.now() - t0 < 180000) {
+        await new Promise((res) => setTimeout(res, 2500));
+        for (const [id, c] of [...pending]) {
+          try {
+            const st = await api.commandStatus(id);
+            if (st.status === "pending") continue;
+            pending.delete(id);
+            const vals = st.result?.values || st.result?.result?.values;
+            if (st.status === "done" && Array.isArray(vals)) vals.forEach((v, i) => got.push({ addr: c.addr + i, v }));
+            else for (let i = 0; i < c.count; i++) got.push({ addr: c.addr + i, v: null, err: st.result?.error || st.status });
+          } catch (e) { /* retry */ }
+        }
+        got.sort((a, b) => a.addr - b.addr);
+        setRows([...got]);
+        setProg(`${r.commands.length - pending.size}/${r.commands.length} dávek`);
+      }
+      setProg(pending.size ? `timeout — ${pending.size} dávek nedoběhlo` : `hotovo (${got.length} registrů)`);
+    } catch (e) { setProg("chyba: " + e.message); }
+    setBusy(false);
+  };
+  const copy = () => {
+    const txt = [`# ${mod.id} ${kind} ${start}–${end} ${new Date().toLocaleString("cs-CZ")}`,
+      ...rows.map((r) => `${r.addr}\t${r.v ?? "ERR"}`)].join("\n");
+    navigator.clipboard?.writeText(txt).then(() => setProg("zkopírováno do schránky"));
+  };
+  const cands = cellCandidates(rows);
+  const s16 = (v) => (v > 32767 ? v - 65536 : v);
+  return (
+    <div style={{ marginTop: 8, padding: "6px 10px", border: "1px dashed var(--border, #30363d)", borderRadius: 8 }}>
+      <div style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600 }} onClick={() => setOpen(!open)}>
+        {open ? "▾" : "▸"} 🔬 Sken registrů měniče (diagnostika BMS / článků)
+      </div>
+      {open && (<>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 6, fontSize: 12 }}>
+          <select value={kind} onChange={(e) => setKind(e.target.value)} disabled={busy}>
+            <option value="input">input (3xxxx)</option><option value="holding">holding (4xxxx)</option></select>
+          <input style={{ width: 80 }} value={start} onChange={(e) => setStart(e.target.value)} disabled={busy} />–
+          <input style={{ width: 80 }} value={end} onChange={(e) => setEnd(e.target.value)} disabled={busy} />
+          <button className="btn" disabled={busy} onClick={() => run()}>▶ číst</button>
+          {rows.length > 0 && <button className="btn" onClick={copy}>📋 kopírovat</button>}
+          <span className="muted">{prog}</span>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+          {SCAN_PRESETS.map(([l, k, s, e]) => (
+            <button key={l} className="btn" style={{ fontSize: 11, padding: "1px 6px" }} disabled={busy}
+                    onClick={() => { setKind(k); setStart(s); setEnd(e); run(k, s, e); }}>{l}</button>))}
+        </div>
+        {cands.length > 0 && (
+          <div style={{ marginTop: 6, fontSize: 12, color: "var(--amber)" }}>
+            🔋 Kandidáti na napětí článků:{" "}
+            {cands.map((c, i) => <span key={i}>{c.from}–{c.to} ({c.n}× ×{c.scale}: {c.min.toFixed(3)}–{c.max.toFixed(3)} V, nejnižší na {c.minAddr}){i < cands.length - 1 ? "; " : ""}</span>)}
+          </div>)}
+        {rows.length > 0 && (
+          <div style={{ maxHeight: 280, overflow: "auto", marginTop: 6 }}>
+            <table style={{ fontSize: 11.5, fontFamily: "monospace" }}>
+              <thead><tr><th>adr</th><th>dec</th><th>hex</th><th>s16</th><th>×0,1</th><th>×0,01</th><th>×0,001</th></tr></thead>
+              <tbody>{rows.map((r) => (
+                <tr key={r.addr} style={{ opacity: r.v == null ? 0.5 : r.v === 0 ? 0.6 : 1 }}>
+                  <td>{r.addr}</td>
+                  {r.v == null ? <td colSpan={6} className="muted">{r.err || "—"}</td> : <>
+                    <td><b>{r.v}</b></td><td>{r.v.toString(16).padStart(4, "0")}</td><td>{s16(r.v)}</td>
+                    <td>{(r.v / 10).toFixed(1)}</td><td>{(r.v / 100).toFixed(2)}</td><td>{(r.v / 1000).toFixed(3)}</td></>}
+                </tr>))}
+              </tbody></table>
+          </div>)}
+        <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>
+          Čte se ve 20registrových dávkách frontou povelů (box/kolektor je vyřídí ~1 dávku za cyklus; 110 registrů ≈ 1 min).
+          Zápis nic nedělá — jen čtení. Výsledek pošli, z hodnot určíme význam registrů (napětí článků, čísla článků, teploty).
+        </p>
+      </>)}
+    </div>
+  );
+}
+
 function SolisControl({ mod }) {
   const { vis } = useAuth();
   const has = (k) => (mod.control_enabled || []).includes(k);
@@ -525,6 +638,7 @@ function SolisControl({ mod }) {
 
 
       <StatusLine status={status} />
+      {vis("ctl:scan") && <RegisterScan mod={mod} />}
     </div>
   );
 }

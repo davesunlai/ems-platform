@@ -90,6 +90,38 @@ async def set_self_heal(module_id: str, body: SelfHealBody,
     return {"module_id": module_id, "self_heal_igfol": body.enabled}
 
 
+class ScanBody(BaseModel):
+    kind: str = "input"        # input | holding
+    start: int
+    end: int                   # včetně
+    chunk: int = 20
+
+
+@router.post("/modules/{module_id}/scan")
+async def scan_registers(module_id: str, body: ScanBody, user: dict = Depends(require_permission("admin"))):
+    """🔬 Sken registrů měniče (diagnostika BMS / článků): rozsah se rozdělí na dávky
+    read_input/read_holding ve frontě povelů; kolektor/box je vyřídí sekvenčně (~1 cyklus
+    na dávku). Vrací ID povelů — UI je polluje přes /command/{id}. Max 400 registrů najednou."""
+    await _get_solis(module_id)
+    if body.kind not in ("input", "holding"):
+        raise HTTPException(status_code=400, detail="kind: input | holding")
+    if body.end < body.start or body.end - body.start > 400:
+        raise HTTPException(status_code=400, detail="rozsah max 400 registrů")
+    chunk = max(1, min(int(body.chunk), 40))
+    await db.ensure_queue_schema()
+    action = "read_input" if body.kind == "input" else "read_holding"
+    ids = []
+    a = body.start
+    while a <= body.end:
+        n = min(chunk, body.end - a + 1)
+        cid = await db.enqueue(module_id, action, {"addr": a, "count": n, "reason": "sken registrů"}, user["username"])
+        ids.append({"id": cid, "addr": a, "count": n})
+        a += n
+    await db.record(user["username"], module_id, "scan", {"kind": body.kind, "start": body.start, "end": body.end},
+                    True, {"queued": [i["id"] for i in ids]})
+    return {"module_id": module_id, "kind": body.kind, "commands": ids}
+
+
 class MpptDiagBody(BaseModel):
     hours: float = 0        # 0 = vypnout
 

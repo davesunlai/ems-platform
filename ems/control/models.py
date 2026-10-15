@@ -29,7 +29,7 @@ class CommandResult(BaseModel):
 # Povely fronty (Solis přes kolektor — jediné Modbus spojení).
 SOLIS_ACTIONS = {"force_charge", "force_discharge", "stop", "force_poke", "set_work_mode",
                  "set_charge_current", "set_discharge_current", "set_soc_backup", "set_soc_force",
-                 "read_controls", "write_holding", "read_holding"}
+                 "read_controls", "write_holding", "read_holding", "read_input"}
 
 
 class CommandRequest(BaseModel):
