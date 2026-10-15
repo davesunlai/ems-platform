@@ -116,12 +116,22 @@ function ForecastSection({ loc, onChange }) {
         name: b.name, share_pct: Number(b.share_pct || 0), panel_type: b.panel_type,
         tilt: Number(b.tilt || 0), azimuth: Number(b.azimuth || 0), pr: Number(b.pr || 0.8), enabled: b.enabled !== false,
       })));
-      onChange(); setMsg("Uloženo.");
+      onChange();
+      // Změna polohy / kWp / panelů = jiná predikce → přepočítat HNED (ne až za 3 h tickem),
+      // a na novou predikci navázat i plán řízení.
+      setMsg("Uloženo — přepočítávám predikci…");
+      setMsg(await recomputeAll());
     } catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+  const recomputeAll = async () => {
+    const r = await api.refreshForecast(loc.id);
+    let plan = "";
+    try { await api.refreshPlanner(loc.id); plan = " · plán řízení obnoven"; } catch (e) { plan = " · plán řízení: " + e.message; }
+    return `Uloženo a přepočítáno: ${r.points} bodů predikce (${r.sources === 2 ? "Open-Meteo + Forecast.Solar" : "Open-Meteo"})${plan}.`;
   };
   const recompute = async () => {
     setBusy(true); setMsg("");
-    try { const r = await api.refreshForecast(loc.id); setMsg(`Přepočítáno: ${r.points} bodů.`); }
+    try { setMsg(await recomputeAll()); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   };
 
