@@ -443,9 +443,10 @@ class SolisAdapter:
                     powers.append(p)
                 add(soh_m[pid], d.get("soh"))
                 add(temp_m[pid], d.get("temp"))
-                # 🔋 BMS články packu (blok 34345/34370; marker 0xAA55 = blok platný)
+                # 🔋 BMS články packu (blok 34345/34370). Značka 0xAA55 je JEN před blokem A
+                # (34345) — blok B začíná 34370 = 0 (sken 16. 10.), proto platnost = Umin > 0.
                 base = BMS_BASE.get((3 - pid) if self.bms_swap else pid)
-                if base is not None and cache.get(base) == 0xAA55:
+                if base is not None and (cache.get(base + 3) or 0) > 0:
                     for key, (off, scale) in BMS_OFF.items():
                         raw = cache.get(base + off)
                         if raw is not None:

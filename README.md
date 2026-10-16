@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.96.3 — fix: Baterie 2 v bloku 🔋 Články chyběla. Adaptér podmiňoval platnost BMS bloku značkou 0xAA55 na jeho začátku — ta je ale podle skenu jen před blokem A (34345) a za oběma (34414); blok B začíná 34370 = 0. Nově platnost = Umin článku (+3) > 0. Nasazení: franta + ⬆ box.
+
 ## v0.96.2 — blok 🔋 Články: řádek s tlačítky období (6 h / 12 h / 24 h / 3 dny / 7 dní / 14 dní / 30 dní, aktivní zvýrazněné) nad volbou řad — dosud bylo okno jen přes − / + v hlavičce, což nebylo zřejmé. Historie článků začíná nasazením v0.96.0 + ⬆ boxu (dřív se blok BMS nečetl), SoC má historii plnou. Jen web.
 
 ## v0.96.1 — HOTFIX černé obrazovky dashboardu (v0.96.0): blok 🔋 Články volal pomocnou funkci `ago`, která v Dashboard.jsx neexistuje (je jen v Emsboxes.jsx) → ReferenceError při prvním vykreslení s daty BMS (po ⬆ boxu) → celá SPA spadla. Stejná třída chyby jako 0.85.1 (useAuth). Regresní pojistka: `web/eslint.config.mjs` + `npm run lint:undef` (pravidlo no-undef přes celé src) — součást smoke testu před každým balením. Jen web.

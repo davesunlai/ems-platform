@@ -75,7 +75,7 @@ REG_E_EXPORT_TOTAL = (33173, "u32", 1.0)          # dodávka do sítě
 REG_E_EXPORT_TODAY = (33175, "u16", 0.1)
 REG_E_LOAD_TOTAL = (33177, "u32", 1.0)            # spotřeba domu
 REG_E_LOAD_TODAY = (33179, "u16", 0.1)
-# 🔋 BMS články (sken 16. 10. 2026): dva shodné bloky po 25 reg., začátek 0xAA55.
+# 🔋 BMS články (sken 16. 10. 2026): dva shodné bloky po 25 reg.; značka 0xAA55 jen na 34345 (a 34414), 34370 = 0.
 # pack A = 34345, pack B = 34370. Offsety: +1 konst. 4785, +3 Umin článku (mV), +4 Umax (mV),
 # +5 Tmin (×0.1 °C), +6 Tmax, +7 číslo článku s Umin, +9 číslo článku s Umax, +13 proud BMS (×0.1 A),
 # +17 cykly, +19 článků/modul (15), +20 modulů (11). Přiřazení A→baterie 1, B→baterie 2 (param bms_swap otočí).
