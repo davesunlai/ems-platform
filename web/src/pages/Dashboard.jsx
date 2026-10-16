@@ -1230,7 +1230,7 @@ function CellsBlock({ deviceIds, devs }) {
         <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
         <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1, marginLeft: 6 }}
                 onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0}>−</button>
-        <span className="muted" style={{ minWidth: 50, textAlign: "center" }}>{WIN[win].label} · {rangeLabel(WIN[win].min, offset)}</span>
+        <span className="muted" style={{ minWidth: 50, textAlign: "center" }}>{WIN[win].label}</span>
         <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
                 onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1}>+</button>
       </div>
@@ -1246,6 +1246,14 @@ function CellsBlock({ deviceIds, devs }) {
             const hot = row[0] === "cell_vmin" && weakest && weakest.n === n;
             return <td key={n} style={{ textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: hot ? 700 : 400, color: hot ? "var(--amber)" : "inherit" }}>{cell(row, n)}</td>; })}</tr>))}
         </tbody></table>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", fontSize: 12, marginBottom: 6 }}>
+        <span className="muted" style={{ marginRight: 4 }}>Období:</span>
+        {WIN.map((w, i) => (
+          <button key={w.min} className="btn" onClick={() => { setWin(i); setOffset(0); }}
+                  style={{ padding: "2px 9px", fontSize: 12, fontWeight: i === win ? 700 : 400,
+                           outline: i === win ? "1.5px solid var(--blue, #58a6ff)" : "none" }}>{w.label}</button>))}
+        <span className="muted" style={{ marginLeft: 8 }}>{rangeLabel(WIN[win].min, offset)}</span>
+      </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: 12, marginBottom: 4 }}>
         <span className="muted">V grafu:</span>
         {CELL_SERIES.map(([k, l, c]) => (
