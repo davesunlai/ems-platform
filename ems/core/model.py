@@ -65,6 +65,39 @@ class Metric(str, Enum):
     PV_VOLTAGE_4 = "pv_voltage_4"
     PV_CURRENT_4 = "pv_current_4"
     PV_POWER_4 = "pv_power_4"
+    # 🔋 BMS články (Solis blok 34345–34392, sken 16. 10. 2026): per pack min/max napětí článku,
+    # min/max teplota, číslo článku s min/max, proud BMS, cykly, počty modulů/článků. Ukládá se 1×/min.
+    BATTERY_CELL_VMIN_1 = "battery_cell_vmin_1"
+    BATTERY_CELL_VMAX_1 = "battery_cell_vmax_1"
+    BATTERY_CELL_TMIN_1 = "battery_cell_tmin_1"
+    BATTERY_CELL_TMAX_1 = "battery_cell_tmax_1"
+    BATTERY_CELL_NMIN_1 = "battery_cell_nmin_1"
+    BATTERY_CELL_NMAX_1 = "battery_cell_nmax_1"
+    BATTERY_BMS_CURRENT_1 = "battery_bms_current_1"
+    BATTERY_CYCLES_1 = "battery_cycles_1"
+    BATTERY_BMS_MODULES_1 = "battery_bms_modules_1"
+    BATTERY_BMS_CELLS_PER_MODULE_1 = "battery_bms_cells_per_module_1"
+    BATTERY_CELL_VMIN_2 = "battery_cell_vmin_2"
+    BATTERY_CELL_VMAX_2 = "battery_cell_vmax_2"
+    BATTERY_CELL_TMIN_2 = "battery_cell_tmin_2"
+    BATTERY_CELL_TMAX_2 = "battery_cell_tmax_2"
+    BATTERY_CELL_NMIN_2 = "battery_cell_nmin_2"
+    BATTERY_CELL_NMAX_2 = "battery_cell_nmax_2"
+    BATTERY_BMS_CURRENT_2 = "battery_bms_current_2"
+    BATTERY_CYCLES_2 = "battery_cycles_2"
+    BATTERY_BMS_MODULES_2 = "battery_bms_modules_2"
+    BATTERY_BMS_CELLS_PER_MODULE_2 = "battery_bms_cells_per_module_2"
+    ENERGY_BAT_CHARGE_TODAY = "energy_bat_charge_today"
+    ENERGY_BAT_DISCHARGE_TODAY = "energy_bat_discharge_today"
+    ENERGY_IMPORT_TODAY = "energy_import_today"
+    ENERGY_EXPORT_TODAY = "energy_export_today"
+    ENERGY_LOAD_TODAY = "energy_load_today"
+    ENERGY_BAT_CHARGE_TOTAL = "energy_bat_charge_total"
+    ENERGY_BAT_DISCHARGE_TOTAL = "energy_bat_discharge_total"
+    ENERGY_IMPORT_TOTAL = "energy_import_total"
+    ENERGY_EXPORT_TOTAL = "energy_export_total"
+    ENERGY_LOAD_TOTAL = "energy_load_total"
+    # Energetické čítače měniče (33161–33180): dnes / celkem — křížová kontrola dopočtů. 1×/min.
     INVERTER_AC_POWER = "inverter_ac_power"    # AC výkon měniče
     INVERTER_CURRENT_L1 = "inverter_current_l1"
     INVERTER_CURRENT_L2 = "inverter_current_l2"
@@ -130,6 +163,36 @@ UNIT_OF: dict[Metric, str] = {
     Metric.PV_VOLTAGE_2: "V", Metric.PV_CURRENT_2: "A", Metric.PV_POWER_2: "W",
     Metric.PV_VOLTAGE_3: "V", Metric.PV_CURRENT_3: "A", Metric.PV_POWER_3: "W",
     Metric.PV_VOLTAGE_4: "V", Metric.PV_CURRENT_4: "A", Metric.PV_POWER_4: "W",
+    Metric.BATTERY_CELL_VMIN_1: "V",
+    Metric.BATTERY_CELL_VMAX_1: "V",
+    Metric.BATTERY_CELL_TMIN_1: "°C",
+    Metric.BATTERY_CELL_TMAX_1: "°C",
+    Metric.BATTERY_CELL_NMIN_1: "",
+    Metric.BATTERY_CELL_NMAX_1: "",
+    Metric.BATTERY_BMS_CURRENT_1: "A",
+    Metric.BATTERY_CYCLES_1: "",
+    Metric.BATTERY_BMS_MODULES_1: "",
+    Metric.BATTERY_BMS_CELLS_PER_MODULE_1: "",
+    Metric.BATTERY_CELL_VMIN_2: "V",
+    Metric.BATTERY_CELL_VMAX_2: "V",
+    Metric.BATTERY_CELL_TMIN_2: "°C",
+    Metric.BATTERY_CELL_TMAX_2: "°C",
+    Metric.BATTERY_CELL_NMIN_2: "",
+    Metric.BATTERY_CELL_NMAX_2: "",
+    Metric.BATTERY_BMS_CURRENT_2: "A",
+    Metric.BATTERY_CYCLES_2: "",
+    Metric.BATTERY_BMS_MODULES_2: "",
+    Metric.BATTERY_BMS_CELLS_PER_MODULE_2: "",
+    Metric.ENERGY_BAT_CHARGE_TODAY: "kWh",
+    Metric.ENERGY_BAT_DISCHARGE_TODAY: "kWh",
+    Metric.ENERGY_IMPORT_TODAY: "kWh",
+    Metric.ENERGY_EXPORT_TODAY: "kWh",
+    Metric.ENERGY_LOAD_TODAY: "kWh",
+    Metric.ENERGY_BAT_CHARGE_TOTAL: "kWh",
+    Metric.ENERGY_BAT_DISCHARGE_TOTAL: "kWh",
+    Metric.ENERGY_IMPORT_TOTAL: "kWh",
+    Metric.ENERGY_EXPORT_TOTAL: "kWh",
+    Metric.ENERGY_LOAD_TOTAL: "kWh",
     Metric.INVERTER_AC_POWER: "W",
     Metric.INVERTER_CURRENT_L1: "A", Metric.INVERTER_CURRENT_L2: "A", Metric.INVERTER_CURRENT_L3: "A",
     Metric.BATTERY_SOH_1: "%",

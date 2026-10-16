@@ -53,7 +53,7 @@ async def ingest_telemetry(body: TelemetryBody, box: dict = Depends(box_auth)) -
             skipped += 1
             continue
         for metric, val in r.metrics.items():
-            if not keep_metric(metric, mparams):     # 🔬 diagnostika mimo okno → zahodit
+            if not keep_metric(metric, mparams, r.device_uid, ts):   # 🔬 diagnostika mimo okno / pomalé 1×/min
                 continue
             rows.append((ts, r.device_uid, metric, val, _UNITS.get(metric, "")))
     accepted = await db.insert_rows(rows)

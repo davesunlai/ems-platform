@@ -1118,6 +1118,7 @@ function LocalitySection({ name, devs, open, onToggle }) {
       {vis("dash:stats") && <LocalityNow deviceIds={ids} localityId={locId} />}
       {open && (<>
         {vis("dash:chart") && <LocalityChart deviceIds={ids} />}
+        {vis("dash:cells") && <CellsBlock deviceIds={ids} devs={devs} />}
         {locId && (
           <div className="card" style={{ marginTop: 14 }}>
             <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>Predikce 24–48 h</h3>
@@ -1129,6 +1130,130 @@ function LocalitySection({ name, devs, open, onToggle }) {
         {vis("dash:billing") && locId && <BillingTable localityId={locId} />}
       </>)}
     </section>
+  );
+}
+
+// 🔋 Články baterie (BMS) — tabulka per box + graf (výchozí 24 h, stejný typ jako Souhrn lokality).
+const CELL_ROWS = [
+  ["cell_vmin", "Nejnižší napětí článku", (v) => `${v.toFixed(3)} V`],
+  ["cell_vmax", "Nejvyšší napětí článku", (v) => `${v.toFixed(3)} V`],
+  ["_delta", "Rozptyl článků (max − min)", (v) => `${Math.round(v * 1000)} mV`],
+  ["cell_nmin", "Číslo článku s minimem", (v, m) => `${v}${m ? ` (modul ${Math.ceil(v / m)}, pozice ${((v - 1) % m) + 1})` : ""}`],
+  ["cell_nmax", "Číslo článku s maximem", (v, m) => `${v}${m ? ` (modul ${Math.ceil(v / m)}, pozice ${((v - 1) % m) + 1})` : ""}`],
+  ["cell_tmin", "Nejnižší teplota článku", (v) => `${v.toFixed(1)} °C`],
+  ["cell_tmax", "Nejvyšší teplota článku", (v) => `${v.toFixed(1)} °C`],
+  ["bms_current", "Proud podle BMS", (v) => `${v.toFixed(1)} A`],
+  ["cycles", "Počet cyklů", (v) => `${v}`],
+  ["_layout", "Moduly × články", (v) => v],
+];
+const CELL_SERIES = [
+  ["battery_soc", "SoC celkem", "#a371f7", { axis: "pct" }, true],
+  ["battery_soc_1", "SoC B1", "#8957e5", { axis: "pct" }, false],
+  ["battery_soc_2", "SoC B2", "#d2a8ff", { axis: "pct" }, false],
+  ["battery_cell_vmin_1", "B1 článek min", "#3fb950", { unit: "V" }, true],
+  ["battery_cell_vmax_1", "B1 článek max", "#56d364", { unit: "V" }, true],
+  ["battery_cell_vmin_2", "B2 článek min", "#58a6ff", { unit: "V" }, true],
+  ["battery_cell_vmax_2", "B2 článek max", "#79c0ff", { unit: "V" }, true],
+  ["battery_cell_tmax_1", "B1 teplota max", "#f0883e", { unit: "°C", axis: "right" }, false],
+  ["battery_cell_tmax_2", "B2 teplota max", "#ffa657", { unit: "°C", axis: "right" }, false],
+];
+function CellsBlock({ deviceIds, devs }) {
+  const solis = (devs || []).filter((d) => d.adapter === "solis").map((d) => d.device_id);
+  const id = solis[0];
+  const [latest, setLatest] = useState(null);
+  const [win, setWin] = useState(2);
+  const [offset, setOffset] = useState(0);
+  const [sel, setSel] = useState(() => {
+    try { const s = localStorage.getItem("cells_sel"); if (s) return new Set(JSON.parse(s)); } catch (e) { /* */ }
+    return new Set(CELL_SERIES.filter((x) => x[4]).map((x) => x[0]));
+  });
+  const [hist, setHist] = useState({});
+  const step = (dir) => setOffset((o) => Math.max(0, Math.min(525600, o + dir * WIN[win].min)));
+  const toggle = (k) => setSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k);
+    try { localStorage.setItem("cells_sel", JSON.stringify([...n])); } catch (e) { /* */ } return n; });
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    const tick = () => api.latest(id).then((l) => alive && setLatest(l.metrics || {})).catch(() => {});
+    tick(); const t = setInterval(tick, 15000); return () => { alive = false; clearInterval(t); };
+  }, [id]);
+  const keys = [...sel];
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    const load = async () => {
+      const out = {};
+      await Promise.all(keys.map(async (k) => {
+        try {
+          out[k] = k === "battery_soc"
+            ? (await api.aggregate(deviceIds, ["battery_soc"], WIN[win].min, offset)).metrics.battery_soc || []
+            : (await api.history(id, k, WIN[win].min, offset)).points;
+        } catch (e) { out[k] = []; }
+      }));
+      if (alive) setHist(out);
+    };
+    load();
+    const t = offset === 0 ? setInterval(load, 60000) : null;
+    return () => { alive = false; if (t) clearInterval(t); };
+  }, [id, keys.join(","), win, offset, deviceIds.join(",")]);
+  if (!id) return null;
+  const m = latest || {};
+  const val = (k, n) => m[`battery_${k}_${n}`]?.value;
+  const packs = [1, 2].filter((n) => val("cell_vmin", n) != null);
+  if (!packs.length && latest) return null;      // měnič BMS blok nedává (nebo starý agent)
+  const cell = (row, n) => {
+    const [k, , f] = row;
+    const mod = val("bms_cells_per_module", n);
+    if (k === "_delta") { const a = val("cell_vmin", n), b = val("cell_vmax", n); return a != null && b != null ? f(b - a) : "—"; }
+    if (k === "_layout") { const mo = val("bms_modules", n); return mo != null && mod != null ? `${mo} × ${mod} = ${mo * mod} článků` : "—"; }
+    const v = val(k, n); return v == null ? "—" : f(v, mod);
+  };
+  const weakest = packs.map((n) => ({ n, v: val("cell_vmin", n), c: val("cell_nmin", n), mod: val("bms_cells_per_module", n) }))
+    .filter((x) => x.v != null).sort((a, b) => a.v - b.v)[0];
+  const spread = packs.map((n) => ({ n, d: (val("cell_vmax", n) ?? 0) - (val("cell_vmin", n) ?? 0) })).sort((a, b) => b.d - a.d)[0];
+  const series = keys.map((k) => { const d = CELL_SERIES.find((x) => x[0] === k); return d ? { label: d[1], color: d[2], ...d[3], points: hist[k] || [] } : null; }).filter(Boolean);
+  const age = (() => { const t = m[`battery_cell_vmin_${packs[0]}`]?.time; return t ? ago(t) : ""; })();
+  return (
+    <div className="panel" style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+        <h3 style={{ margin: 0 }}>🔋 Články baterie (BMS)</h3>
+        <span className="muted" style={{ fontSize: 12 }}>· {id}{age ? ` · ${age}` : ""}</span>
+        <span style={{ flex: 1 }} />
+        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
+        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
+        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
+        <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1, marginLeft: 6 }}
+                onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0}>−</button>
+        <span className="muted" style={{ minWidth: 50, textAlign: "center" }}>{WIN[win].label} · {rangeLabel(WIN[win].min, offset)}</span>
+        <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
+                onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1}>+</button>
+      </div>
+      {weakest && (
+        <div style={{ fontSize: 13, marginBottom: 8, padding: "6px 10px", borderRadius: 8, background: "var(--bg2, #161b22)" }}>
+          🔻 <b>Nejslabší článek:</b> box {weakest.n}, článek {weakest.c}{weakest.mod ? ` (modul ${Math.ceil(weakest.c / weakest.mod)}, pozice ${((weakest.c - 1) % weakest.mod) + 1})` : ""} — <b>{weakest.v.toFixed(3)} V</b>
+          {spread && <span className="muted"> · největší rozptyl: box {spread.n} {Math.round(spread.d * 1000)} mV</span>}
+        </div>)}
+      <table style={{ fontSize: 12.5, marginBottom: 10 }}>
+        <thead><tr><th style={{ textAlign: "left" }}></th>{packs.map((n) => <th key={n}>Baterie {n}</th>)}</tr></thead>
+        <tbody>{CELL_ROWS.map((row) => (
+          <tr key={row[0]}><td className="muted">{row[1]}</td>{packs.map((n) => {
+            const hot = row[0] === "cell_vmin" && weakest && weakest.n === n;
+            return <td key={n} style={{ textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: hot ? 700 : 400, color: hot ? "var(--amber)" : "inherit" }}>{cell(row, n)}</td>; })}</tr>))}
+        </tbody></table>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: 12, marginBottom: 4 }}>
+        <span className="muted">V grafu:</span>
+        {CELL_SERIES.map(([k, l, c]) => (
+          <label key={k} style={{ display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+            <input type="checkbox" checked={sel.has(k)} onChange={() => toggle(k)} />
+            <span style={{ display: "inline-block", width: 10, height: 3, background: c }} />{l}
+          </label>))}
+      </div>
+      {keys.length ? <MultiChart series={series} name="teraems-clanky" /> : <p className="muted" style={{ fontSize: 12 }}>Zaškrtni, co chceš vidět.</p>}
+      <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>
+        Napětí článků na levé ose (V), SoC na pravé (%), teploty čárkovaně. Měnič dává jen extrémy packu (nejnižší/nejvyšší článek), ne všechny články; ukládá se 1× za minutu.
+        Přiřazení BMS blok A → Baterie 1 je k ověření (porovnej teploty/proud s kartou baterií).
+      </p>
+    </div>
   );
 }
 

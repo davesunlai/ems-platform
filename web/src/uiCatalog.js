@@ -10,6 +10,7 @@ export const UI_CATALOG = [
     { key: "dash:chart", label: "Graf výkonů" },
     { key: "dash:forecast", label: "🔮 Graf predikce" },
     { key: "dash:temp", label: "🌡️ Graf teplot" },
+    { key: "dash:cells", label: "🔋 Články baterie (BMS: min/max článek, teploty, graf SoC)" },
     { key: "dash:devices", label: "Panely zařízení (metriky)" },
     { key: "dash:billing", label: "💰 Tabulka nákladů" },
   ]},

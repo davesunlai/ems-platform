@@ -66,7 +66,8 @@ async def poll_device(adapter, sink, params: dict | None = None) -> None:
         samples = reading_to_samples(reading)
         if params is not None:          # 🔬 diagnostické veličiny jen v aktivním okně
             from ems.core.diag import keep_metric
-            samples = [s for s in samples if keep_metric(str(getattr(s.metric, "value", s.metric)), params)]
+            samples = [s for s in samples if keep_metric(str(getattr(s.metric, "value", s.metric)), params,
+                                                         reading.device_id, s.time)]
         await sink.write(samples)
         if reading.states and hasattr(sink, "write_states"):
             await sink.write_states(reading.device_id, reading.states)

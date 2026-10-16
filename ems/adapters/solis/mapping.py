@@ -63,7 +63,27 @@ BATTERY_PACKS = {
 BLOCK_SYS1 = (33029, 30)   # 33029..33058: energie celk./dnes, PV stringy, FVE výkon
 BLOCK_SYS2 = (33073, 21)   # 33073..33093: 3f napětí L1-3 + teplota měniče
 BLOCK_GRID = (33130, 2)    # 33130..33131: síťový meter (S32)
-BLOCK_BAT1 = (33133, 18)   # 33133..33150: baterie 1
+BLOCK_BAT1 = (33133, 48)   # 33133..33180: baterie 1 + energetické čítače 33161–33180 (zdarma v jednom dotazu)
+# Energetické čítače měniče (ověřeno skenem 16. 10. 2026 — sedí na Solis mapu):
+REG_E_BAT_CHARGE_TOTAL = (33161, "u32", 1.0)      # kWh nabito do baterie celkem
+REG_E_BAT_CHARGE_TODAY = (33163, "u16", 0.1)
+REG_E_BAT_DISCHARGE_TOTAL = (33165, "u32", 1.0)
+REG_E_BAT_DISCHARGE_TODAY = (33167, "u16", 0.1)
+REG_E_IMPORT_TOTAL = (33169, "u32", 1.0)          # odběr ze sítě
+REG_E_IMPORT_TODAY = (33171, "u16", 0.1)
+REG_E_EXPORT_TOTAL = (33173, "u32", 1.0)          # dodávka do sítě
+REG_E_EXPORT_TODAY = (33175, "u16", 0.1)
+REG_E_LOAD_TOTAL = (33177, "u32", 1.0)            # spotřeba domu
+REG_E_LOAD_TODAY = (33179, "u16", 0.1)
+# 🔋 BMS články (sken 16. 10. 2026): dva shodné bloky po 25 reg., začátek 0xAA55.
+# pack A = 34345, pack B = 34370. Offsety: +1 konst. 4785, +3 Umin článku (mV), +4 Umax (mV),
+# +5 Tmin (×0.1 °C), +6 Tmax, +7 číslo článku s Umin, +9 číslo článku s Umax, +13 proud BMS (×0.1 A),
+# +17 cykly, +19 článků/modul (15), +20 modulů (11). Přiřazení A→baterie 1, B→baterie 2 (param bms_swap otočí).
+BLOCK_BMS = (34345, 48)
+BMS_BASE = {1: 34345, 2: 34370}
+BMS_OFF = {"cell_vmin": (3, 0.001), "cell_vmax": (4, 0.001), "cell_tmin": (5, 0.1), "cell_tmax": (6, 0.1),
+           "cell_nmin": (7, 1.0), "cell_nmax": (9, 1.0), "bms_current": (13, 0.1), "cycles": (17, 1.0),
+           "bms_cells_per_module": (19, 1.0), "bms_modules": (20, 1.0)}
 BLOCK_BAT2 = (34275, 17)   # 34275..34291: baterie 2 (vč. směrového registru 34291)
 
 # --- ŘÍDICÍ (holding) registry — FC03 čtení / FC06 zápis. ---

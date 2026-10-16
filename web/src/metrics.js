@@ -18,6 +18,15 @@ export const METRIC_LABEL = {
   pv_voltage_2: "MPPT 2 napětí", pv_current_2: "MPPT 2 proud", pv_power_2: "MPPT 2 výkon",
   pv_voltage_3: "MPPT 3 napětí", pv_current_3: "MPPT 3 proud", pv_power_3: "MPPT 3 výkon",
   pv_voltage_4: "MPPT 4 napětí", pv_current_4: "MPPT 4 proud", pv_power_4: "MPPT 4 výkon",
+  battery_cell_vmin_1: "B1 článek min U", battery_cell_vmax_1: "B1 článek max U", battery_cell_tmin_1: "B1 článek min T", battery_cell_tmax_1: "B1 článek max T",
+  battery_cell_nmin_1: "B1 č. článku min", battery_cell_nmax_1: "B1 č. článku max", battery_bms_current_1: "B1 proud BMS", battery_cycles_1: "B1 cykly",
+  battery_bms_modules_1: "B1 modulů", battery_bms_cells_per_module_1: "B1 článků/modul",
+  battery_cell_vmin_2: "B2 článek min U", battery_cell_vmax_2: "B2 článek max U", battery_cell_tmin_2: "B2 článek min T", battery_cell_tmax_2: "B2 článek max T",
+  battery_cell_nmin_2: "B2 č. článku min", battery_cell_nmax_2: "B2 č. článku max", battery_bms_current_2: "B2 proud BMS", battery_cycles_2: "B2 cykly",
+  battery_bms_modules_2: "B2 modulů", battery_bms_cells_per_module_2: "B2 článků/modul",
+  energy_bat_charge_today: "Nabito dnes (měnič)", energy_bat_discharge_today: "Vybito dnes (měnič)", energy_import_today: "Odběr dnes (měnič)",
+  energy_export_today: "Dodávka dnes (měnič)", energy_load_today: "Spotřeba dnes (měnič)", energy_bat_charge_total: "Nabito celkem (měnič)",
+  energy_bat_discharge_total: "Vybito celkem (měnič)", energy_import_total: "Odběr celkem (měnič)", energy_export_total: "Dodávka celkem (měnič)", energy_load_total: "Spotřeba celkem (měnič)",
   battery_power_inv: "Výkon baterie dle měniče (33149)", house_load_inv: "Zátěž domu dle měniče (33147)",
   inverter_ac_power: "AC výkon měniče (33079)", inverter_current_l1: "Proud měniče L1", inverter_current_l2: "Proud měniče L2",
   inverter_current_l3: "Proud měniče L3", inverter_fault: "Porucha měniče", inverter_state: "Stav měniče",
@@ -53,6 +62,14 @@ export const METRIC_GROUPS = [
   { id: "mppt", label: "🔬 MPPT (diagnostika, časově omezená)", icon: "sun", metrics: [
     "pv_voltage_1", "pv_current_1", "pv_power_1", "pv_voltage_2", "pv_current_2", "pv_power_2",
     "pv_voltage_3", "pv_current_3", "pv_power_3", "pv_voltage_4", "pv_current_4", "pv_power_4"] },
+  { id: "cells", label: "🔋 Články baterie (BMS)", icon: "battery", metrics: [
+    "battery_cell_vmin_1", "battery_cell_vmax_1", "battery_cell_tmin_1", "battery_cell_tmax_1", "battery_cell_nmin_1", "battery_cell_nmax_1",
+    "battery_bms_current_1", "battery_cycles_1", "battery_bms_modules_1", "battery_bms_cells_per_module_1",
+    "battery_cell_vmin_2", "battery_cell_vmax_2", "battery_cell_tmin_2", "battery_cell_tmax_2", "battery_cell_nmin_2", "battery_cell_nmax_2",
+    "battery_bms_current_2", "battery_cycles_2", "battery_bms_modules_2", "battery_bms_cells_per_module_2"] },
+  { id: "counters", label: "Čítače měniče (kWh)", icon: "chart", metrics: [
+    "energy_bat_charge_today", "energy_bat_discharge_today", "energy_import_today", "energy_export_today", "energy_load_today",
+    "energy_bat_charge_total", "energy_bat_discharge_total", "energy_import_total", "energy_export_total", "energy_load_total"] },
   { id: "tech", label: "Technické / křížové kontroly", icon: "sliders", metrics: [
     "inverter_state", "inverter_fault", "inverter_ac_power", "inverter_current_l1", "inverter_current_l2", "inverter_current_l3",
     "house_load_inv", "battery_power_inv"] },
@@ -61,7 +78,7 @@ export const METRIC_GROUPS = [
 // Veličiny, které se NEPOČÍTAJÍ do limitu sledovaných (diagnostika a technické křížové kontroly —
 // čtou se zdarma z už načtených bloků, slouží auditu/servisu, ne zákaznickému sledování).
 export const DIAG_METRICS = new Set(METRIC_GROUPS.find((g) => g.id === "mppt").metrics);
-export const TECH_METRICS = new Set(METRIC_GROUPS.find((g) => g.id === "tech").metrics);
+export const TECH_METRICS = new Set(METRIC_GROUPS.filter((g) => ["tech", "cells", "counters"].includes(g.id)).flatMap((g) => g.metrics));
 export const countsToLimit = (k) => !DIAG_METRICS.has(k) && !TECH_METRICS.has(k);
 export const MPPT_ADAPTERS = ["solis:hybrid", "solis:generation"];
 export const DIAG_HOURS = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [72, "3 dny"], [168, "7 dní"], [720, "30 dní"]];

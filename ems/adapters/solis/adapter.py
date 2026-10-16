@@ -27,6 +27,9 @@ from .mapping import (
     CTRL_SOC_BACKUP, CTRL_SOC_FORCE,
     REG_ENERGY_TODAY, REG_ENERGY_TOTAL, REG_GRID_METER,
     REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_INV_TEMP, REG_INV_AC_POWER, REG_HOUSE_LOAD, REG_BAT_POWER_INV, REG_INV_I_L1, REG_INV_I_L2, REG_INV_I_L3, REG_PV_POWER, REG_MPPT,
+    BLOCK_BMS, BMS_BASE, BMS_OFF,
+    REG_E_BAT_CHARGE_TOTAL, REG_E_BAT_CHARGE_TODAY, REG_E_BAT_DISCHARGE_TOTAL, REG_E_BAT_DISCHARGE_TODAY,
+    REG_E_IMPORT_TOTAL, REG_E_IMPORT_TODAY, REG_E_EXPORT_TOTAL, REG_E_EXPORT_TODAY, REG_E_LOAD_TOTAL, REG_E_LOAD_TODAY,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,8 +82,10 @@ class SolisAdapter:
         parity: str = "N",
         stopbits: int = 1,
         bytesize: int = 8,
+        bms_swap: bool = False,              # otočí přiřazení BMS bloků A/B ↔ baterie 1/2
         **_ignored,
     ) -> None:
+        self.bms_swap = bool(bms_swap)
         self.device_id = device_id
         self.host = host
         self.port = int(port)
@@ -350,7 +355,7 @@ class SolisAdapter:
         if dtype == DeviceType.STORAGE.value:
             blocks += [BLOCK_BAT1 if self.battery_pack != 2 else BLOCK_BAT2]
         if dtype == DeviceType.HYBRID.value:
-            blocks += [BLOCK_BAT1, BLOCK_BAT2]
+            blocks += [BLOCK_BAT1, BLOCK_BAT2, BLOCK_BMS]
         blocks += [BLOCK_STATE]
         cache = self._load(blocks)
 
@@ -438,6 +443,20 @@ class SolisAdapter:
                     powers.append(p)
                 add(soh_m[pid], d.get("soh"))
                 add(temp_m[pid], d.get("temp"))
+                # 🔋 BMS články packu (blok 34345/34370; marker 0xAA55 = blok platný)
+                base = BMS_BASE.get((3 - pid) if self.bms_swap else pid)
+                if base is not None and cache.get(base) == 0xAA55:
+                    for key, (off, scale) in BMS_OFF.items():
+                        raw = cache.get(base + off)
+                        if raw is not None:
+                            add(Metric(f"battery_{key}_{pid}"), round(raw * scale, 3))
+            # energetické čítače měniče (33161–33180, v bloku BAT1 zdarma)
+            for metric, spec in ((Metric.ENERGY_BAT_CHARGE_TOTAL, REG_E_BAT_CHARGE_TOTAL), (Metric.ENERGY_BAT_CHARGE_TODAY, REG_E_BAT_CHARGE_TODAY),
+                                 (Metric.ENERGY_BAT_DISCHARGE_TOTAL, REG_E_BAT_DISCHARGE_TOTAL), (Metric.ENERGY_BAT_DISCHARGE_TODAY, REG_E_BAT_DISCHARGE_TODAY),
+                                 (Metric.ENERGY_IMPORT_TOTAL, REG_E_IMPORT_TOTAL), (Metric.ENERGY_IMPORT_TODAY, REG_E_IMPORT_TODAY),
+                                 (Metric.ENERGY_EXPORT_TOTAL, REG_E_EXPORT_TOTAL), (Metric.ENERGY_EXPORT_TODAY, REG_E_EXPORT_TODAY),
+                                 (Metric.ENERGY_LOAD_TOTAL, REG_E_LOAD_TOTAL), (Metric.ENERGY_LOAD_TODAY, REG_E_LOAD_TODAY)):
+                add(metric, self._dec(cache, spec))
             if socs:
                 add(Metric.BATTERY_SOC, sum(socs) / len(socs))   # průměr (pro souhrn)
             # --- stav/chyby měniče (diagnostika, vyšetřování 6.–7. 9.) ---

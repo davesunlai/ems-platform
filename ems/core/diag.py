@@ -29,6 +29,26 @@ def diag_active(params: dict | None) -> bool:
     return bool(u and u > datetime.now(timezone.utc))
 
 
-def keep_metric(metric: str, params: dict | None) -> bool:
-    """False = diagnostická veličina mimo aktivní okno → neukládat."""
-    return metric not in DIAG_METRICS or diag_active(params)
+# Pomalé veličiny: čtou se každý cyklus, ale do DB jdou nejvýš 1× za SLOW_INTERVAL_S
+# (BMS články, energetické čítače) — mění se pomalu, 10s vzorkování by jen plnilo DB.
+SLOW_METRICS = frozenset(
+    [f"battery_{k}_{n}" for n in (1, 2) for k in ("cell_vmin", "cell_vmax", "cell_tmin", "cell_tmax", "cell_nmin",
+                                                   "cell_nmax", "bms_current", "cycles", "bms_modules", "bms_cells_per_module")]
+    + [f"energy_{k}_{p}" for k in ("bat_charge", "bat_discharge", "import", "export", "load") for p in ("today", "total")])
+SLOW_INTERVAL_S = 60
+_last_slow: dict[tuple[str, str], float] = {}
+
+
+def keep_metric(metric: str, params: dict | None, device_id: str | None = None, ts: datetime | None = None) -> bool:
+    """False = neukládat: diagnostická veličina mimo aktivní okno, nebo pomalá veličina
+    dřív než SLOW_INTERVAL_S po posledním uloženém vzorku téhož zařízení."""
+    if metric in DIAG_METRICS and not diag_active(params):
+        return False
+    if metric in SLOW_METRICS:
+        t = (ts or datetime.now(timezone.utc)).timestamp()
+        key = (device_id or "", metric)
+        last = _last_slow.get(key)
+        if last is not None and 0 <= t - last < SLOW_INTERVAL_S:
+            return False
+        _last_slow[key] = t
+    return True
