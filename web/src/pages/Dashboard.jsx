@@ -1133,6 +1133,12 @@ function LocalitySection({ name, devs, open, onToggle }) {
   );
 }
 
+const ago = (iso) => {
+  if (!iso) return "";
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  return m < 1 ? "právě teď" : m < 60 ? `před ${m} min` : m < 1440 ? `před ${Math.floor(m / 60)} h` : `před ${Math.floor(m / 1440)} d`;
+};
+
 // 🔋 Články baterie (BMS) — tabulka per box + graf (výchozí 24 h, stejný typ jako Souhrn lokality).
 const CELL_ROWS = [
   ["cell_vmin", "Nejnižší napětí článku", (v) => `${v.toFixed(3)} V`],
