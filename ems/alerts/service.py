@@ -15,7 +15,7 @@ from . import db as alerts_db
 
 _EVENT_ICON = {
     "force_charge": "⚡", "force_discharge": "🔻", "spiral": "🌀",
-    "output_on": "🔌", "output_off": "🔌", "test": "🔔", "stop": "⏹",
+    "output_on": "🔌", "output_off": "🔌", "test": "🔔", "stop": "⏹", "cells": "🔋", "config": "⚙️",
 }
 
 

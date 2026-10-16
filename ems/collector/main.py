@@ -237,6 +237,8 @@ async def run() -> None:
         await eb_db.ensure_schema()
         from ems.alerts import db as alerts_db
         await alerts_db.ensure_schema()
+        from ems.cells import db as cells_db
+        await cells_db.ensure_schema()
     except Exception as exc:
         logger.error("Inicializace registru modulů selhala: %s", exc)
 
@@ -275,6 +277,11 @@ async def run() -> None:
             await tick_export_guard(state)
             await tick_inverter_limits(state)
             await tick_diag_purge(state)
+            try:
+                from ems.cells import service as cells_service
+                await cells_service.tick(state)
+            except Exception as exc:
+                logger.debug("cells tick: %s", exc)
             await tick_notify(state)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)

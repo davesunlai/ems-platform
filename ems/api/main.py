@@ -75,6 +75,8 @@ async def lifespan(app: FastAPI):
         await outputs_db.ensure_schema()
         from ems.outages import db as outages_db
         await outages_db.ensure_schema()
+        from ems.cells import db as cells_db
+        await cells_db.ensure_schema()
         from ems.ewelink import store as ewelink_store
         await ewelink_store.ensure_schema()
     except Exception as exc:
@@ -83,7 +85,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="0.96.3", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="0.97.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -204,6 +206,8 @@ app.include_router(settings_router)
 app.include_router(localities_router)
 from ems.outages.routes import router as outages_router
 app.include_router(outages_router)
+from ems.cells.routes import router as cells_router  # noqa: E402
+app.include_router(cells_router)
 from ems.alerts.routes import router as alerts_router
 app.include_router(alerts_router)
 

@@ -209,6 +209,72 @@ const TINP = { width: "100%", padding: "5px 7px", borderRadius: 6, border: "1px 
 
 // Číselné pole jako text (převod na číslo až při uložení) — definováno na úrovni
 // modulu, aby se při přepisování nepřemountovalo a input neztrácel fokus.
+// 🔋 Hlídání nerovnováhy článků baterie — 4 parametry + denní kontrola za 24 h.
+function CellAlertSection({ loc }) {
+  const [c, setC] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () => api.cellAlertGet(loc.id).then(setC).catch(() => {});
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [loc.id]);
+  if (!c) return null;
+  const set = (k, v) => setC({ ...c, [k]: v });
+  const save = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const r = await api.cellAlertPut(loc.id, { enabled: !!c.enabled, soc_low: Number(c.soc_low), delta_low_mv: Number(c.delta_low_mv),
+        soc_high: Number(c.soc_high), delta_high_mv: Number(c.delta_high_mv), check_hour: Number(c.check_hour) });
+      setC(r); setMsg("Uloženo.");
+    } catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+  const check = async (notify) => {
+    setBusy(true); setMsg("");
+    try {
+      const r = await api.cellAlertCheck(loc.id, notify);
+      setC({ ...c, last_check_at: r.checked_at, last_result: r });
+      setMsg(r.packs.length ? (r.alerts.length ? `${r.alerts.length}× překročení${notify ? " — upozornění odesláno" : " (náhled, bez odeslání)"}` : "V pořádku — žádné překročení za 24 h.")
+                            : "Za posledních 24 h nejsou data článků (BMS blok se čte od v0.96).");
+    } catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+  const res = c.last_result;
+  const inp = { width: 70, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
+        🔋 Hlídání článků baterie (nerovnováha)
+        <label style={{ fontWeight: 400, fontSize: 12.5, display: "inline-flex", gap: 5, alignItems: "center" }}>
+          <input type="checkbox" checked={!!c.enabled} onChange={(e) => set("enabled", e.target.checked)} /> zapnuto
+        </label>
+      </div>
+      <div style={{ fontSize: 12.5, display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
+        <span>při SoC &lt; <input style={inp} value={c.soc_low} onChange={(e) => set("soc_low", e.target.value)} /> % upozornit, když Umax − Umin &gt; <input style={inp} value={c.delta_low_mv} onChange={(e) => set("delta_low_mv", e.target.value)} /> mV</span>
+        <span>při SoC &gt; <input style={inp} value={c.soc_high} onChange={(e) => set("soc_high", e.target.value)} /> % upozornit, když Umax − Umin &gt; <input style={inp} value={c.delta_high_mv} onChange={(e) => set("delta_high_mv", e.target.value)} /> mV</span>
+        <span>kontrola denně po <input style={inp} value={c.check_hour} onChange={(e) => set("check_hour", e.target.value)} /> h</span>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+        <button onClick={save} disabled={busy} style={{ fontWeight: 600 }}>Uložit</button>
+        <button onClick={() => check(false)} disabled={busy} title="Vyhodnotí posledních 24 h, nic neposílá">Zkontrolovat teď (náhled)</button>
+        <button onClick={() => check(true)} disabled={busy} title="Vyhodnotí a při překročení odešle upozornění">Zkontrolovat a odeslat</button>
+        {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+      </div>
+      {res && res.packs && res.packs.length > 0 && (
+        <table style={{ fontSize: 12, marginTop: 6 }}>
+          <thead><tr><th>Baterie</th><th>vzorků</th><th>max Δ celkem</th><th>max Δ při SoC &lt; {c.soc_low} %</th><th>max Δ při SoC &gt; {c.soc_high} %</th></tr></thead>
+          <tbody>{res.packs.map((p) => {
+            const f = (w) => (w ? `${w.delta_mv} mV @ SoC ${w.soc} % (${new Date(w.t).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })})` : "—");
+            return (<tr key={p.pack}>
+              <td>Baterie {p.pack}</td><td className="muted">{p.samples}</td><td>{f(p.overall)}</td>
+              <td style={p.alert_low ? { color: "#e5534b", fontWeight: 700 } : {}}>{f(p.low)}</td>
+              <td style={p.alert_high ? { color: "#e5534b", fontWeight: 700 } : {}}>{f(p.high)}</td></tr>); })}
+          </tbody></table>)}
+      <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
+        Jednou denně se za posledních 24 h najde největší rozdíl Umax − Umin článků každého boxu zvlášť při nízkém a při vysokém SoC.
+        Překročení prahu vytvoří výstrahu lokality a odešle e-mail uživatelům lokality, kteří mají zapnuté notifikace.
+        {c.last_check_at && <> Poslední kontrola: {new Date(c.last_check_at).toLocaleString("cs-CZ")}.</>}
+      </p>
+    </div>
+  );
+}
+
 function NumField({ label, suf, value, onChange }) {
   return (
     <div style={{ flex: "1 1 120px" }}>
@@ -433,6 +499,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
       <EmsboxCard locId={loc.id} />
       <OutageSection loc={loc} onChange={onChange} />
       <ForecastSection loc={loc} onChange={onChange} />
+      <CellAlertSection loc={loc} />
       <TariffSection loc={loc} />
       <BillingSettings loc={loc} onSaved={onChange} />
     </div>
