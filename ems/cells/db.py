@@ -92,10 +92,10 @@ async def cell_ranking(device_id: str, pack: int, minutes: int = 1440, offset: i
             """SELECT time_bucket('1 minute', time) AS b, metric, avg(value) AS v
                FROM samples
                WHERE device_id = $1 AND metric = ANY($2::text[])
-                 AND time > now() - (($3 + $4) || ' minutes')::interval AND time <= now() - ($4 || ' minutes')::interval
+                 AND time > now() - make_interval(mins => $3 + $4) AND time <= now() - make_interval(mins => $4)
                GROUP BY b, metric""",
             device_id, [f"battery_cell_nmin_{pack}", f"battery_cell_nmax_{pack}",
-                        f"battery_cell_vmin_{pack}", f"battery_cell_vmax_{pack}"], str(minutes), str(offset))
+                        f"battery_cell_vmin_{pack}", f"battery_cell_vmax_{pack}"], int(minutes), int(offset))
     by_t: dict = {}
     for r in rows:
         d = by_t.setdefault(r["b"], {})

@@ -1148,7 +1148,7 @@ const CELL_ROWS = [
   ["cell_nmax", "Číslo článku s maximem", (v, m) => `${v}${m ? ` (modul ${Math.ceil(v / m)}, pozice ${((v - 1) % m) + 1})` : ""}`],
   ["cell_tmin", "Nejnižší teplota článku", (v) => `${v.toFixed(1)} °C`],
   ["cell_tmax", "Nejvyšší teplota článku", (v) => `${v.toFixed(1)} °C`],
-  ["bms_current", "Proud podle BMS", (v) => `${v.toFixed(1)} A`],
+  ["bms_current", "Hodnota BMS +13 (proud? — drží 14,0/15,5 A, spíš limit)", (v) => `${v.toFixed(1)} A`],
   ["cycles", "Počet cyklů", (v) => `${v}`],
   ["_layout", "Moduly × články", (v) => v],
 ];
