@@ -1262,7 +1262,7 @@ function CellsBlock({ deviceIds, devs }) {
             <span style={{ display: "inline-block", width: 10, height: 3, background: c }} />{l}
           </label>))}
       </div>
-      {keys.length ? <MultiChart series={series} name="teraems-clanky" /> : <p className="muted" style={{ fontSize: 12 }}>Zaškrtni, co chceš vidět.</p>}
+      {keys.length ? <MultiChart series={series} name="teraems-clanky" yRange={[3, 4]} /> : <p className="muted" style={{ fontSize: 12 }}>Zaškrtni, co chceš vidět.</p>}
       <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>
         Napětí článků na levé ose (V), SoC na pravé (%), teploty čárkovaně. Měnič dává jen extrémy packu (nejnižší/nejvyšší článek), ne všechny články; ukládá se 1× za minutu.
         Přiřazení BMS blok A → Baterie 1 je k ověření (porovnej teploty/proud s kartou baterií).

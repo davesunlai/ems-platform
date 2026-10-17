@@ -9,7 +9,8 @@ import { useState } from "react";
 import ExportBtn from "./ExportBtn";
 import { exportRowsXlsx, mergeSeriesRows } from "../utils/exportXlsx";
 
-export default function MultiChart({ series, height = 240, name = "graf" }) {
+// yRange: [lo, hi] = výchozí rozsah levé osy (rozšíří se, když data přesahují); bez něj osa začíná na 0.
+export default function MultiChart({ series, height = 240, name = "graf", yRange = null }) {
   const [hovT, setHovT] = useState(null);
   const [hovY, setHovY] = useState(0.15);
   const [hidden, setHidden] = useState(() => new Set());
@@ -33,10 +34,17 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
   const unitOf = (s) => (isPct(s) ? "%" : s.unit || "kW");
   const sval = (s, p) => (isPct(s) ? p.value : dispS(s, p.value));
   const allVals = shown.filter((s) => !isPct(s) && !isRight(s)).flatMap((s) => s.points.map((p) => dispS(s, p.value)));
-  let lo = Math.min(0, ...(allVals.length ? allVals : [0]));
-  let hi = Math.max(0, ...(allVals.length ? allVals : [1]));
+  let lo, hi;
+  if (yRange) {
+    lo = Math.min(yRange[0], ...(allVals.length ? allVals : [yRange[0]]));
+    hi = Math.max(yRange[1], ...(allVals.length ? allVals : [yRange[1]]));
+  } else {
+    lo = Math.min(0, ...(allVals.length ? allVals : [0]));
+    hi = Math.max(0, ...(allVals.length ? allVals : [1]));
+  }
   if (hi === lo) hi = lo + 1;
   const span = hi - lo;
+  const zeroIn = lo <= 0 && hi >= 0;
   const rVals = shown.filter(isRight).flatMap((s) => s.points.map((p) => dispS(s, p.value)));
   let rlo = Math.min(0, ...(rVals.length ? rVals : [0]));
   let rhi = Math.max(0, ...(rVals.length ? rVals : [1]));
@@ -57,7 +65,7 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
   const Yr = (v) => padT + plotH * (1 - (v - rlo) / rspan);
   const Ys = (s, p) => (isPct(s) ? Yp(p.value) : isRight(s) ? Yr(dispS(s, p.value)) : Y(dispS(s, p.value)));
 
-  const fmtY = (v) => (Math.abs(v) >= 100 ? Math.round(v) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
+  const fmtY = (v) => (Math.abs(v) >= 100 ? Math.round(v) : Math.abs(v) >= 10 ? v.toFixed(1) : yRange && (yRange[1] - yRange[0]) <= 2 ? v.toFixed(3) : v.toFixed(2));
   const multiDay = tspan > 2 * 864e5;
   const fmtX = (t) => {
     const d = new Date(t);
@@ -66,7 +74,7 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
   };
   const fmtFull = (t) => new Date(t).toLocaleString("cs-CZ",
     { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const yTicks = [...new Set([lo, lo + span / 2, hi, 0])].sort((a, b) => a - b);
+  const yTicks = [...new Set([lo, lo + span / 4, lo + span / 2, lo + (3 * span) / 4, hi, ...(zeroIn ? [0] : [])])].sort((a, b) => a - b);
   const xN = 5;
   const xTicks = Array.from({ length: xN }, (_, i) => t0 + (tspan * i) / (xN - 1));
 
@@ -107,8 +115,8 @@ export default function MultiChart({ series, height = 240, name = "graf" }) {
               <text x={padL - 7} y={Y(v) + 3} textAnchor="end" fontSize="10" fill="var(--muted)" fontWeight={v === 0 ? 700 : 400}>{fmtY(v)}</text>
             </g>
           ))}
-          {/* výrazná osa X (nulová linka) */}
-          <line x1={padL} y1={Y(0)} x2={W - padR} y2={Y(0)} stroke="var(--fg, #c9d1d9)" strokeWidth="1.4" opacity="0.85" />
+          {/* výrazná osa X (nulová linka) — jen když je nula v rozsahu */}
+          {zeroIn && <line x1={padL} y1={Y(0)} x2={W - padR} y2={Y(0)} stroke="var(--fg, #c9d1d9)" strokeWidth="1.4" opacity="0.85" />}
           {xTicks.map((t, i) => (
             <text key={`x${i}`} x={X(t)} y={H - 8}
                   textAnchor={i === 0 ? "start" : i === xN - 1 ? "end" : "middle"}
