@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.98.2 — žebříček článků: explicitní ::int v make_interval (asyncpg neumí odvodit typ `$3 + $4`), a UI už chybu/prázdný výsledek nemlčí — vypíše „Žebříček článků: chyba — …“ resp. „v tomto okně nejsou data“. Nasazení: franta.
+
 ## v0.98.1 — fix: žebříček článků se nezobrazoval — SQL v cell_ranking sčítalo textové parametry (`($3 + $4) || ' minutes'` → operator text + text neexistuje → 500). Nově make_interval(mins => int). Poznámka: hodnota BMS +13 (34358/34383) drží 14,0 / 15,5 A ve dvou dnech beze změny → nejspíš limit/konstanta, ne okamžitý proud — v tabulce označeno jako nejisté. Nasazení: franta.
 
 ## v0.98.0 — 🔋 žebříček nejslabších článků. Blok Články: pod tabulkou „Nejslabší články za <okno>“ per baterie — top 10 článků podle toho, kolik minut je BMS hlásil jako článek s NEJNIŽŠÍM napětím (vzorek 1×/min), u každého modul/pozice, nejnižší dosažené napětí a největší rozptyl packu v těch chvílích; rozbalovací „nejvyšší články (omezují nabíjení)“ = totéž pro článek s nejvyšším napětím. Okno sdílí s grafem (6 h … 30 dní, ◀ ▶). Kritérium: četnost výskytu jako min článek (slabý článek omezuje vybíjení a dosahuje minima nejčastěji); vedle toho napětí a Δ, aby šlo odlišit článek „často, ale o 5 mV“ od „zřídka, ale o 150 mV“. GET /api/localities/{id}/cell-ranking?minutes=&offset=&top= (read; ems/cells/db.cell_ranking z samples). Nasazení: franta.

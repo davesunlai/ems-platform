@@ -1169,6 +1169,7 @@ function CellsBlock({ deviceIds, devs, localityId }) {
   const [latest, setLatest] = useState(null);
   const [yr, setYr] = useState([3.2, 3.7]);
   const [rank, setRank] = useState(null);
+  const [rankErr, setRankErr] = useState("");
   useEffect(() => {
     if (!localityId) return;
     api.cellAlertGet(localityId).then((c) => {
@@ -1195,7 +1196,9 @@ function CellsBlock({ deviceIds, devs, localityId }) {
   useEffect(() => {
     if (!localityId) return;
     let alive = true;
-    const load = () => api.cellRanking(localityId, WIN[win].min, offset).then((r) => alive && setRank(r)).catch(() => {});
+    const load = () => api.cellRanking(localityId, WIN[win].min, offset)
+      .then((r) => { if (alive) { setRank(r); setRankErr(""); } })
+      .catch((e) => alive && setRankErr(e.message || "chyba"));
     load();
     const t = offset === 0 ? setInterval(load, 120000) : null;
     return () => { alive = false; if (t) clearInterval(t); };
@@ -1263,6 +1266,8 @@ function CellsBlock({ deviceIds, devs, localityId }) {
             const hot = row[0] === "cell_vmin" && weakest && weakest.n === n;
             return <td key={n} style={{ textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: hot ? 700 : 400, color: hot ? "var(--amber)" : "inherit" }}>{cell(row, n)}</td>; })}</tr>))}
         </tbody></table>
+      {rankErr && <p className="muted" style={{ fontSize: 12 }}>Žebříček článků: chyba — {rankErr}</p>}
+      {rank && rank.packs.length === 0 && <p className="muted" style={{ fontSize: 12 }}>Žebříček článků: v tomto okně nejsou data (čísla článků se ukládají od v0.96).</p>}
       {rank && rank.packs.length > 0 && (() => {
         const pos = (c, n) => { const mod = val("bms_cells_per_module", n); return mod ? ` (modul ${Math.ceil(c / mod)}, poz. ${((c - 1) % mod) + 1})` : ""; };
         const list = (items, n, kind) => items.length ? (
