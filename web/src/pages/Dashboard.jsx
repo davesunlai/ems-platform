@@ -1118,7 +1118,7 @@ function LocalitySection({ name, devs, open, onToggle }) {
       {vis("dash:stats") && <LocalityNow deviceIds={ids} localityId={locId} />}
       {open && (<>
         {vis("dash:chart") && <LocalityChart deviceIds={ids} />}
-        {vis("dash:cells") && <CellsBlock deviceIds={ids} devs={devs} />}
+        {vis("dash:cells") && <CellsBlock deviceIds={ids} devs={devs} localityId={locId} />}
         {locId && (
           <div className="card" style={{ marginTop: 14 }}>
             <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>Predikce 24–48 h</h3>
@@ -1163,10 +1163,18 @@ const CELL_SERIES = [
   ["battery_cell_tmax_1", "B1 teplota max", "#f0883e", { unit: "°C", axis: "right" }, false],
   ["battery_cell_tmax_2", "B2 teplota max", "#ffa657", { unit: "°C", axis: "right" }, false],
 ];
-function CellsBlock({ deviceIds, devs }) {
+function CellsBlock({ deviceIds, devs, localityId }) {
   const solis = (devs || []).filter((d) => d.adapter === "solis").map((d) => d.device_id);
   const id = solis[0];
   const [latest, setLatest] = useState(null);
+  const [yr, setYr] = useState([3.2, 3.7]);
+  useEffect(() => {
+    if (!localityId) return;
+    api.cellAlertGet(localityId).then((c) => {
+      const a = Number(c.y_min), b = Number(c.y_max);
+      if (isFinite(a) && isFinite(b) && b > a) setYr([a, b]);
+    }).catch(() => {});
+  }, [localityId]);
   const [win, setWin] = useState(2);
   const [offset, setOffset] = useState(0);
   const [sel, setSel] = useState(() => {
@@ -1262,7 +1270,7 @@ function CellsBlock({ deviceIds, devs }) {
             <span style={{ display: "inline-block", width: 10, height: 3, background: c }} />{l}
           </label>))}
       </div>
-      {keys.length ? <MultiChart series={series} name="teraems-clanky" yRange={[3, 4]} /> : <p className="muted" style={{ fontSize: 12 }}>Zaškrtni, co chceš vidět.</p>}
+      {keys.length ? <MultiChart series={series} name="teraems-clanky" yRange={yr} /> : <p className="muted" style={{ fontSize: 12 }}>Zaškrtni, co chceš vidět.</p>}
       <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>
         Napětí článků na levé ose (V), SoC na pravé (%), teploty čárkovaně. Měnič dává jen extrémy packu (nejnižší/nejvyšší článek), ne všechny články; ukládá se 1× za minutu.
         Přiřazení BMS blok A → Baterie 1 je k ověření (porovnej teploty/proud s kartou baterií).

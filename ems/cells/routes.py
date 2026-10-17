@@ -19,6 +19,8 @@ class CellAlertIn(BaseModel):
     soc_high: float | None = None
     delta_high_mv: float | None = None
     check_hour: int | None = None
+    y_min: float | None = None
+    y_max: float | None = None
 
 
 @router.get("/{locality_id}/cell-alert")

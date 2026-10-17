@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from ems.api.db import get_pool
 
 DEFAULTS = {"enabled": False, "soc_low": 30.0, "delta_low_mv": 200.0, "soc_high": 80.0, "delta_high_mv": 150.0,
-            "check_hour": 6}
+            "check_hour": 6, "y_min": 3.2, "y_max": 3.7}
 _KEYS = tuple(DEFAULTS)
 
 
@@ -25,6 +25,8 @@ async def ensure_schema() -> None:
                  check_hour INT NOT NULL DEFAULT 6,
                  last_check_at TIMESTAMPTZ,
                  last_result JSONB)""")
+        await conn.execute("ALTER TABLE cell_alert_config ADD COLUMN IF NOT EXISTS y_min REAL NOT NULL DEFAULT 3.2")
+        await conn.execute("ALTER TABLE cell_alert_config ADD COLUMN IF NOT EXISTS y_max REAL NOT NULL DEFAULT 3.7")
 
 
 def _row(r) -> dict:
@@ -55,12 +57,13 @@ async def put_config(locality_id: int, patch: dict) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            """INSERT INTO cell_alert_config (locality_id, enabled, soc_low, delta_low_mv, soc_high, delta_high_mv, check_hour)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)
+            """INSERT INTO cell_alert_config (locality_id, enabled, soc_low, delta_low_mv, soc_high, delta_high_mv, check_hour, y_min, y_max)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                ON CONFLICT (locality_id) DO UPDATE SET enabled=$2, soc_low=$3, delta_low_mv=$4, soc_high=$5,
-                 delta_high_mv=$6, check_hour=$7""",
+                 delta_high_mv=$6, check_hour=$7, y_min=$8, y_max=$9""",
             locality_id, bool(vals["enabled"]), float(vals["soc_low"]), float(vals["delta_low_mv"]),
-            float(vals["soc_high"]), float(vals["delta_high_mv"]), int(vals["check_hour"]))
+            float(vals["soc_high"]), float(vals["delta_high_mv"]), int(vals["check_hour"]),
+            float(vals["y_min"]), float(vals["y_max"]))
     return await get_config(locality_id)
 
 

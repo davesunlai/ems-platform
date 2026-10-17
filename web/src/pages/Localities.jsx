@@ -222,7 +222,8 @@ function CellAlertSection({ loc }) {
     setBusy(true); setMsg("");
     try {
       const r = await api.cellAlertPut(loc.id, { enabled: !!c.enabled, soc_low: Number(c.soc_low), delta_low_mv: Number(c.delta_low_mv),
-        soc_high: Number(c.soc_high), delta_high_mv: Number(c.delta_high_mv), check_hour: Number(c.check_hour) });
+        soc_high: Number(c.soc_high), delta_high_mv: Number(c.delta_high_mv), check_hour: Number(c.check_hour),
+        y_min: Number(c.y_min), y_max: Number(c.y_max) });
       setC(r); setMsg("Uloženo.");
     } catch (e) { setMsg(e.message); } finally { setBusy(false); }
   };
@@ -249,6 +250,7 @@ function CellAlertSection({ loc }) {
         <span>při SoC &lt; <input style={inp} value={c.soc_low} onChange={(e) => set("soc_low", e.target.value)} /> % upozornit, když Umax − Umin &gt; <input style={inp} value={c.delta_low_mv} onChange={(e) => set("delta_low_mv", e.target.value)} /> mV</span>
         <span>při SoC &gt; <input style={inp} value={c.soc_high} onChange={(e) => set("soc_high", e.target.value)} /> % upozornit, když Umax − Umin &gt; <input style={inp} value={c.delta_high_mv} onChange={(e) => set("delta_high_mv", e.target.value)} /> mV</span>
         <span>kontrola denně po <input style={inp} value={c.check_hour} onChange={(e) => set("check_hour", e.target.value)} /> h</span>
+        <span>graf článků — osa napětí od <input style={inp} value={c.y_min} onChange={(e) => set("y_min", e.target.value)} /> do <input style={inp} value={c.y_max} onChange={(e) => set("y_max", e.target.value)} /> V</span>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
         <button onClick={save} disabled={busy} style={{ fontWeight: 600 }}>Uložit</button>
