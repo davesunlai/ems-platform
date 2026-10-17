@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.98.0 — 🔋 žebříček nejslabších článků. Blok Články: pod tabulkou „Nejslabší články za <okno>“ per baterie — top 10 článků podle toho, kolik minut je BMS hlásil jako článek s NEJNIŽŠÍM napětím (vzorek 1×/min), u každého modul/pozice, nejnižší dosažené napětí a největší rozptyl packu v těch chvílích; rozbalovací „nejvyšší články (omezují nabíjení)“ = totéž pro článek s nejvyšším napětím. Okno sdílí s grafem (6 h … 30 dní, ◀ ▶). Kritérium: četnost výskytu jako min článek (slabý článek omezuje vybíjení a dosahuje minima nejčastěji); vedle toho napětí a Δ, aby šlo odlišit článek „často, ale o 5 mV“ od „zřídka, ale o 150 mV“. GET /api/localities/{id}/cell-ranking?minutes=&offset=&top= (read; ems/cells/db.cell_ranking z samples). Nasazení: franta.
+
 ## v0.97.2 — rozsah osy napětí grafu 🔋 Články nastavitelný per lokalita: Lokality → sekce Hlídání článků → „graf článků — osa napětí od … do … V“ (cell_alert_config.y_min/y_max, výchozí 3,2–3,7 V). Blok na dashboardu si rozsah načte z konfigurace lokality (GET /cell-alert, read). Nasazení: franta.
 
 ## v0.97.1 — graf 🔋 Články: levá osa napětí článků výchozí rozsah 3–4 V (rozdíly mezi články jsou vidět; rozšíří se jen když data přesahují), popisky s 3 desetinnými místy, nulová linka jen když je 0 v rozsahu. MultiChart má nový prop `yRange`. Jen web.

@@ -83,6 +83,47 @@ async def save_result(locality_id: int, result: dict) -> None:
             locality_id, json.dumps(result, default=str))
 
 
+async def cell_ranking(device_id: str, pack: int, minutes: int = 1440, offset: int = 0, top: int = 10) -> dict:
+    """Žebříček článků za okno: kolikrát (minut) byl článek hlášen jako nejnižší / nejvyšší,
+    k tomu jeho nejnižší (resp. nejvyšší) napětí a největší rozptyl packu v těch chvílích."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT time_bucket('1 minute', time) AS b, metric, avg(value) AS v
+               FROM samples
+               WHERE device_id = $1 AND metric = ANY($2::text[])
+                 AND time > now() - (($3 + $4) || ' minutes')::interval AND time <= now() - ($4 || ' minutes')::interval
+               GROUP BY b, metric""",
+            device_id, [f"battery_cell_nmin_{pack}", f"battery_cell_nmax_{pack}",
+                        f"battery_cell_vmin_{pack}", f"battery_cell_vmax_{pack}"], str(minutes), str(offset))
+    by_t: dict = {}
+    for r in rows:
+        d = by_t.setdefault(r["b"], {})
+        m = r["metric"]
+        d["nmin" if "nmin" in m else "nmax" if "nmax" in m else "vmin" if "vmin" in m else "vmax"] = float(r["v"])
+    mins: dict[int, dict] = {}
+    maxs: dict[int, dict] = {}
+    for d in by_t.values():
+        if "vmin" not in d or "vmax" not in d:
+            continue
+        delta = (d["vmax"] - d["vmin"]) * 1000.0
+        if "nmin" in d:
+            c = int(round(d["nmin"]))
+            e = mins.setdefault(c, {"cell": c, "count": 0, "v": d["vmin"], "delta_mv": 0.0})
+            e["count"] += 1
+            e["v"] = min(e["v"], d["vmin"])
+            e["delta_mv"] = max(e["delta_mv"], delta)
+        if "nmax" in d:
+            c = int(round(d["nmax"]))
+            e = maxs.setdefault(c, {"cell": c, "count": 0, "v": d["vmax"], "delta_mv": 0.0})
+            e["count"] += 1
+            e["v"] = max(e["v"], d["vmax"])
+            e["delta_mv"] = max(e["delta_mv"], delta)
+    fmt = lambda lst: [{**e, "v": round(e["v"], 3), "delta_mv": round(e["delta_mv"])}
+                       for e in sorted(lst.values(), key=lambda x: (-x["count"], x["cell"]))[:top]]
+    return {"pack": pack, "minutes_total": len(by_t), "worst": fmt(mins), "best": fmt(maxs)}
+
+
 async def pack_series(device_id: str, pack: int, hours: int = 24) -> list[dict]:
     """Minutové řady SoC packu + Umin/Umax článku za posledních N hodin → [{t, soc, vmin, vmax}]."""
     pool = await get_pool()

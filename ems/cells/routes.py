@@ -41,6 +41,20 @@ async def put_cfg(locality_id: int, body: CellAlertIn, user: dict = Depends(admi
     return cfg
 
 
+@router.get("/{locality_id}/cell-ranking")
+async def ranking(locality_id: int, minutes: int = 1440, offset: int = 0, top: int = 10, _: dict = Depends(read)):
+    """Nejslabší / nejsilnější články za okno (podle počtu minut, kdy je BMS hlásil jako min/max)."""
+    minutes = max(10, min(int(minutes), 43200)); offset = max(0, int(offset)); top = max(1, min(int(top), 30))
+    out = []
+    for dev in await service._solis_modules(locality_id):
+        cpm = None
+        for pack in (1, 2):
+            r = await db.cell_ranking(dev, pack, minutes, offset, top)
+            if r["minutes_total"]:
+                out.append({"device": dev, **r})
+    return {"locality_id": locality_id, "minutes": minutes, "offset": offset, "packs": out}
+
+
 @router.post("/{locality_id}/cell-alert/check")
 async def run_check(locality_id: int, notify: bool = False, _: dict = Depends(admin)):
     """Spustí kontrolu hned (výchozí bez odeslání upozornění — jen náhled výsledku)."""

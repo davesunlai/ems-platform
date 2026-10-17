@@ -155,6 +155,7 @@ export const api = {
   geocode: (q) => request(`/api/forecast/geocode?q=${encodeURIComponent(q)}`),
   cellAlertGet: (id) => request(`/api/localities/${id}/cell-alert`),
   cellAlertPut: (id, body) => request(`/api/localities/${id}/cell-alert`, { method: "PUT", body }),
+  cellRanking: (id, minutes, offset = 0) => request(`/api/localities/${id}/cell-ranking?minutes=${minutes}&offset=${offset}`),
   cellAlertCheck: (id, notify = false) => request(`/api/localities/${id}/cell-alert/check?notify=${notify ? 1 : 0}`, { method: "POST" }),
   forecastBlocks: (id) => request(`/api/forecast/${id}/blocks`),
   setForecastBlocks: (id, blocks) => request(`/api/forecast/${id}/blocks`, { method: "PUT", body: { blocks } }),

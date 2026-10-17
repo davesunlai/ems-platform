@@ -1168,6 +1168,7 @@ function CellsBlock({ deviceIds, devs, localityId }) {
   const id = solis[0];
   const [latest, setLatest] = useState(null);
   const [yr, setYr] = useState([3.2, 3.7]);
+  const [rank, setRank] = useState(null);
   useEffect(() => {
     if (!localityId) return;
     api.cellAlertGet(localityId).then((c) => {
@@ -1191,6 +1192,14 @@ function CellsBlock({ deviceIds, devs, localityId }) {
     const tick = () => api.latest(id).then((l) => alive && setLatest(l.metrics || {})).catch(() => {});
     tick(); const t = setInterval(tick, 15000); return () => { alive = false; clearInterval(t); };
   }, [id]);
+  useEffect(() => {
+    if (!localityId) return;
+    let alive = true;
+    const load = () => api.cellRanking(localityId, WIN[win].min, offset).then((r) => alive && setRank(r)).catch(() => {});
+    load();
+    const t = offset === 0 ? setInterval(load, 120000) : null;
+    return () => { alive = false; if (t) clearInterval(t); };
+  }, [localityId, win, offset]);
   const keys = [...sel];
   useEffect(() => {
     if (!id) return;
@@ -1254,6 +1263,32 @@ function CellsBlock({ deviceIds, devs, localityId }) {
             const hot = row[0] === "cell_vmin" && weakest && weakest.n === n;
             return <td key={n} style={{ textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: hot ? 700 : 400, color: hot ? "var(--amber)" : "inherit" }}>{cell(row, n)}</td>; })}</tr>))}
         </tbody></table>
+      {rank && rank.packs.length > 0 && (() => {
+        const pos = (c, n) => { const mod = val("bms_cells_per_module", n); return mod ? ` (modul ${Math.ceil(c / mod)}, poz. ${((c - 1) % mod) + 1})` : ""; };
+        const list = (items, n, kind) => items.length ? (
+          <ol style={{ margin: "2px 0 0 18px", padding: 0, fontSize: 12, lineHeight: 1.5 }}>
+            {items.map((e) => (
+              <li key={e.cell}><b>{e.cell}</b>{pos(e.cell, n)} — {e.count}× · {kind === "min" ? "min" : "max"} {e.v.toFixed(3)} V
+                <span className="muted"> · Δ {e.delta_mv} mV</span></li>))}
+          </ol>) : <span className="muted" style={{ fontSize: 12 }}>—</span>;
+        return (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>
+              Nejslabší články za {WIN[win].label} <span className="muted" style={{ fontWeight: 400 }}>(kolikrát byl článek hlášen jako nejnižší; vzorek 1×/min)</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${rank.packs.length}, minmax(200px, 1fr))`, gap: 12 }}>
+              {rank.packs.map((p) => (
+                <div key={`${p.device}-${p.pack}`} style={{ padding: "6px 10px", borderRadius: 8, background: "var(--bg2, #161b22)" }}>
+                  <div style={{ fontWeight: 600, fontSize: 12.5 }}>Baterie {p.pack} <span className="muted" style={{ fontWeight: 400 }}>· {p.minutes_total} min dat</span></div>
+                  {list(p.worst, p.pack, "min")}
+                  <details style={{ marginTop: 4 }}>
+                    <summary className="muted" style={{ fontSize: 11.5, cursor: "pointer" }}>nejvyšší články (omezují nabíjení)</summary>
+                    {list(p.best, p.pack, "max")}
+                  </details>
+                </div>))}
+            </div>
+          </div>);
+      })()}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", fontSize: 12, marginBottom: 6 }}>
         <span className="muted" style={{ marginRight: 4 }}>Období:</span>
         {WIN.map((w, i) => (
