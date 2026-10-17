@@ -19,6 +19,25 @@ async def _solis_modules(locality_id: int) -> list[str]:
     return [r["id"] for r in rows]
 
 
+def _cell_txt(n, cpm) -> str:
+    """'162 (modul 11, poz. 12)' — číslo článku s modulem/pozicí (cpm = článků na modul)."""
+    if n is None:
+        return "?"
+    n = int(round(n))
+    if cpm and cpm > 0:
+        cpm = int(round(cpm))
+        return f"{n} (modul {(n - 1) // cpm + 1}, poz. {(n - 1) % cpm + 1})"
+    return str(n)
+
+
+def _local_hm(t: datetime) -> str:
+    try:
+        from zoneinfo import ZoneInfo
+        return t.astimezone(ZoneInfo("Europe/Prague")).strftime("%d.%m. %H:%M")
+    except Exception:
+        return t.strftime("%H:%M UTC")
+
+
 def _worst(series: list[dict], pred) -> dict | None:
     best = None
     for p in series:
@@ -26,8 +45,12 @@ def _worst(series: list[dict], pred) -> dict | None:
             continue
         d = (p["vmax"] - p["vmin"]) * 1000.0
         if best is None or d > best["delta_mv"]:
+            cpm = p.get("cpm")
             best = {"delta_mv": round(d, 0), "soc": round(p["soc"], 1), "vmin": round(p["vmin"], 3),
-                    "vmax": round(p["vmax"], 3), "t": p["t"].isoformat()}
+                    "vmax": round(p["vmax"], 3), "t": p["t"].isoformat(), "t_local": _local_hm(p["t"]),
+                    "nmin": int(round(p["nmin"])) if p.get("nmin") is not None else None,
+                    "nmax": int(round(p["nmax"])) if p.get("nmax") is not None else None,
+                    "nmin_txt": _cell_txt(p.get("nmin"), cpm), "nmax_txt": _cell_txt(p.get("nmax"), cpm)}
     return best
 
 
@@ -47,14 +70,14 @@ async def check_locality(locality_id: int, cfg: dict | None = None, notify: bool
                 rec["alert_low"] = True
                 out["alerts"].append(
                     f"Baterie {pack}: při SoC {low['soc']:.0f} % (< {cfg['soc_low']:g} %) rozptyl článků "
-                    f"{low['delta_mv']:.0f} mV > {cfg['delta_low_mv']:g} mV (Umin {low['vmin']:.3f} V, Umax {low['vmax']:.3f} V, "
-                    f"{low['t'][11:16]} UTC)")
+                    f"{low['delta_mv']:.0f} mV > {cfg['delta_low_mv']:g} mV — nejnižší článek {low['nmin_txt']} {low['vmin']:.3f} V, "
+                    f"nejvyšší článek {low['nmax_txt']} {low['vmax']:.3f} V ({low['t_local']})")
             if high and high["delta_mv"] > float(cfg["delta_high_mv"]):
                 rec["alert_high"] = True
                 out["alerts"].append(
                     f"Baterie {pack}: při SoC {high['soc']:.0f} % (> {cfg['soc_high']:g} %) rozptyl článků "
-                    f"{high['delta_mv']:.0f} mV > {cfg['delta_high_mv']:g} mV (Umin {high['vmin']:.3f} V, Umax {high['vmax']:.3f} V, "
-                    f"{high['t'][11:16]} UTC)")
+                    f"{high['delta_mv']:.0f} mV > {cfg['delta_high_mv']:g} mV — nejnižší článek {high['nmin_txt']} {high['vmin']:.3f} V, "
+                    f"nejvyšší článek {high['nmax_txt']} {high['vmax']:.3f} V ({high['t_local']})")
             out["packs"].append(rec)
     await db.save_result(locality_id, out)
     if out["alerts"] and notify:

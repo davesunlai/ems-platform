@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.98.3 — denní kontrola článků: upozornění (e-mail/výstraha) i tabulka výsledku uvádějí ČÍSLA ČLÁNKŮ s modulem/pozicí („nejnižší článek 15 (modul 1, poz. 15) 3,041 V, nejvyšší článek 162 (modul 11, poz. 12) 3,288 V“) a čas v lokálním čase (dříve UTC). pack_series čte navíc nmin/nmax/článků-na-modul. Konfigurační hodnoty zaokrouhleny (REAL → 3.2000000476 artefakt v UI). Nasazení: franta.
+
 ## v0.98.2 — žebříček článků: explicitní ::int v make_interval (asyncpg neumí odvodit typ `$3 + $4`), a UI už chybu/prázdný výsledek nemlčí — vypíše „Žebříček článků: chyba — …“ resp. „v tomto okně nejsou data“. Nasazení: franta.
 
 ## v0.98.1 — fix: žebříček článků se nezobrazoval — SQL v cell_ranking sčítalo textové parametry (`($3 + $4) || ' minutes'` → operator text + text neexistuje → 500). Nově make_interval(mins => int). Poznámka: hodnota BMS +13 (34358/34383) drží 14,0 / 15,5 A ve dvou dnech beze změny → nejspíš limit/konstanta, ne okamžitý proud — v tabulce označeno jako nejisté. Nasazení: franta.

@@ -262,7 +262,8 @@ function CellAlertSection({ loc }) {
         <table style={{ fontSize: 12, marginTop: 6 }}>
           <thead><tr><th>Baterie</th><th>vzorků</th><th>max Δ celkem</th><th>max Δ při SoC &lt; {c.soc_low} %</th><th>max Δ při SoC &gt; {c.soc_high} %</th></tr></thead>
           <tbody>{res.packs.map((p) => {
-            const f = (w) => (w ? `${w.delta_mv} mV @ SoC ${w.soc} % (${new Date(w.t).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })})` : "—");
+            const f = (w) => (w ? <>{w.delta_mv} mV @ SoC {w.soc} % ({new Date(w.t).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })})
+              {w.nmin_txt && <div className="muted" style={{ fontSize: 11 }}>min {w.nmin_txt} {w.vmin} V · max {w.nmax_txt} {w.vmax} V</div>}</> : "—");
             return (<tr key={p.pack}>
               <td>Baterie {p.pack}</td><td className="muted">{p.samples}</td><td>{f(p.overall)}</td>
               <td style={p.alert_low ? { color: "#e5534b", fontWeight: 700 } : {}}>{f(p.low)}</td>

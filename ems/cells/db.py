@@ -40,6 +40,9 @@ def _row(r) -> dict:
             pass
     if d.get("last_check_at"):
         d["last_check_at"] = d["last_check_at"].isoformat()
+    for k in ("soc_low", "delta_low_mv", "soc_high", "delta_high_mv", "y_min", "y_max"):
+        if isinstance(d.get(k), float):
+            d[k] = round(d[k], 3)          # REAL → bez 3.200000047 artefaktů
     d.pop("locality_id", None)
     return d
 
@@ -125,18 +128,23 @@ async def cell_ranking(device_id: str, pack: int, minutes: int = 1440, offset: i
 
 
 async def pack_series(device_id: str, pack: int, hours: int = 24) -> list[dict]:
-    """Minutové řady SoC packu + Umin/Umax článku za posledních N hodin → [{t, soc, vmin, vmax}]."""
+    """Minutové řady SoC packu + Umin/Umax článku (+ čísla článků, článků/modul) za posledních N hodin
+    → [{t, soc, vmin, vmax, nmin, nmax, cpm}]."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """SELECT time_bucket('1 minute', time) AS b, metric, avg(value) AS v
                FROM samples
-               WHERE device_id = $1 AND metric = ANY($2::text[]) AND time > now() - ($3 || ' hours')::interval
+               WHERE device_id = $1 AND metric = ANY($2::text[]) AND time > now() - make_interval(hours => $3::int)
                GROUP BY b, metric ORDER BY b""",
-            device_id, [f"battery_soc_{pack}", f"battery_cell_vmin_{pack}", f"battery_cell_vmax_{pack}"], str(hours))
+            device_id, [f"battery_soc_{pack}", f"battery_cell_vmin_{pack}", f"battery_cell_vmax_{pack}",
+                        f"battery_cell_nmin_{pack}", f"battery_cell_nmax_{pack}", f"battery_bms_cells_per_module_{pack}"],
+            int(hours))
     by_t: dict[datetime, dict] = {}
+    keymap = {f"battery_soc_{pack}": "soc", f"battery_cell_vmin_{pack}": "vmin", f"battery_cell_vmax_{pack}": "vmax",
+              f"battery_cell_nmin_{pack}": "nmin", f"battery_cell_nmax_{pack}": "nmax",
+              f"battery_bms_cells_per_module_{pack}": "cpm"}
     for r in rows:
         d = by_t.setdefault(r["b"], {"t": r["b"]})
-        m = r["metric"]
-        d["soc" if m.endswith(f"soc_{pack}") else "vmin" if "vmin" in m else "vmax"] = float(r["v"])
+        d[keymap[r["metric"]]] = float(r["v"])
     return [d for d in by_t.values() if "soc" in d and "vmin" in d and "vmax" in d]
