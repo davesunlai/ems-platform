@@ -11,6 +11,7 @@ import HeatPump from "./pages/HeatPump";
 import Emsboxes from "./pages/Emsboxes";
 import ModuleDiag from "./pages/ModuleDiag";
 import Users from "./pages/Users";
+import DataDiag from "./pages/DataDiag";
 import Modules from "./pages/Modules";
 import Control from "./pages/Control";
 import Contact from "./pages/Contact";
@@ -36,6 +37,9 @@ export default function App() {
             <Route path="/vzhled" element={<Vzhled />} />
             <Route path="/users" element={
               <ProtectedRoute permission="admin"><Users /></ProtectedRoute>
+            } />
+            <Route path="/data-diag" element={
+              <ProtectedRoute permission="admin"><DataDiag /></ProtectedRoute>
             } />
             <Route path="/modules" element={
               <ProtectedRoute permission="admin"><Modules /></ProtectedRoute>

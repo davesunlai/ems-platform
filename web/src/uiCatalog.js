@@ -36,6 +36,7 @@ export const UI_CATALOG = [
   { page: "page:localities", label: "Lokality", path: "/localities", items: [] },
   { page: "page:modules", label: "Moduly", path: "/modules", items: [] },
   { page: "page:users", label: "Uživatelé", path: "/users", items: [] },
+  { page: "page:datadiag", label: "📚 Datová diagnostika portálu", path: "/data-diag", items: [] },
   { page: "page:vzhled", label: "Vzhled", path: "/vzhled", items: [] },
 ];
 export const PAGE_BY_PATH = Object.fromEntries(UI_CATALOG.map((g) => [g.path, g.page]));

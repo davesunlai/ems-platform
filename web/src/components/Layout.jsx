@@ -118,6 +118,7 @@ const NAV_GROUPS = [
   ]},
   { label: "Správa", icon: "⚙️", items: [
     { to: "/users", label: "Uživatelé a role", perm: "admin", vk: "page:users" },
+    { to: "/data-diag", label: "📚 Datová diagnostika portálu", perm: "admin", vk: "page:datadiag" },
   ]},
 ];
 

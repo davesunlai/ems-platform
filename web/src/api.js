@@ -153,6 +153,7 @@ export const api = {
   createLocality: (l) => request("/api/admin/localities", { method: "POST", body: l }),
   updateLocality: (id, patch) => request(`/api/admin/localities/${id}`, { method: "PATCH", body: patch }),
   geocode: (q) => request(`/api/forecast/geocode?q=${encodeURIComponent(q)}`),
+  dataDiag: () => request("/api/admin/data-diag"),
   cellAlertGet: (id) => request(`/api/localities/${id}/cell-alert`),
   cellAlertPut: (id, body) => request(`/api/localities/${id}/cell-alert`, { method: "PUT", body }),
   cellRanking: (id, minutes, offset = 0) => request(`/api/localities/${id}/cell-ranking?minutes=${minutes}&offset=${offset}`),

@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="1.0.1", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="1.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -208,6 +208,8 @@ from ems.outages.routes import router as outages_router
 app.include_router(outages_router)
 from ems.cells.routes import router as cells_router  # noqa: E402
 app.include_router(cells_router)
+from ems.datadiag.routes import router as datadiag_router  # noqa: E402
+app.include_router(datadiag_router)
 from ems.alerts.routes import router as alerts_router
 app.include_router(alerts_router)
 
