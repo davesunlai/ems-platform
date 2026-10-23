@@ -1,6 +1,13 @@
 import { Fragment, useEffect, useState } from "react";
 import { api } from "../api";
 
+// Ø jednotková cena: tučně dle sazebníku (co se platí), šedě jen holý spot. Vážený průměr z reálných kWh.
+const Unit = ({ full, spot }) => (full == null && spot == null ? "—" : (
+  <span style={{ whiteSpace: "nowrap" }}>
+    {full != null ? <b>{full.toFixed(2)}</b> : "—"}
+    {spot != null && <span className="muted" style={{ fontSize: 11 }}> / {spot.toFixed(2)}</span>}
+  </span>));
+
 function fmtKWh(v) {
   return v >= 1000 ? `${(v / 1000).toFixed(2)} MWh` : `${v.toFixed(0)} kWh`;
 }
@@ -64,7 +71,9 @@ export default function BillingTable({ localityId }) {
           <th style={{ textAlign: "right" }}>Přetoky</th>
           <th style={{ textAlign: "right" }}>Nákup od distributora</th>
           <th style={{ textAlign: "right" }}>Cena ze sítě</th>
+          <th style={{ textAlign: "right" }} title="Vážený průměr jen z reálně odebraných kWh: celkem (dle sazebníku) / jen holý spot">Ø Kč/kWh odběr</th>
           <th style={{ textAlign: "right" }}>Cena do sítě</th>
+          <th style={{ textAlign: "right" }} title="Vážený průměr jen z reálně dodaných kWh: celkem (po provizi) / jen holý spot">Ø Kč/kWh dodávka</th>
           <th style={{ textAlign: "right" }}>Saldo</th>
         </tr></thead>
         <tbody>
@@ -75,6 +84,8 @@ export default function BillingTable({ localityId }) {
               <td style={{ textAlign: "right" }}>—</td>
               <td style={{ textAlign: "right" }}>{b.baseline.export_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right" }}>{b.baseline.import_kwh.toFixed(0)} kWh</td>
+              <td style={{ textAlign: "right" }}>—</td>
+              <td style={{ textAlign: "right" }}>—</td>
               <td style={{ textAlign: "right" }}>—</td>
               <td style={{ textAlign: "right" }}>—</td>
               <td style={{ textAlign: "right" }}>—</td>
@@ -89,13 +100,15 @@ export default function BillingTable({ localityId }) {
               <td style={{ textAlign: "right", color: "var(--green)" }}>{r.export_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right" }}>{r.import_kwh.toFixed(0)} kWh</td>
               <td style={{ textAlign: "right" }}>{r.import_czk != null ? `${r.import_czk.toFixed(0)} Kč` : "—"}</td>
+              <td style={{ textAlign: "right" }}><Unit full={r.unit_import_czk} spot={r.unit_import_spot} /></td>
               <td style={{ textAlign: "right", color: "var(--green)" }}>{r.export_czk != null ? `${r.export_czk.toFixed(0)} Kč` : "—"}</td>
+              <td style={{ textAlign: "right", color: "var(--green)" }}><Unit full={r.unit_export_czk} spot={r.unit_export_spot} /></td>
               <td style={{ textAlign: "right", fontWeight: 600, color: (r.saldo_czk || 0) >= 0 ? "var(--green)" : "#e06c75" }}>
                 {r.saldo_czk != null ? `${r.saldo_czk > 0 ? "+" : ""}${r.saldo_czk.toFixed(0)} Kč` : "—"}
               </td>
             </tr>
             {openMonth === r.month && !days[r.month] && (
-              <tr><td colSpan="8" className="muted" style={{ fontSize: 12 }}>Načítám dny…</td></tr>
+              <tr><td colSpan="10" className="muted" style={{ fontSize: 12 }}>Načítám dny…</td></tr>
             )}
             {openMonth === r.month && days[r.month] && days[r.month].map((d) => (
               <tr key={d.day} style={{ fontSize: 12, opacity: 0.92, background: "var(--bg)" }}>
@@ -108,14 +121,16 @@ export default function BillingTable({ localityId }) {
                 <td style={{ textAlign: "right", color: "var(--green)" }}>{d.export_kwh.toFixed(1)} kWh</td>
                 <td style={{ textAlign: "right" }}>{d.import_kwh.toFixed(1)} kWh</td>
                 <td style={{ textAlign: "right" }}>{d.import_czk.toFixed(0)} Kč</td>
+                <td style={{ textAlign: "right" }}><Unit full={d.unit_import_czk} spot={d.unit_import_spot} /></td>
                 <td style={{ textAlign: "right", color: "var(--green)" }}>{d.export_czk.toFixed(0)} Kč</td>
+                <td style={{ textAlign: "right", color: "var(--green)" }}><Unit full={d.unit_export_czk} spot={d.unit_export_spot} /></td>
                 <td style={{ textAlign: "right", color: (d.saldo_czk || 0) >= 0 ? "var(--green)" : "#e06c75" }}>
                   {`${d.saldo_czk > 0 ? "+" : ""}${d.saldo_czk.toFixed(0)} Kč`}
                 </td>
               </tr>
             ))}
           </Fragment>))}
-          {!b.months.length && <tr><td colSpan="8" className="muted">Zatím žádná data v tomto období.</td></tr>}
+          {!b.months.length && <tr><td colSpan="10" className="muted">Zatím žádná data v tomto období.</td></tr>}
         </tbody>
         {b.months.length > 0 && (
           <tfoot><tr style={{ fontWeight: 600, borderTop: "1px solid var(--border)" }}>
@@ -125,7 +140,9 @@ export default function BillingTable({ localityId }) {
             <td style={{ textAlign: "right", color: "var(--green)" }}>{fmtKWh(b.totals.export_kwh)}</td>
             <td style={{ textAlign: "right" }}>{fmtKWh(b.totals.import_kwh)}</td>
             <td style={{ textAlign: "right" }}>{b.totals.import_czk != null ? `${b.totals.import_czk.toFixed(0)} Kč` : "—"}</td>
+            <td style={{ textAlign: "right" }}><Unit full={b.totals.unit_import_czk} spot={b.totals.unit_import_spot} /></td>
             <td style={{ textAlign: "right", color: "var(--green)" }}>{b.totals.export_czk != null ? `${b.totals.export_czk.toFixed(0)} Kč` : "—"}</td>
+            <td style={{ textAlign: "right", color: "var(--green)" }}><Unit full={b.totals.unit_export_czk} spot={b.totals.unit_export_spot} /></td>
             <td style={{ textAlign: "right", color: (b.totals.saldo_czk || 0) >= 0 ? "var(--green)" : "#e06c75" }}>
               {b.totals.saldo_czk != null ? `${b.totals.saldo_czk > 0 ? "+" : ""}${b.totals.saldo_czk.toFixed(0)} Kč` : "—"}
             </td>

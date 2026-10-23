@@ -10,58 +10,88 @@ from datetime import date
 
 from ems.api.db import get_pool
 
-# Hodinová energie sítě (kWh) + hodinová spot cena (CZK/MWh) — cenu aplikuje Python
+# 15minutová energie sítě (kWh) + spot cena slotu (CZK/MWh) — cenu aplikuje Python
 # přes pricing.cost.price_czk_kwh (JEDEN cenový model, shodný s plánovačem: přirážka,
 # distribuce VT/NT, poplatky u nákupu; provize odečtená u prodeje).
-_HOURLY_GRID_SPOT_SQL = """
-WITH gh AS (
-    SELECT h, sum(p) / 1000.0 AS np_kwh FROM (
-        SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS p
+# v0.99.0: dřív hodinové koše — v rámci hodiny se odběr a dodávka vzájemně odečítaly
+# (dopoledne export, pak odběr → „nic“), což podhodnocovalo obojí. 15 min = zúčtovací
+# interval distributora i granularita spotu, takže se počítá přesně to, co fakturuje.
+_Q15_GRID_SPOT_SQL = """
+WITH gq AS (
+    SELECT q, sum(p) * 0.25 / 1000.0 AS np_kwh FROM (
+        SELECT time_bucket('15 minutes', time) AS q, device_id, avg(value) AS p
         FROM samples
         WHERE device_id = ANY($1::text[]) AND metric = 'grid_power'
           AND time >= $2 AND time < $3
         GROUP BY 1, device_id
-    ) x GROUP BY h
+    ) x GROUP BY q
 ), sp AS (
-    SELECT time_bucket('1 hour', slot) AS h, avg(price) AS czk_mwh
+    SELECT time_bucket('15 minutes', slot) AS q, avg(price) AS czk_mwh
     FROM spot_history WHERE slot >= $2 AND slot < $3 GROUP BY 1
 )
-SELECT gh.h AS h, to_char(date_trunc('month', gh.h), 'YYYY-MM') AS m,
-       gh.np_kwh AS np_kwh, sp.czk_mwh AS czk_mwh
-FROM gh LEFT JOIN sp ON sp.h = gh.h
-ORDER BY gh.h
+SELECT gq.q AS h, to_char(date_trunc('month', gq.q), 'YYYY-MM') AS m,
+       gq.np_kwh AS np_kwh, sp.czk_mwh AS czk_mwh
+FROM gq LEFT JOIN sp ON sp.q = gq.q
+ORDER BY gq.q
 """
 
 
 async def hourly_grid_spot(device_ids: list[str], start: date, end: date) -> list[dict]:
-    """Hodinové řádky: {h, m, np_kwh (+odběr/−dodávka), czk_mwh}."""
+    """15min řádky (název zachován kvůli volajícím): {h = začátek slotu, m, np_kwh (+odběr/−dodávka), czk_mwh}."""
     if not device_ids:
         return []
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(_HOURLY_GRID_SPOT_SQL, device_ids, start, end)
+        rows = await conn.fetch(_Q15_GRID_SPOT_SQL, device_ids, start, end)
     return [dict(r) for r in rows]
+
+
+def cost_bucket() -> dict:
+    """Prázdný akumulátor nákladů (měsíc/den): kWh, Kč dle sazebníku, Kč jen za holý spot."""
+    return {"import_kwh": 0.0, "export_kwh": 0.0, "import_czk": 0.0, "export_czk": 0.0,
+            "import_spot_czk": 0.0, "export_spot_czk": 0.0, "slots_no_spot": 0}
+
+
+def accumulate(d: dict, np_kwh: float, price: dict, czk_mwh) -> None:
+    """Přičte jeden 15min slot: kWh, Kč dle sazebníku (price) a Kč za holý spot."""
+    spot_kwh = (float(czk_mwh) / 1000.0) if czk_mwh is not None else None
+    if czk_mwh is None and np_kwh:
+        d["slots_no_spot"] += 1
+    if np_kwh > 0:
+        d["import_kwh"] += np_kwh
+        d["import_czk"] += np_kwh * price["import_czk"]
+        if spot_kwh is not None:
+            d["import_spot_czk"] += np_kwh * spot_kwh
+    elif np_kwh < 0:
+        d["export_kwh"] += -np_kwh
+        d["export_czk"] += (-np_kwh) * price["export_czk"]
+        if spot_kwh is not None:
+            d["export_spot_czk"] += (-np_kwh) * spot_kwh
+
+
+def unit_prices(d: dict) -> dict:
+    """Jednotkové ceny JEN z reálně odebraných / dodaných kWh (vážený průměr):
+    unit_import_czk = Kč dle sazebníku / kWh, unit_import_spot = holý spot / kWh, totéž export."""
+    ik, ek = d.get("import_kwh", 0.0), d.get("export_kwh", 0.0)
+    return {
+        "unit_import_czk": round(d["import_czk"] / ik, 3) if ik > 0.01 else None,
+        "unit_import_spot": round(d["import_spot_czk"] / ik, 3) if ik > 0.01 else None,
+        "unit_export_czk": round(d["export_czk"] / ek, 3) if ek > 0.01 else None,
+        "unit_export_spot": round(d["export_spot_czk"] / ek, 3) if ek > 0.01 else None,
+    }
 
 
 async def monthly_cost(device_ids: list[str], tariff: dict | None,
                        start: date, end: date) -> dict[str, dict]:
-    """Cena importu/exportu po měsících DLE SAZEBNÍKU lokality (ne holý spot).
-
-    Import se počítá cenou nákupu (spot + přirážka + distribuce[VT/NT] + poplatky),
-    export cenou prodeje (spot − provize) — tedy tím, co reálně platíš/dostáváš.
-    """
+    """Cena importu/exportu po měsících DLE SAZEBNÍKU lokality (+ holý spot pro srovnání),
+    z 15min slotů. Import = spot + přirážka + distribuce[VT/NT] + poplatky; export = spot − provize."""
     from ems.pricing import cost as pricing_cost
 
     out: dict[str, dict] = {}
     for r in await hourly_grid_spot(device_ids, start, end):
-        m = r["m"]
-        d = out.setdefault(m, {"import_czk": 0.0, "export_czk": 0.0})
-        np_kwh = float(r["np_kwh"] or 0.0)
+        d = out.setdefault(r["m"], cost_bucket())
         price = pricing_cost.price_czk_kwh(tariff, r["h"], r["czk_mwh"])
-        if np_kwh > 0:
-            d["import_czk"] += np_kwh * price["import_czk"]
-        else:
-            d["export_czk"] += (-np_kwh) * price["export_czk"]
+        accumulate(d, float(r["np_kwh"] or 0.0), price, r["czk_mwh"])
     return out
 
 
@@ -70,18 +100,18 @@ async def monthly_spot_cost(device_ids: list[str], start: date, end: date) -> di
     return await monthly_cost(device_ids, None, start, end)
 
 _GRID_SQL = """
-WITH hourly AS (
-    SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS p
+WITH q15 AS (
+    SELECT time_bucket('15 minutes', time) AS h, device_id, avg(value) AS p
     FROM samples
     WHERE device_id = ANY($1::text[]) AND metric = 'grid_power'
       AND time >= $2 AND time < $3
     GROUP BY h, device_id
 ), net AS (
-    SELECT h, sum(p) AS np FROM hourly GROUP BY h
+    SELECT h, sum(p) AS np FROM q15 GROUP BY h
 )
 SELECT to_char(date_trunc('month', h), 'YYYY-MM') AS m,
-       sum(greatest(0, -np)) / 1000.0 AS export_kwh,
-       sum(greatest(0,  np)) / 1000.0 AS import_kwh
+       sum(greatest(0, -np)) * 0.25 / 1000.0 AS export_kwh,
+       sum(greatest(0,  np)) * 0.25 / 1000.0 AS import_kwh
 FROM net GROUP BY 1
 """
 

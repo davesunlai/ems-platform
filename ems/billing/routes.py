@@ -50,24 +50,17 @@ async def locality_billing_days(loc_id: int, month: str,
         h = r["h"]
         local_day = h.astimezone(tz).date()
         key = local_day.isoformat()
-        d = days.setdefault(key, {"day": key, "import_kwh": 0.0, "export_kwh": 0.0,
-                                  "import_czk": 0.0, "export_czk": 0.0})
+        d = days.setdefault(key, {"day": key, **billing_db.cost_bucket()})
         np_kwh = float(r["np_kwh"] or 0.0)
         if mode == "tariff":
-            pi, pe = ti, te
+            price = {"import_czk": ti, "export_czk": te}
         else:
             t = tariff_by_day.get(key)
             if t is None and key not in tariff_by_day:
                 t = await pricing_db.get_effective(loc_id, at=local_day)  # sazebník platný v ten den
                 tariff_by_day[key] = t
             price = pricing_cost.price_czk_kwh(t, h, r["czk_mwh"])
-            pi, pe = price["import_czk"], price["export_czk"]
-        if np_kwh > 0:
-            d["import_kwh"] += np_kwh
-            d["import_czk"] += np_kwh * pi
-        elif np_kwh < 0:
-            d["export_kwh"] += -np_kwh
-            d["export_czk"] += (-np_kwh) * pe
+        billing_db.accumulate(d, np_kwh, price, r["czk_mwh"])
 
     def _by_day(rows):
         out: dict[str, float] = {}
@@ -79,7 +72,7 @@ async def locality_billing_days(loc_id: int, month: str,
     load_days = _by_day(load_rows)
     bat_days = _by_day(bat_rows)
     for k in set(pv_days) | set(load_days):
-        days.setdefault(k, {"day": k, "import_kwh": 0.0, "export_kwh": 0.0, "import_czk": 0.0, "export_czk": 0.0})
+        days.setdefault(k, {"day": k, **billing_db.cost_bucket()})
 
     out = []
     for key in sorted(days):
@@ -94,7 +87,8 @@ async def locality_billing_days(loc_id: int, month: str,
                     "export_kwh": round(d["export_kwh"], 1),
                     "import_czk": round(d["import_czk"], 2),
                     "export_czk": round(d["export_czk"], 2),
-                    "saldo_czk": round(d["export_czk"] - d["import_czk"], 2)})
+                    "saldo_czk": round(d["export_czk"] - d["import_czk"], 2),
+                    **billing_db.unit_prices(d)})
     return {"month": month, "days": out}
 
 
@@ -133,19 +127,27 @@ async def locality_billing(loc_id: int, _: dict = Depends(require_permission("re
         for r in months:
             r["import_czk"] = round(r["import_kwh"] * ti, 2)
             r["export_czk"] = round(r["export_kwh"] * te, 2)
+        for r in months:
+            r.update(billing_db.unit_prices({**billing_db.cost_bucket(), "import_kwh": r["import_kwh"], "export_kwh": r["export_kwh"],
+                                             "import_czk": r["import_czk"], "export_czk": r["export_czk"]}))
     else:
         costs = await billing_db.monthly_cost(devs, tariff, start, end)
         for r in months:
-            c = costs.get(r["month"], {})
-            r["import_czk"] = round(c.get("import_czk", 0.0), 2)
-            r["export_czk"] = round(c.get("export_czk", 0.0), 2)
+            c = costs.get(r["month"]) or billing_db.cost_bucket()
+            r["import_czk"] = round(c["import_czk"], 2)
+            r["export_czk"] = round(c["export_czk"], 2)
+            r["import_spot_czk"] = round(c["import_spot_czk"], 2)
+            r["export_spot_czk"] = round(c["export_spot_czk"], 2)
+            r.update(billing_db.unit_prices(c))
     for r in months:
         r["saldo_czk"] = round(r.get("export_czk", 0) - r.get("import_czk", 0), 2)
 
     totals = {k: round(sum(r[k] for r in months), 1)
               for k in ("prod_kwh", "cons_kwh", "export_kwh", "import_kwh")}
-    for k in ("import_czk", "export_czk", "saldo_czk"):
-        totals[k] = round(sum(r.get(k, 0) for r in months), 2)
+    for k in ("import_czk", "export_czk", "saldo_czk", "import_spot_czk", "export_spot_czk"):
+        totals[k] = round(sum(r.get(k, 0) or 0 for r in months), 2)
+    totals.update(billing_db.unit_prices({**totals, "import_kwh": sum(r["import_kwh"] for r in months),
+                                          "export_kwh": sum(r["export_kwh"] for r in months)}))
 
     # Paušály (měsíční fixní platby) — čistě účetní položka, do dispečinku nevstupuje.
     monthly_fee = float((tariff or {}).get("monthly_fee") or 0)

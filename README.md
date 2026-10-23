@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v0.99.0 — zúčtování po 15 minutách + jednotkové ceny z reálně odebraných kWh. (1) Energie sítě i ceny se počítají z 15min košů (dřív hodinové: v rámci hodiny se odběr a dodávka vzájemně odečítaly → obojí podhodnoceno; 15 min = zúčtovací interval distributora i granularita spotu, spot se váže přímo na slot, ne hodinový průměr). Platí pro měsíce, dny i souhrn (billing/db: _Q15_GRID_SPOT_SQL, _GRID_SQL na 15 min). (2) Nové sloupce tabulky zúčtování „Ø Kč/kWh odběr“ a „Ø Kč/kWh dodávka“ = vážený průměr jen z kWh, které se v daném slotu opravdu odebraly/dodaly: tučně dle sazebníku lokality (spot + přirážka + distribuce VT/NT + poplatky; prodej spot − provize), šedě jen holý spot. Per den, měsíc i celkem za období (unit_import_czk/unit_import_spot/unit_export_czk/unit_export_spot v API; měsíce navíc import_spot_czk/export_spot_czk). Nasazení: franta.
+
 ## v0.98.3 — denní kontrola článků: upozornění (e-mail/výstraha) i tabulka výsledku uvádějí ČÍSLA ČLÁNKŮ s modulem/pozicí („nejnižší článek 15 (modul 1, poz. 15) 3,041 V, nejvyšší článek 162 (modul 11, poz. 12) 3,288 V“) a čas v lokálním čase (dříve UTC). pack_series čte navíc nmin/nmax/článků-na-modul. Konfigurační hodnoty zaokrouhleny (REAL → 3.2000000476 artefakt v UI). Nasazení: franta.
 
 ## v0.98.2 — žebříček článků: explicitní ::int v make_interval (asyncpg neumí odvodit typ `$3 + $4`), a UI už chybu/prázdný výsledek nemlčí — vypíše „Žebříček článků: chyba — …“ resp. „v tomto okně nejsou data“. Nasazení: franta.
