@@ -16,21 +16,21 @@ from ems.api.db import get_pool
 # v0.99.0: dřív hodinové koše — v rámci hodiny se odběr a dodávka vzájemně odečítaly
 # (dopoledne export, pak odběr → „nic“), což podhodnocovalo obojí. 15 min = zúčtovací
 # interval distributora i granularita spotu, takže se počítá přesně to, co fakturuje.
+# v1.0.0: čte z continuous aggregate samples_15m (materializované 15min koše, realtime okraj),
+# n = počet surových vzorků ve slotu (pokrytí; plný slot ≈ 30–90 podle periody čtení).
 _Q15_GRID_SPOT_SQL = """
 WITH gq AS (
-    SELECT q, sum(p) * 0.25 / 1000.0 AS np_kwh FROM (
-        SELECT time_bucket('15 minutes', time) AS q, device_id, avg(value) AS p
-        FROM samples
-        WHERE device_id = ANY($1::text[]) AND metric = 'grid_power'
-          AND time >= $2 AND time < $3
-        GROUP BY 1, device_id
-    ) x GROUP BY q
+    SELECT bucket AS q, sum(avg) * 0.25 / 1000.0 AS np_kwh, min(n) AS n
+    FROM samples_15m
+    WHERE device_id = ANY($1::text[]) AND metric = 'grid_power'
+      AND bucket >= $2 AND bucket < $3
+    GROUP BY bucket
 ), sp AS (
     SELECT time_bucket('15 minutes', slot) AS q, avg(price) AS czk_mwh
     FROM spot_history WHERE slot >= $2 AND slot < $3 GROUP BY 1
 )
 SELECT gq.q AS h, to_char(date_trunc('month', gq.q), 'YYYY-MM') AS m,
-       gq.np_kwh AS np_kwh, sp.czk_mwh AS czk_mwh
+       gq.np_kwh AS np_kwh, sp.czk_mwh AS czk_mwh, gq.n AS n
 FROM gq LEFT JOIN sp ON sp.q = gq.q
 ORDER BY gq.q
 """
@@ -100,14 +100,11 @@ async def monthly_spot_cost(device_ids: list[str], start: date, end: date) -> di
     return await monthly_cost(device_ids, None, start, end)
 
 _GRID_SQL = """
-WITH q15 AS (
-    SELECT time_bucket('15 minutes', time) AS h, device_id, avg(value) AS p
-    FROM samples
+WITH net AS (
+    SELECT bucket AS h, sum(avg) AS np FROM samples_15m
     WHERE device_id = ANY($1::text[]) AND metric = 'grid_power'
-      AND time >= $2 AND time < $3
-    GROUP BY h, device_id
-), net AS (
-    SELECT h, sum(p) AS np FROM q15 GROUP BY h
+      AND bucket >= $2 AND bucket < $3
+    GROUP BY bucket
 )
 SELECT to_char(date_trunc('month', h), 'YYYY-MM') AS m,
        sum(greatest(0, -np)) * 0.25 / 1000.0 AS export_kwh,
@@ -116,17 +113,14 @@ FROM net GROUP BY 1
 """
 
 _METRIC_SQL = """
-WITH hourly AS (
-    SELECT h, sum(dev) AS p FROM (
-        SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS dev
-        FROM samples
-        WHERE device_id = ANY($1::text[]) AND metric = $4
-          AND time >= $2 AND time < $3
-        GROUP BY h, device_id
-    ) x GROUP BY h
+WITH q AS (
+    SELECT bucket AS h, sum(avg) AS p FROM samples_15m
+    WHERE device_id = ANY($1::text[]) AND metric = $4
+      AND bucket >= $2 AND bucket < $3
+    GROUP BY bucket
 )
-SELECT to_char(date_trunc('month', h), 'YYYY-MM') AS m, sum(p) / 1000.0 AS kwh
-FROM hourly GROUP BY 1
+SELECT to_char(date_trunc('month', h), 'YYYY-MM') AS m, sum(p) * 0.25 / 1000.0 AS kwh
+FROM q GROUP BY 1
 """
 
 # Výroba z vlastního DENNÍHO počítadla měniče (energy_today): max za pražský den
@@ -134,11 +128,11 @@ FROM hourly GROUP BY 1
 _PROD_TODAY_SQL = """
 SELECT to_char(date_trunc('month', day), 'YYYY-MM') AS m, sum(day_kwh) AS kwh FROM (
     SELECT device_id,
-           date_trunc('day', time AT TIME ZONE 'Europe/Prague') AS day,
-           max(value) AS day_kwh
-    FROM samples
+           date_trunc('day', bucket AT TIME ZONE 'Europe/Prague') AS day,
+           max(max) AS day_kwh
+    FROM samples_15m
     WHERE device_id = ANY($1::text[]) AND metric = 'energy_today'
-      AND time >= $2 AND time < $3
+      AND bucket >= $2 AND bucket < $3
     GROUP BY device_id, day
 ) t GROUP BY 1
 """
@@ -241,14 +235,10 @@ async def today_spot_cost(device_ids: list[str], tariff: dict | None = None) -> 
 
 
 _HOURLY_METRIC_SQL = """
-WITH ph AS (
-    SELECT time_bucket('1 hour', time) AS h, device_id, avg(value) AS p
-    FROM samples
-    WHERE device_id = ANY($1::text[]) AND metric = $4
-      AND time >= $2 AND time < $3
-    GROUP BY 1, device_id
-)
-SELECT h, sum(p) / 1000.0 AS kwh FROM ph GROUP BY h ORDER BY h
+SELECT bucket AS h, sum(avg) * 0.25 / 1000.0 AS kwh FROM samples_15m
+WHERE device_id = ANY($1::text[]) AND metric = $4
+  AND bucket >= $2 AND bucket < $3
+GROUP BY bucket ORDER BY bucket
 """
 
 
