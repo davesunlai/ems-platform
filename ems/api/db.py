@@ -113,21 +113,35 @@ async def latest_for_device(device_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+# v1.0.1: surová `samples` mají retenci 3 měsíce; grafy, které sahají dál než RAW_KEEP_MIN zpět
+# nebo se kreslí hruběji než po 15 min, čtou z continuous aggregate `samples_15m`
+# (sloupce bucket/avg) — bez ztráty historie, rychleji.
+RAW_KEEP_MIN = 80 * 1440
+
+
+def _source(bucket_seconds: int, start_min: int) -> tuple[str, str, str, int]:
+    """(tabulka, časový sloupec, hodnotový sloupec, koš s) podle okna."""
+    if bucket_seconds >= 900 or start_min > RAW_KEEP_MIN:
+        return "samples_15m", "bucket", "avg", max(900, (bucket_seconds // 900) * 900)
+    return "samples", "time", "value", bucket_seconds
+
+
 async def history(device_id: str, metric: str, minutes: int = 360, offset: int = 0,
                   target_points: int = 400) -> list[dict]:
     # Okno [now-(minutes+offset), now-offset]; agregace do ~target_points košů.
     bucket_seconds = max(10, int(minutes * 60 / target_points))
     start_min = minutes + offset
+    tbl, tcol, vcol, bucket_seconds = _source(bucket_seconds, start_min)
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """
-            SELECT time_bucket(($4 || ' seconds')::interval, time) AS bucket,
-                   avg(value) AS value
-            FROM samples
+            f"""
+            SELECT time_bucket(($4 || ' seconds')::interval, {tcol}) AS bucket,
+                   avg({vcol}) AS value
+            FROM {tbl}
             WHERE device_id = $1 AND metric = $2
-              AND time >  now() - ($3 || ' minutes')::interval
-              AND time <= now() - ($5 || ' minutes')::interval
+              AND {tcol} >  now() - ($3 || ' minutes')::interval
+              AND {tcol} <= now() - ($5 || ' minutes')::interval
             GROUP BY bucket
             ORDER BY bucket
             """,
@@ -279,26 +293,27 @@ async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 3
         return []
     bucket_seconds = max(10, int(minutes * 60 / target_points))
     start_min = minutes + offset
+    tbl, tcol, vcol, bucket_seconds = _source(bucket_seconds, start_min)
     pool = await get_pool()
     async with pool.acquire() as conn:
         if metric == "load":
             # Počítaná spotřeba lokality = Σ FVE + Σ síť − Σ baterie (per bucket).
             # (znaménka EMS: síť + import/− export, baterie + nabíjení/− vybíjení)
             rows = await conn.fetch(
-                """
+                f"""
                 SELECT b,
                        GREATEST(0,
                          COALESCE(sum(dev_avg) FILTER (WHERE metric='pv_power'), 0)
                        + COALESCE(sum(dev_avg) FILTER (WHERE metric='grid_power'), 0)
                        - COALESCE(sum(dev_avg) FILTER (WHERE metric='battery_power'), 0)) AS value
                 FROM (
-                    SELECT time_bucket(($1 || ' seconds')::interval, time) AS b,
-                           device_id, metric, avg(value) AS dev_avg
-                    FROM samples
+                    SELECT time_bucket(($1 || ' seconds')::interval, {tcol}) AS b,
+                           device_id, metric, avg({vcol}) AS dev_avg
+                    FROM {tbl}
                     WHERE device_id = ANY($2::text[])
                       AND metric IN ('pv_power', 'grid_power', 'battery_power')
-                      AND time >  now() - ($3 || ' minutes')::interval
-                      AND time <= now() - ($4 || ' minutes')::interval
+                      AND {tcol} >  now() - ($3 || ' minutes')::interval
+                      AND {tcol} <= now() - ($4 || ' minutes')::interval
                     GROUP BY b, device_id, metric
                 ) t
                 GROUP BY b ORDER BY b
@@ -311,12 +326,12 @@ async def aggregate_history(device_ids: list[str], metric: str, minutes: int = 3
             rows = await conn.fetch(
                 f"""
                 SELECT b, {agg}(dev_avg) AS value FROM (
-                    SELECT time_bucket(($1 || ' seconds')::interval, time) AS b,
-                           device_id, avg(value) AS dev_avg
-                    FROM samples
+                    SELECT time_bucket(($1 || ' seconds')::interval, {tcol}) AS b,
+                           device_id, avg({vcol}) AS dev_avg
+                    FROM {tbl}
                     WHERE device_id = ANY($2::text[]) AND metric = $3
-                      AND time >  now() - ($4 || ' minutes')::interval
-                      AND time <= now() - ($5 || ' minutes')::interval
+                      AND {tcol} >  now() - ($4 || ' minutes')::interval
+                      AND {tcol} <= now() - ($5 || ' minutes')::interval
                     GROUP BY b, device_id
                 ) t
                 GROUP BY b ORDER BY b
