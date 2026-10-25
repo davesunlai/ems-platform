@@ -1195,14 +1195,21 @@ async def tick_market_and_automation(state: dict) -> None:
         state["last_market"] = now
         try:
             st = await market_db.get_state()
+            # Sloty: každých 30 min, nebo hned když pro dnešek/zítřek (po 13:00) chybí — šetří zdroj
+            # (3 dotazy / 5 min byly zbytečné a mohly přispět k bloku IP 25. 10.).
+            need = (now - state.get("last_slots", -1e9) >= 1800) or not await market_db.has_slots_for_today(
+                include_tomorrow=__import__("datetime").datetime.now().hour >= 13)
+            if need:
+                state["last_slots"] = now
+                slots = await fetch_day_slots()
+                if slots:
+                    await market_db.upsert_slots(slots)
             if not st.get("manual"):
                 price = await fetch_current_price_czk()
+                if price is None:           # zdroj mlčí → aktuální cena ze slotů v DB (OTE/cache)
+                    price = await market_db.current_slot_price()
                 if price is not None:
                     await market_db.set_live_price(price)
-            # čtvrthodinové sloty stahujeme vždy (reálná data i během ručního testu)
-            slots = await fetch_day_slots()
-            if slots:
-                await market_db.upsert_slots(slots)
         except Exception as exc:
             logger.warning("Obnova trhu selhala: %s", exc)
     # vyhodnocení automatizace s aktuální cenou (kromě modulů řízených plánovačem)

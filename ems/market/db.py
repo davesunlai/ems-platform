@@ -128,6 +128,28 @@ async def history_window(days: int = 1, target_points: int = 400) -> list[dict]:
             for r in rows if r["price"] is not None]
 
 
+async def has_slots_for_today(include_tomorrow: bool = False) -> bool:
+    """Máme v DB kompletní sloty pro dnešek (a po 13. h i zítřek)? Rozhoduje, zda zdroj dotazovat hned."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        n_today = await conn.fetchval(
+            "SELECT count(*) FROM spot_history WHERE slot >= date_trunc('day', now() AT TIME ZONE 'Europe/Prague') AT TIME ZONE 'Europe/Prague' "
+            "AND slot < (date_trunc('day', now() AT TIME ZONE 'Europe/Prague') + interval '1 day') AT TIME ZONE 'Europe/Prague'")
+        n_tom = await conn.fetchval(
+            "SELECT count(*) FROM spot_history WHERE slot >= (date_trunc('day', now() AT TIME ZONE 'Europe/Prague') + interval '1 day') AT TIME ZONE 'Europe/Prague' "
+            "AND slot < (date_trunc('day', now() AT TIME ZONE 'Europe/Prague') + interval '2 day') AT TIME ZONE 'Europe/Prague'") if include_tomorrow else 96
+    return (n_today or 0) >= 92 and (n_tom or 0) >= 92
+
+
+async def current_slot_price() -> float | None:
+    """Cena slotu, do kterého spadá teď (Kč/MWh) — náhrada živé ceny, když zdroj mlčí."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        v = await conn.fetchval(
+            "SELECT price FROM spot_history WHERE slot <= now() AND slot > now() - interval '15 minutes' ORDER BY slot DESC LIMIT 1")
+    return float(v) if v is not None else None
+
+
 async def future_slots(hours: float = 24) -> list[dict]:
     """Budoucí 15min spotové sloty od teď do +hours. [{slot: datetime, price: CZK/MWh}]."""
     pool = await get_pool()
