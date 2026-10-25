@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v1.2.3 — druhá vrstva incidentu s bufferem: nginx před API má výchozí `client_max_body_size 1m`; dávka 1000 řádků × ~60 veličin ≈ 2 MB → 413 ještě před API (proto se po 1.2.2 buffer nehnul, dokud si box nestáhl config s dávkou 40 ř.). Nyní 16m + proxy_read_timeout 60 s. Nasazení: franta (web). Kontrola: fleet → buffer klesá, 🔎 detail → epizoda bufferování.
+
 ## v1.2.2 — HOTFIX dohrávání bufferu EMSBOXu. Incident 25. 10.: po výpadku od 3:01 box 11 h hlásil heartbeat, ale ingest stál (buffer 959 ř.). Příčina: dávka z bufferu = až 1000 řádků × ~60 veličin = 60 000 INSERT … NOT EXISTS po jednom v jedné transakci → > 25 s (timeout agenta) → agent dávku opakoval donekonečna (nejnovější napřed = stále tatáž). Oprava: (1) insert_rows = jeden hromadný INSERT … SELECT FROM unnest() s anti-joinem (DISTINCT ON proti duplicitám v dávce) — zlomek sekundy; (2) server v configu boxu posílá max_batch_rows = 40 (BOX_BATCH_ROWS; agent si ho vezme při příštím config pollu, bez update), server dál přijme až 1000. Nasazení: franta (api); box netřeba — buffer se po nasazení dohraje sám (sync každé 2 s, 1 dávka/s).
 
 ## v1.2.1 — fix OTE fallback při změně času: 25. 10. (25 h) vrátilo OTE 100 bodů a krok 1440/100 = 14 min rozhodil mřížku (91 slotů, poslední 22:06). Krok je vždy 15 min (60 u hodinových dat), sloty se skládají v UTC od lokální půlnoci (100 / 92 / 96 slotů vyjde správně). Prázdný `dataLine` (zítřek před 13:00) = info, ne warning. Nasazení: franta (collector) + smazat dnešní chybné sloty (SQL v deploy bloku), collector je hned stáhne znovu.
