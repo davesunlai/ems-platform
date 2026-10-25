@@ -16,7 +16,11 @@ from datetime import datetime, timezone
 from ems.api.db import get_pool
 
 BATCH_TTL_DAYS = 7
-MAX_BATCH_ROWS = 1000
+MAX_BATCH_ROWS = 1000          # co server ještě PŘIJME (zpětná kompatibilita starších agentů)
+# v1.2.2: kolik řádků má box posílat v jedné dávce. Řádek = jeden cyklus zařízení (~60 veličin),
+# 1000 řádků = 60 000 vzorků → vkládání trvalo > 25 s (timeout agenta) → box dávku opakoval donekonečna
+# (incident 25. 10., buffer 959 ř. 11 h). 40 řádků ≈ 2 400 vzorků ≈ zlomek sekundy hromadným INSERTem.
+BOX_BATCH_ROWS = 40
 
 
 def _hash(token: str) -> str:
@@ -242,22 +246,32 @@ async def modules_for_box(box_id: int) -> list[dict]:
 
 
 async def insert_rows(rows: list[tuple]) -> int:
-    """rows: (time, device_id, metric, value, unit). Dedup anti-joinem, vrací počet vložených."""
+    """rows: (time, device_id, metric, value, unit). Dedup anti-joinem, vrací počet vložených.
+    v1.2.2: JEDEN hromadný INSERT … SELECT FROM unnest() místo vkládání po jednom (60 000 příkazů
+    na dávku z bufferu = timeout agenta). Duplicity uvnitř dávky odfiltruje DISTINCT ON."""
     if not rows:
         return 0
+    ts = [r[0] for r in rows]
+    devs = [r[1] for r in rows]
+    mets = [r[2] for r in rows]
+    vals = [float(r[3]) for r in rows]
+    units = [r[4] or "" for r in rows]
     pool = await get_pool()
-    inserted = 0
     async with pool.acquire() as conn:
         async with conn.transaction():
-            for t, dev, metric, val, unit in rows:
-                r = await conn.fetchval(
-                    "INSERT INTO samples (time, device_id, metric, value, unit) "
-                    "SELECT $1, $2, $3, $4, $5 WHERE NOT EXISTS ("
-                    "  SELECT 1 FROM samples s WHERE s.time = $1 AND s.device_id = $2 AND s.metric = $3"
-                    ") RETURNING 1", t, dev, metric, float(val), unit)
-                if r:
-                    inserted += 1
-    return inserted
+            n = await conn.fetchval(
+                """WITH src AS (
+                       SELECT DISTINCT ON (t, d, m) t, d, m, v, u
+                       FROM unnest($1::timestamptz[], $2::text[], $3::text[], $4::float8[], $5::text[]) AS x(t, d, m, v, u)
+                       ORDER BY t, d, m
+                   ), ins AS (
+                       INSERT INTO samples (time, device_id, metric, value, unit)
+                       SELECT t, d, m, v, u FROM src
+                       WHERE NOT EXISTS (SELECT 1 FROM samples s WHERE s.time = src.t AND s.device_id = src.d AND s.metric = src.m)
+                       RETURNING 1
+                   ) SELECT count(*) FROM ins""",
+                ts, devs, mets, vals, units)
+    return int(n or 0)
 
 
 async def touch_ingest(box_id: int, accepted: int) -> None:

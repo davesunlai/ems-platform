@@ -78,7 +78,7 @@ async def build_config(box_id: int) -> tuple[str, str]:
                "box_name": row["name"] if row else None,
                "locality": {"id": row["locality_id"], "name": row["locality_name"]} if row else None,
                "devices": devices,
-               "settings": {"heartbeat_s": 60, "config_poll_s": 300, "max_batch_rows": db.MAX_BATCH_ROWS}}
+               "settings": {"heartbeat_s": 60, "config_poll_s": 300, "max_batch_rows": db.BOX_BATCH_ROWS}}
     body = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     etag = '"' + hashlib.md5(body.encode()).hexdigest() + '"'
     return body, etag
