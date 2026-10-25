@@ -21,7 +21,7 @@ _UA = {"User-Agent": "TERA-EMS/1 (+https://teraems.com; energy management, 1 req
 async def fetch_ote_day_slots(day_date, eur_czk: float) -> list[dict]:
     """OTE denní trh pro daný den → [{start, price Kč/MWh}] (15min sloty; 24 h hodnoty se rozkopírují).
     Struktura: {"data": {"dataLine": [{"title": "Cena (EUR/MWh)", "point": [{"x": 1, "y": 95.1}, …]}, …]}}."""
-    from datetime import datetime, timedelta, time as _time
+    from datetime import datetime, timedelta, time as _time, timezone
     from zoneinfo import ZoneInfo
     import httpx
     tz = ZoneInfo("Europe/Prague")
@@ -30,6 +30,9 @@ async def fetch_ote_day_slots(day_date, eur_czk: float) -> list[dict]:
         r.raise_for_status()
         data = r.json()
     lines = ((data or {}).get("data") or {}).get("dataLine") or []
+    if not lines:
+        logger.info("OTE %s: zatím nepublikováno (dataLine prázdné)", day_date)
+        return []
     series = None
     for ln in lines:
         title = str(ln.get("title", "")).lower()
@@ -49,13 +52,17 @@ async def fetch_ote_day_slots(day_date, eur_czk: float) -> list[dict]:
         return []
     pts.sort()
     n = len(pts)
-    step = 1440 // n if n in (24, 25, 23, 96, 92, 100) else (15 if n > 30 else 60)
-    base = datetime.combine(day_date, _time(0, 0)).replace(tzinfo=tz)
+    # Den má 96 čtvrthodin, při změně času 100 (podzim) / 92 (jaro) — krok je VŽDY 15 min
+    # (hodinová data = 23–25 bodů → 60 min). Sloty skládáme v UTC od lokální půlnoci, aby
+    # přechod času nerozhodil mřížku (wall-clock aritmetika by 25. hodinu přeskočila).
+    step = 15 if n > 30 else 60
+    base_utc = datetime.combine(day_date, _time(0, 0)).replace(tzinfo=tz).astimezone(timezone.utc)
     out = []
     for i, (_, eur) in enumerate(pts):
         czk = eur * eur_czk
         for q in range(0, step, 15):
-            out.append({"start": (base + timedelta(minutes=i * step + q)).isoformat(), "price": round(czk, 2)})
+            out.append({"start": (base_utc + timedelta(minutes=i * step + q)).astimezone(tz).isoformat(),
+                        "price": round(czk, 2)})
     return out
 
 
