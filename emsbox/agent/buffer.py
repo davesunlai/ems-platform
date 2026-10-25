@@ -25,24 +25,34 @@ class Buffer:
             " ts TEXT NOT NULL,"                 # ISO UTC
             " payload TEXT NOT NULL)")           # JSON {metric: value}
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_rows_ts ON rows (ts)")
+        # v1.3.0: monotonic čas + boot_id + příznak synchronizovaných hodin (oprava časů po skoku NTP)
+        for col, typ in (("mono", "REAL"), ("boot_id", "TEXT"), ("synced", "INTEGER")):
+            try:
+                self.db.execute(f"ALTER TABLE rows ADD COLUMN {col} {typ}")
+            except sqlite3.OperationalError:
+                pass
         self.db.commit()
         self._last_vacuum = 0.0
 
-    def add_cycle(self, readings: list[tuple[str, str, dict]]) -> None:
+    def add_cycle(self, readings: list[tuple[str, str, dict]], mono: float | None = None,
+                  boot: str | None = None, synced: bool | None = None) -> None:
         """readings: [(device_uid, iso_ts, metrics_dict)] — jedna transakce za cyklus."""
         if not readings:
             return
+        sy = None if synced is None else (1 if synced else 0)
         with self.db:
             self.db.executemany(
-                "INSERT INTO rows (device_uid, ts, payload) VALUES (?, ?, ?)",
-                [(d, t, json.dumps(m)) for d, t, m in readings])
+                "INSERT INTO rows (device_uid, ts, payload, mono, boot_id, synced) VALUES (?, ?, ?, ?, ?, ?)",
+                [(d, t, json.dumps(m), mono, boot, sy) for d, t, m in readings])
 
     def next_batch(self, limit: int = 1000) -> list[dict]:
         """Dávka k odeslání — NEJNOVĚJŠÍ NAPŘED (§5: dashboard hned žije, grafy
         se plní od přítomnosti dozadu). Server dedupuje, pořadí mu nevadí."""
         cur = self.db.execute(
-            "SELECT id, device_uid, ts, payload FROM rows ORDER BY ts DESC, id DESC LIMIT ?", (limit,))
-        return [{"_id": r[0], "device_uid": r[1], "ts": r[2], "metrics": json.loads(r[3])}
+            "SELECT id, device_uid, ts, payload, mono, boot_id, synced FROM rows ORDER BY ts DESC, id DESC LIMIT ?",
+            (limit,))
+        return [{"_id": r[0], "device_uid": r[1], "ts": r[2], "metrics": json.loads(r[3]),
+                 "_mono": r[4], "_boot": r[5], "_synced": r[6]}
                 for r in cur.fetchall()]
 
     def ack(self, ids: list[int]) -> None:

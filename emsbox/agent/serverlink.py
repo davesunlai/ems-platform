@@ -66,7 +66,7 @@ class ServerLink:
 
     async def send_telemetry(self, rows: list[dict], box_time: str) -> dict:
         body = {"box_id": self.box_id, "batch_id": str(uuid.uuid4()), "box_time": box_time,
-                "rows": [{k: v for k, v in r.items() if k != "_id"} for r in rows]}
+                "rows": [{k: v for k, v in r.items() if not k.startswith("_")} for r in rows]}
         r = await self._client.post(f"{self.server}/api/ingest/v1/telemetry",
                                     json=body, headers=self._headers)
         r.raise_for_status()

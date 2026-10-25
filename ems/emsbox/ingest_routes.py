@@ -86,7 +86,9 @@ async def ingest_heartbeat(body: dict, request: Request, box: dict = Depends(box
     action = await db.pop_pending_action(box["id"])
     if action:
         logger.info("heartbeat box #%s: doručena servisní akce %s", box["id"], action)
-    return {"ok": True, **({"action": action} if action else {})}
+    # server_time: box (RPi bez RTC) si ověří své hodiny i bez kernelového NTP příznaku
+    from datetime import datetime as _dt, timezone as _tz
+    return {"ok": True, "server_time": _dt.now(_tz.utc).isoformat(), **({"action": action} if action else {})}
 
 
 # --- povelový kanál (varianta B): box čte i VYKONÁVÁ povely — jediný klient na střídači

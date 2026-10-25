@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .buffer import Buffer
+from . import clock as _clock
 from .serverlink import ServerLink, load_credentials, save_credentials
 
 logger = logging.getLogger("emsbox")
@@ -80,6 +81,8 @@ class Agent:
         self.online = False
         self.last_sync_ts: str | None = None
         self._io_lock = asyncio.Lock()      # serializace čtení × povelů na sdíleném Modbus spojení
+        self._server_drift: float | None = None   # s, box − server (z heartbeatu); None = neznámý
+        self._server_drift_at: float = 0.0
 
     # --- config ------------------------------------------------------------
     async def refresh_config(self) -> None:
@@ -132,18 +135,59 @@ class Agent:
                     self.dev_state[uid] = {"last_read_ts": ts, "ok": True, "error": None}
             except Exception as exc:
                 self.dev_state[uid] = {**self.dev_state.get(uid, {}), "ok": False, "error": str(exc)}
-        self.buffer.add_cycle(cycle)
+        # v1.3.0: monotonic + boot_id + stav hodin → po NTP skoku se časy opraví při odeslání
+        self.buffer.add_cycle(cycle, mono=time.monotonic(), boot=_clock.boot_id(), synced=_clock.synced())
+
+    def _clock_bad(self) -> bool:
+        """Hodiny nevěřit, když: server hlásí drift > 60 s, NEBO kernel hlásí nesynchronizováno a server
+        drift zatím nepotvrdil jako malý (drift < 5 s do 10 min zpět hodiny rehabilituje — host bez NTP daemonu)."""
+        fresh = (time.monotonic() - self._server_drift_at) < 600 and self._server_drift is not None
+        if fresh and abs(self._server_drift) > 60:
+            return True
+        if _clock.synced() is False and not (fresh and abs(self._server_drift) < 5):
+            return True
+        return False
 
     # --- sync --------------------------------------------------------------
     async def sync_loop(self) -> None:
         backoff = 5.0
+        warned_unsync = False
         while True:
+            # Hodiny nesynchronizované (po výpadku proudu, před NTP) → nic neposílat; vzorky čekají
+            # v bufferu a při odeslání se jim čas přepočítá z monotonic (viz clock.py).
+            if self._clock_bad():
+                if not warned_unsync:
+                    logger.warning("hodiny nejsou synchronizované (NTP) — telemetrie čeká v bufferu")
+                    warned_unsync = True
+                await asyncio.sleep(10)
+                continue
+            if warned_unsync:
+                logger.info("hodiny synchronizované — odesílám buffer (časy se přepočítají z monotonic)")
+                warned_unsync = False
             batch = self.buffer.next_batch(int(self.cfg.get("settings", {}).get("max_batch_rows", 1000)))
             if not batch:
                 await asyncio.sleep(2)
                 continue
+            # oprava časů + zahození vzorků pořízených před rebootem s nesynchronizovanými hodinami
+            fixed = dropped = 0
+            send = []
+            for r in batch:
+                ts, ok = _clock.corrected_ts(r["ts"], r.get("_mono"), r.get("_boot"))
+                if ok:
+                    r["ts"] = ts
+                    fixed += 1
+                elif r.get("_synced") == 0 and r.get("_boot") and r["_boot"] != _clock.boot_id():
+                    dropped += 1          # čas neznámý a neopravitelný — raději nic než špatně
+                    continue
+                send.append(r)
+            if fixed or dropped:
+                logger.warning("sync: časy opraveny u %s vzorků, zahozeno %s (nesynchronizované hodiny před rebootem)",
+                               fixed, dropped)
+            if not send:
+                self.buffer.ack([r["_id"] for r in batch])
+                continue
             try:
-                res = await self.link.send_telemetry(batch, _now_iso())
+                res = await self.link.send_telemetry(send, _now_iso())
                 self.buffer.ack([r["_id"] for r in batch])
                 backoff = 5.0
                 self.last_sync_ts = _now_iso()
@@ -298,6 +342,7 @@ class Agent:
             except Exception:
                 pass
             body = {"box_time": _now_iso(), "uptime_s": int(time.monotonic() - self.started),
+                    "clock_synced": _clock.synced(),
                     "private_ip": _private_ip(), "fingerprint": _fingerprint(), **_sysinfo(),
                     "buffer_rows": st["rows"], "buffer_oldest_ts": st["oldest_ts"],
                     "disk_free_mb": disk_free, "agent_version": AGENT_VERSION,
@@ -309,6 +354,17 @@ class Agent:
                     self._action_ack = None
                 resp = await self.link.heartbeat(body)
                 self.online = True
+                try:
+                    st_ = (resp or {}).get("server_time")
+                    if st_:
+                        from datetime import datetime as _dt
+                        srv = _dt.fromisoformat(st_.replace("Z", "+00:00")).timestamp()
+                        self._server_drift = time.time() - srv
+                        self._server_drift_at = time.monotonic()
+                        if abs(self._server_drift) > 60:
+                            logger.warning("hodiny boxu se liší od serveru o %.0f s", self._server_drift)
+                except Exception:
+                    pass
                 await self._handle_server_action((resp or {}).get("action"))
             except Exception as exc:
                 self.online = False
