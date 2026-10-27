@@ -34,7 +34,7 @@ class OpenMeteoProvider(WeatherProvider):
             "latitude": round(lat, 4), "longitude": round(lon, 4),
             "hourly": "global_tilted_irradiance,shortwave_radiation,temperature_2m,cloud_cover",
             "tilt": round(tilt, 1), "azimuth": round(azimuth, 1),
-            "forecast_days": 3, "timezone": "auto",
+            "forecast_days": 4, "timezone": "auto",
         }
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(OPEN_METEO_URL, params=params)

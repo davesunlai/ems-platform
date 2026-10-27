@@ -85,7 +85,7 @@ async def refresh_locality(locality_id: int) -> dict:
     om_series_list, fs_series_list, weather_repr = [], [], None
     for g in groups:
         try:
-            weather = await om.fetch(lat, lon, g["tilt"], g["azimuth"])
+            weather = await om.fetch(lat, lon, g["tilt"], g["azimuth"], hours=72)   # dnes + zítra + pozítří
             if weather_repr is None:
                 weather_repr = weather
             om_series_list.append(pv_model.block_series(g["kwp"], g["pr"], g["panel_type"], weather))

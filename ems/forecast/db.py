@@ -211,7 +211,7 @@ async def latest_pv_all_sources(locality_id: int) -> dict[str, list[dict]]:
 
 
 async def cloud_days(locality_id: int) -> list[dict]:
-    """Průměrná oblačnost (%) přes denní hodiny 7–19 pro dnes a zítra (Europe/Prague).
+    """Průměrná oblačnost (%) přes denní hodiny 7–19 pro dnes, zítra a pozítří (Europe/Prague).
     Bere poslední fetch bez ohledu na zdroj (lekce 11. 9.: 'open_meteo' vs 'open-meteo' → 0 řádků)."""
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -223,6 +223,6 @@ async def cloud_days(locality_id: int) -> list[dict]:
                  AND extract(hour FROM ts AT TIME ZONE 'Europe/Prague') BETWEEN 7 AND 19
                  AND (ts AT TIME ZONE 'Europe/Prague')::date
                      BETWEEN (now() AT TIME ZONE 'Europe/Prague')::date
-                         AND (now() AT TIME ZONE 'Europe/Prague')::date + 1
+                         AND (now() AT TIME ZONE 'Europe/Prague')::date + 2
                GROUP BY 1 ORDER BY 1""", locality_id)
     return [{"day": r["d"].isoformat(), "cloud_pct": round(float(r["c"]), 1)} for r in rows]

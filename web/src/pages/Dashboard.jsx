@@ -586,42 +586,50 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
   const fc = d.pv_forecast_days || [];
   const frac = (p) => (p == null ? 0 : Math.max(0, Math.min(1, p / 100)));
   const word = (p) => CLOUD_WORD(p) || "—";
-  const wfs = (t) => Math.min(8 * ts, (w / 3 - 6) / (Math.max(1, t.length) * 0.56));   // slovo se musí vejít do sloupce
+  const wfs = (t) => Math.min(8 * ts, (w / 4 - 6) / (Math.max(1, t.length) * 0.56));   // slovo se musí vejít do sloupce
   const hov = onAudit ? { onMouseEnter: (e) => onAudit("pv_w", e), onMouseLeave: () => onAudit(null),
                           style: { cursor: "help", textDecoration: "underline dotted" } } : {};
-  const col = w / 3;
+  const col = w / 4;
   const cx = (i) => x + col * i + col / 2;
+  const DAYS = ["ne", "po", "út", "st", "čt", "pá", "so"];
+  const hdr = (i, base) => {           // ["DNES", "út 27.10."] — datum z predikce, jinak z kalendáře
+    const dd = new Date(); dd.setDate(dd.getDate() + i);
+    const dt = fc[i]?.day ? new Date(fc[i].day) : dd;
+    return [base, `${DAYS[dt.getDay()]} ${dt.getDate()}.${dt.getMonth() + 1}.`];
+  };
   const green = "#3fb950", blue = "#58a6ff";   // jednotná logika: modrá = predikce/plán, zelená = skutečnost (vyrobeno, výkon)
   const active = pvKw > 0.05;
   const fs = (v) => v * m;                       // svislé rozložení
-  const ts = m * Math.min(1, w / 240);           // velikost písma — v užším boxu (mobil 185) menší, ať se sloupce nepřekrývají
+  const ts = m * Math.min(1, w / 300);           // velikost písma — v užším boxu (mobil 185) menší, ať se sloupce nepřekrývají
   const Col = ({ i, head, color, children }) => (<g>
-    <text x={cx(i)} y={y + fs(13)} textAnchor="middle" fontSize={8.5 * ts} fontWeight="700" fill={color} letterSpacing="0.6">{head}</text>
+    <text x={cx(i)} y={y + fs(11)} textAnchor="middle" fontSize={8 * ts} fontWeight="700" fill={color} letterSpacing="0.4">{Array.isArray(head) ? head[0] : head}</text>
+    {Array.isArray(head) && head[1] && <text x={cx(i)} y={y + fs(19)} textAnchor="middle" fontSize={6.5 * ts} fill={color}>{head[1]}</text>}
     {children}
   </g>);
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={active ? green : "var(--border)"} strokeWidth={1.4 * m} />
-      {[1, 2].map((i) => <line key={i} x1={x + col * i} y1={y + fs(6)} x2={x + col * i} y2={y + h - fs(6)} stroke="var(--border)" strokeWidth={0.8 * m} opacity="0.7" />)}
-      <Col i={0} head="DNES" color="var(--muted)">
-        <SunCloud cx={cx(0)} cy={y + fs(30)} base={fs(20)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[0]?.cloud_pct)} />
+      {[1, 2, 3].map((i) => <line key={i} x1={x + col * i} y1={y + fs(6)} x2={x + col * i} y2={y + h - fs(6)} stroke="var(--border)" strokeWidth={0.8 * m} opacity="0.7" />)}
+      <Col i={0} head={hdr(0, "DNES")} color="var(--muted)">
+        <SunCloud cx={cx(0)} cy={y + fs(33)} base={fs(18)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[0]?.cloud_pct)} />
         <text x={cx(0)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[0]?.cloud_pct))} fill="var(--muted)">{word(cd[0]?.cloud_pct)}</text>
         <text x={cx(0)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">plán</text>
         <text x={cx(0)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{fc[0] ? `${fc[0].kwh.toFixed(0)} kWh` : "—"}</text>
         <text x={cx(0)} y={y + fs(79)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">vyrobeno</text>
         <text x={cx(0)} y={y + fs(89)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={green}>{(d.today_kwh ?? 0).toFixed(1)} kWh</text>
       </Col>
-      <Col i={1} head="ZÍTRA" color="var(--muted)">
-        <SunCloud cx={cx(1)} cy={y + fs(30)} base={fs(20)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[1]?.cloud_pct)} />
-        <text x={cx(1)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[1]?.cloud_pct))} fill="var(--muted)">{word(cd[1]?.cloud_pct)}</text>
-        <text x={cx(1)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">plán</text>
-        <text x={cx(1)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{fc[1] ? `${fc[1].kwh.toFixed(0)} kWh` : "—"}</text>
-      </Col>
-      <Col i={2} head="TEĎ" color="var(--muted)">
-        <Ico icon={ic.pv} cx={cx(2)} cy={y + fs(30)} size={fs(22)} />
-        <text x={cx(2)} y={y + fs(49)} textAnchor="middle" fontSize={8 * ts} fill="var(--muted)">FVE</text>
-        <text x={cx(2)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">výkon</text>
-        <text x={cx(2)} y={y + fs(76)} textAnchor="middle" fontSize={14 * ts} fontWeight="700" fill={active ? green : "var(--fg)"} {...hov}>{pvKw.toFixed(1)} kW</text>
+      {[1, 2].map((i) => (
+        <Col key={i} i={i} head={hdr(i, i === 1 ? "ZÍTRA" : "POZÍTŘÍ")} color="var(--muted)">
+          <SunCloud cx={cx(i)} cy={y + fs(33)} base={fs(18)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[i]?.cloud_pct)} />
+          <text x={cx(i)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[i]?.cloud_pct))} fill="var(--muted)">{word(cd[i]?.cloud_pct)}</text>
+          <text x={cx(i)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">plán</text>
+          <text x={cx(i)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{fc[i] ? `${fc[i].kwh.toFixed(0)} kWh` : "—"}</text>
+        </Col>))}
+      <Col i={3} head="TEĎ" color="var(--muted)">
+        <Ico icon={ic.pv} cx={cx(3)} cy={y + fs(33)} size={fs(20)} />
+        <text x={cx(3)} y={y + fs(49)} textAnchor="middle" fontSize={8 * ts} fill="var(--muted)">FVE</text>
+        <text x={cx(3)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">výkon</text>
+        <text x={cx(3)} y={y + fs(76)} textAnchor="middle" fontSize={14 * ts} fontWeight="700" fill={active ? green : "var(--fg)"} {...hov}>{pvKw.toFixed(1)} kW</text>
       </Col>
     </g>
   );
@@ -911,7 +919,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={505} ly={330 + i * 55} />
             ))}
-            <PvNode x={30} y={48} w={240} h={94} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} />
+            <PvNode x={10} y={48} w={280} h={94} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} />
             <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit} value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />

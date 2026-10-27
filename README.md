@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v1.5.0 — predikce na pozítří. Open-Meteo se stahuje na 72 h (forecast_days 4), oblačnost pro 3 dny; Forecast.Solar dává jen 2 dny → pozítří jede jen z Open-Meteo modelu (bez pásma). pv_forecast_days_kwh už pozítří uměl (≥ 20 hodinových bodů). FVE box ve schématu má 4 sloupce DNES · ZÍTRA · POZÍTŘÍ · TEĎ, hlavičky se zkráceným dnem v týdnu a datem („DNES út 27.10.“); desktop box 280 px. Nasazení: franta; pozítří se objeví po příštím přepočtu predikce (max 3 h, nebo Lokality → Přepočítat predikci).
+
 ## v1.4.3 — Souhrn lokality: nová řada „Záloha (backup výstup měniče)“ (backup_load_power, tyrkysová; legendou lze skrýt). Zobrazí se, jakmile box po ⬆ 1.4.0 posílá backup metriky. Jen web.
 
 ## v1.4.2 — FVE box: jednotná barevná logika — MODRÁ = predikce/plán (plán dnes i zítra, stejný font/velikost), ZELENÁ = skutečnost (vyrobeno dnes, výkon teď); hlavičky sloupců neutrálně šedé, popisky „plán / vyrobeno / výkon“ nad hodnotami. Jen web.
