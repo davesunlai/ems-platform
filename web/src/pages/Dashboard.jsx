@@ -580,6 +580,52 @@ function weatherTitle(cd) {
   const t = CLOUD_WORD(cd[0]?.cloud_pct), z = CLOUD_WORD(cd[1]?.cloud_pct);
   return `dnes ${t}${z ? ` · zítra ${z}` : ""}`;
 }
+// ☀️ FVE box ve třech sloupcích: DNES (počasí, plán, vyrobeno) · ZÍTRA (počasí, plán) · TEĎ (výkon). v1.4.1
+function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
+  const cd = d.cloud_days || [];
+  const fc = d.pv_forecast_days || [];
+  const frac = (p) => (p == null ? 0 : Math.max(0, Math.min(1, p / 100)));
+  const word = (p) => CLOUD_WORD(p) || "—";
+  const wfs = (t) => Math.min(8 * ts, (w / 3 - 6) / (Math.max(1, t.length) * 0.56));   // slovo se musí vejít do sloupce
+  const hov = onAudit ? { onMouseEnter: (e) => onAudit("pv_w", e), onMouseLeave: () => onAudit(null),
+                          style: { cursor: "help", textDecoration: "underline dotted" } } : {};
+  const col = w / 3;
+  const cx = (i) => x + col * i + col / 2;
+  const green = "#3fb950", amber = "#d29922", blue = "#58a6ff";
+  const active = pvKw > 0.05;
+  const fs = (v) => v * m;                       // svislé rozložení
+  const ts = m * Math.min(1, w / 240);           // velikost písma — v užším boxu (mobil 185) menší, ať se sloupce nepřekrývají
+  const Col = ({ i, head, color, children }) => (<g>
+    <text x={cx(i)} y={y + fs(13)} textAnchor="middle" fontSize={8.5 * ts} fontWeight="700" fill={color} letterSpacing="0.6">{head}</text>
+    {children}
+  </g>);
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={active ? green : "var(--border)"} strokeWidth={1.4 * m} />
+      {[1, 2].map((i) => <line key={i} x1={x + col * i} y1={y + fs(6)} x2={x + col * i} y2={y + h - fs(6)} stroke="var(--border)" strokeWidth={0.8 * m} opacity="0.7" />)}
+      <Col i={0} head="DNES" color={amber}>
+        <SunCloud cx={cx(0)} cy={y + fs(30)} base={fs(20)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[0]?.cloud_pct)} />
+        <text x={cx(0)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[0]?.cloud_pct))} fill="var(--muted)">{word(cd[0]?.cloud_pct)}</text>
+        <text x={cx(0)} y={y + fs(62)} textAnchor="middle" fontSize={8.5 * ts} fill="var(--muted)">plán {fc[0] ? `${fc[0].kwh.toFixed(0)} kWh` : "—"}</text>
+        <text x={cx(0)} y={y + fs(76)} textAnchor="middle" fontSize={11 * ts} fontWeight="700" fill={green}>{(d.today_kwh ?? 0).toFixed(1)} kWh</text>
+        <text x={cx(0)} y={y + fs(86)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">vyrobeno</text>
+      </Col>
+      <Col i={1} head="ZÍTRA" color={blue}>
+        <SunCloud cx={cx(1)} cy={y + fs(30)} base={fs(20)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[1]?.cloud_pct)} />
+        <text x={cx(1)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[1]?.cloud_pct))} fill="var(--muted)">{word(cd[1]?.cloud_pct)}</text>
+        <text x={cx(1)} y={y + fs(62)} textAnchor="middle" fontSize={8.5 * ts} fill="var(--muted)">plán</text>
+        <text x={cx(1)} y={y + fs(76)} textAnchor="middle" fontSize={11 * ts} fontWeight="700" fill={blue}>{fc[1] ? `${fc[1].kwh.toFixed(0)} kWh` : "—"}</text>
+      </Col>
+      <Col i={2} head="TEĎ" color={green}>
+        <Ico icon={ic.pv} cx={cx(2)} cy={y + fs(30)} size={fs(22)} />
+        <text x={cx(2)} y={y + fs(49)} textAnchor="middle" fontSize={8 * ts} fill="var(--muted)">FVE</text>
+        <text x={cx(2)} y={y + fs(74)} textAnchor="middle" fontSize={14 * ts} fontWeight="700" fill={active ? green : "var(--fg)"} {...hov}>{pvKw.toFixed(1)} kW</text>
+        <text x={cx(2)} y={y + fs(86)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">výkon</text>
+      </Col>
+    </g>
+  );
+}
+
 function cloudOverlay(cd, ic) {
   const p = cd?.[0]?.cloud_pct;
   return { sun: ic.sun, cloud: ic.cloud, frac: p == null ? 0 : Math.max(0, Math.min(1, p / 100)) };
@@ -781,9 +827,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={i === 0 ? 92 : 312} ly={470} />
             ))}
-            <FlowNode m={1.5} x={10} y={10} w={185} h={128} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} auditKey="pv_w" onAudit={onAudit} value={`${f1(pvKw)} / ${(d.today_kwh ?? 0).toFixed(1)} kWh`}
-                      sub={d.pv_forecast_days?.length ? `plán ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
-                      accent={pvKw > 0.05 ? "#3fb950" : null} />
+            <PvNode m={1.4} x={10} y={10} w={185} h={128} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} />
             <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit}
                       value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
@@ -866,9 +910,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={505} ly={330 + i * 55} />
             ))}
-            <FlowNode x={65} y={55} icon={ic.pv} title={weatherTitle(d.cloud_days)} overlay={cloudOverlay(d.cloud_days, ic)} auditKey="pv_w" onAudit={onAudit} value={`${f1(pvKw)} / ${(d.today_kwh ?? 0).toFixed(1)} kWh`}
-                      sub={d.pv_forecast_days?.length ? `plán dnes ${d.pv_forecast_days[0].kwh.toFixed(0)}${d.pv_forecast_days[1] ? ` · zítra ${d.pv_forecast_days[1].kwh.toFixed(0)}` : ""} kWh` : null}
-                      accent={pvKw > 0.05 ? "#3fb950" : null} />
+            <PvNode x={30} y={48} w={240} h={94} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} />
             <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit} value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
