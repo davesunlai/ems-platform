@@ -591,7 +591,7 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
                           style: { cursor: "help", textDecoration: "underline dotted" } } : {};
   const col = w / 3;
   const cx = (i) => x + col * i + col / 2;
-  const green = "#3fb950", amber = "#d29922", blue = "#58a6ff";
+  const green = "#3fb950", blue = "#58a6ff";   // jednotná logika: modrá = predikce/plán, zelená = skutečnost (vyrobeno, výkon)
   const active = pvKw > 0.05;
   const fs = (v) => v * m;                       // svislé rozložení
   const ts = m * Math.min(1, w / 240);           // velikost písma — v užším boxu (mobil 185) menší, ať se sloupce nepřekrývají
@@ -603,24 +603,25 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
     <g>
       <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={active ? green : "var(--border)"} strokeWidth={1.4 * m} />
       {[1, 2].map((i) => <line key={i} x1={x + col * i} y1={y + fs(6)} x2={x + col * i} y2={y + h - fs(6)} stroke="var(--border)" strokeWidth={0.8 * m} opacity="0.7" />)}
-      <Col i={0} head="DNES" color={amber}>
+      <Col i={0} head="DNES" color="var(--muted)">
         <SunCloud cx={cx(0)} cy={y + fs(30)} base={fs(20)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[0]?.cloud_pct)} />
         <text x={cx(0)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[0]?.cloud_pct))} fill="var(--muted)">{word(cd[0]?.cloud_pct)}</text>
-        <text x={cx(0)} y={y + fs(62)} textAnchor="middle" fontSize={8.5 * ts} fill="var(--muted)">plán {fc[0] ? `${fc[0].kwh.toFixed(0)} kWh` : "—"}</text>
-        <text x={cx(0)} y={y + fs(76)} textAnchor="middle" fontSize={11 * ts} fontWeight="700" fill={green}>{(d.today_kwh ?? 0).toFixed(1)} kWh</text>
-        <text x={cx(0)} y={y + fs(86)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">vyrobeno</text>
+        <text x={cx(0)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">plán</text>
+        <text x={cx(0)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{fc[0] ? `${fc[0].kwh.toFixed(0)} kWh` : "—"}</text>
+        <text x={cx(0)} y={y + fs(79)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">vyrobeno</text>
+        <text x={cx(0)} y={y + fs(89)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={green}>{(d.today_kwh ?? 0).toFixed(1)} kWh</text>
       </Col>
-      <Col i={1} head="ZÍTRA" color={blue}>
+      <Col i={1} head="ZÍTRA" color="var(--muted)">
         <SunCloud cx={cx(1)} cy={y + fs(30)} base={fs(20)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[1]?.cloud_pct)} />
         <text x={cx(1)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[1]?.cloud_pct))} fill="var(--muted)">{word(cd[1]?.cloud_pct)}</text>
-        <text x={cx(1)} y={y + fs(62)} textAnchor="middle" fontSize={8.5 * ts} fill="var(--muted)">plán</text>
-        <text x={cx(1)} y={y + fs(76)} textAnchor="middle" fontSize={11 * ts} fontWeight="700" fill={blue}>{fc[1] ? `${fc[1].kwh.toFixed(0)} kWh` : "—"}</text>
+        <text x={cx(1)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">plán</text>
+        <text x={cx(1)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{fc[1] ? `${fc[1].kwh.toFixed(0)} kWh` : "—"}</text>
       </Col>
-      <Col i={2} head="TEĎ" color={green}>
+      <Col i={2} head="TEĎ" color="var(--muted)">
         <Ico icon={ic.pv} cx={cx(2)} cy={y + fs(30)} size={fs(22)} />
         <text x={cx(2)} y={y + fs(49)} textAnchor="middle" fontSize={8 * ts} fill="var(--muted)">FVE</text>
-        <text x={cx(2)} y={y + fs(74)} textAnchor="middle" fontSize={14 * ts} fontWeight="700" fill={active ? green : "var(--fg)"} {...hov}>{pvKw.toFixed(1)} kW</text>
-        <text x={cx(2)} y={y + fs(86)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">výkon</text>
+        <text x={cx(2)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">výkon</text>
+        <text x={cx(2)} y={y + fs(76)} textAnchor="middle" fontSize={14 * ts} fontWeight="700" fill={active ? green : "var(--fg)"} {...hov}>{pvKw.toFixed(1)} kW</text>
       </Col>
     </g>
   );
