@@ -13,6 +13,7 @@ při načítání registru ponechá běžící adaptéry beze změny.
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 import os
 import signal
@@ -60,9 +61,11 @@ def _module_sig(m) -> str:
     return json.dumps({"adapter": m.adapter, "params": m.params}, sort_keys=True, default=str)
 
 
-async def poll_device(adapter, sink, params: dict | None = None) -> None:
+async def poll_device(adapter, sink, params: dict | None = None, entry: dict | None = None) -> None:
     try:
         reading = await adapter.read()
+        if entry is not None and reading.measurements:
+            entry["last_ok"] = time.monotonic()
         samples = reading_to_samples(reading)
         if params is not None:          # 🔬 diagnostické veličiny jen v aktivním okně
             from ems.core.diag import keep_metric
@@ -83,6 +86,118 @@ async def poll_device(adapter, sink, params: dict | None = None) -> None:
                 logger.debug("hp_telemetry insert: %s", exc)
     except Exception as exc:
         logger.warning("Čtení '%s' selhalo: %s", getattr(adapter, "device_id", "?"), exc)
+        if entry is not None:
+            entry["last_error"] = str(exc)
+            entry.setdefault("last_ok", time.monotonic() - 1)
+
+
+DEVICE_OFFLINE_MIN = 15
+
+
+async def _isg_probe(host: str) -> str:
+    """Rozliší, PROČ ISG neodpovídá: web běží + hlásí CAN / web běží, 502 odmítá / nedostupné."""
+    import httpx
+    html = ""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            r = await c.get(f"http://{host}/")
+            html = r.text if r.status_code == 200 else ""
+    except Exception:
+        return ("ISG není dostupné po síti (ping/kabel/napájení gateway). Po obnovení napájení často pomůže "
+                "restart ISG (vytáhnout na 10 s).")
+    low = html.lower()
+    if "can" in low and any(k in low for k in ("není připojen", "nicht angeschlossen", "not connected", "chyba spojení",
+                                                "verbindungsfehler", "connection error")):
+        return ("ISG hlásí „Není připojen kabel CAN / chyba spojení“ — gateway ztratila sběrnici k regulátoru TČ (WPM), "
+                "Modbus proto neběží. Postup: 1) restart ISG (napájení na 10 s), 2) kabel CAN na X1.18/X1.19, "
+                "3) restart regulátoru WPM, pak znovu ISG. (27. 10. 2026 stačil restart ISG.)")
+    return ("ISG web běží, ale Modbus TCP (port 502) odmítá spojení — zkontrolovat nastavení Modbus v ISG "
+            "(Profil → Nastavení → Modbus) nebo restartovat ISG.")
+
+
+async def tick_device_watchdog(state: dict, active: dict) -> None:
+    """Výstraha + e-mail, když zařízení neodpovídá > DEVICE_OFFLINE_MIN (typicky po výpadku proudu),
+    s diagnózou pro Stiebel ISG; při návratu zaloguje „opět online“. v1.4.0."""
+    now = time.monotonic()
+    if now - state.get("_devwd_ts", 0) < 60:
+        return
+    state["_devwd_ts"] = now
+    down = state.setdefault("_dev_down", {})
+    for mid, e in list(active.items()):
+        if e.get("control_only"):
+            continue
+        ad = e.get("adapter")
+        last_ok = getattr(ad, "last_ok", None) or e.get("last_ok")
+        err = getattr(ad, "last_error", None) or e.get("last_error")
+        if last_ok is None:
+            continue
+        silent_s = now - last_ok
+        lid = e.get("locality_id")
+        try:
+            from ems.alerts import db as alerts_db
+            from ems.notify import dispatch as notify_dispatch
+            if silent_s > DEVICE_OFFLINE_MIN * 60 and err and mid not in down:
+                down[mid] = now
+                name = e.get("name") or mid
+                if ad.__class__.__name__ == "StiebelIsgAdapter":
+                    why = await _isg_probe(getattr(ad, "host", ""))
+                    title = f"🌀 TČ neodpovídá – {name}"
+                else:
+                    why = f"Poslední chyba: {err}"
+                    title = f"📵 Zařízení neodpovídá – {name}"
+                await alerts_db.record_event(lid, "device", title,
+                                             f"Bez platného čtení {int(silent_s // 60)} min. {why}")
+                await notify_dispatch.notify_new_alerts()
+                logger.warning("watchdog: %s neodpovídá %d min", mid, silent_s // 60)
+            elif silent_s < 120 and mid in down:
+                mins = int((now - down.pop(mid)) // 60) + DEVICE_OFFLINE_MIN
+                await alerts_db.record_event(lid, "device", f"✅ Zařízení opět online – {e.get('name') or mid}",
+                                             f"Výpadek čtení ≈ {mins} min.")
+        except Exception as exc:
+            logger.debug("watchdog %s: %s", mid, exc)
+
+
+async def tick_island(state: dict) -> None:
+    """Ostrovní režim Solisu: síťová napětí ~0 a backup výstup pod napětím → událost (1× na epizodu). v1.4.0."""
+    now = time.monotonic()
+    if now - state.get("_island_ts", 0) < 60:
+        return
+    state["_island_ts"] = now
+    try:
+        from ems.api.db import get_pool
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT device_id, m.locality_id,
+                          max(value) FILTER (WHERE metric IN ('grid_voltage_l1','grid_voltage_l2','grid_voltage_l3')) AS grid_v,
+                          max(value) FILTER (WHERE metric IN ('backup_voltage_l1','backup_voltage_l2','backup_voltage_l3')) AS backup_v,
+                          max(value) FILTER (WHERE metric = 'backup_load_power') AS backup_w
+                   FROM samples s JOIN modules m ON m.id = s.device_id
+                   WHERE s.time > now() - interval '3 minutes' AND m.adapter = 'solis'
+                     AND metric IN ('grid_voltage_l1','grid_voltage_l2','grid_voltage_l3',
+                                    'backup_voltage_l1','backup_voltage_l2','backup_voltage_l3','backup_load_power')
+                   GROUP BY device_id, m.locality_id""")
+        isl = state.setdefault("_island", {})
+        from ems.alerts import db as alerts_db
+        from ems.notify import dispatch as notify_dispatch
+        for r in rows:
+            gv, bv = r["grid_v"], r["backup_v"]
+            if gv is None or bv is None:
+                continue
+            island = gv < 50 and bv > 180
+            dev = r["device_id"]
+            if island and dev not in isl:
+                isl[dev] = now
+                await alerts_db.record_event(r["locality_id"], "island", f"🏝 Ostrovní režim – {dev}",
+                                             f"Síť bez napětí (max {gv:.0f} V), zálohovaný výstup drží {bv:.0f} V, "
+                                             f"zátěž na záloze {(r['backup_w'] or 0):.0f} W.")
+                await notify_dispatch.notify_new_alerts()
+            elif not island and dev in isl:
+                mins = int((now - isl.pop(dev)) // 60)
+                await alerts_db.record_event(r["locality_id"], "island", f"🔌 Síť obnovena – {dev}",
+                                             f"Ostrovní režim trval ≈ {mins} min.")
+    except Exception as exc:
+        logger.debug("tick_island: %s", exc)
 
 
 from ems.control.dispatch import dispatch_command  # sdílené s EMSBOX agentem
@@ -186,7 +301,8 @@ async def reconcile(active: dict, sink) -> None:
         if cur is None:
             try:
                 active[mid] = {"adapter": await _connect_module(m), "sig": sig,
-                               "control_only": mid in control_only_ids, "params": dict(m.params or {})}
+                               "control_only": mid in control_only_ids, "params": dict(m.params or {}),
+                               "locality_id": getattr(m, "locality_id", None), "name": getattr(m, "name", mid)}
                 logger.info("Modul připojen: %s (adaptér=%s%s)", mid, m.adapter,
                             ", jen povely — čte EMSBOX" if mid in control_only_ids else "")
             except Exception as exc:
@@ -199,7 +315,8 @@ async def reconcile(active: dict, sink) -> None:
                 pass
             try:
                 active[mid] = {"adapter": await _connect_module(m), "sig": sig,
-                               "control_only": mid in control_only_ids, "params": dict(m.params or {})}
+                               "control_only": mid in control_only_ids, "params": dict(m.params or {}),
+                               "locality_id": getattr(m, "locality_id", None), "name": getattr(m, "name", mid)}
                 logger.info("Modul přenastaven za běhu: %s%s", mid,
                             " (jen povely — čte EMSBOX)" if mid in control_only_ids else " (nové parametry)")
             except Exception as exc:
@@ -264,7 +381,7 @@ async def run() -> None:
         while not stop.is_set():
             await reconcile(active, sink)
             if active:
-                await asyncio.gather(*(poll_device(e["adapter"], sink, e.get("params"))
+                await asyncio.gather(*(poll_device(e["adapter"], sink, e.get("params"), e)
                                        for e in active.values() if not e.get("control_only")))
                 await process_queue(active)
             await tick_market_and_automation(state)
@@ -277,6 +394,8 @@ async def run() -> None:
             await tick_export_guard(state)
             await tick_inverter_limits(state)
             await tick_diag_purge(state)
+            await tick_device_watchdog(state, active)
+            await tick_island(state)
             try:
                 from ems.cells import service as cells_service
                 await cells_service.tick(state)

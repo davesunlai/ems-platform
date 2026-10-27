@@ -24,6 +24,8 @@ export const METRIC_LABEL = {
   battery_cell_vmin_2: "B2 článek min U", battery_cell_vmax_2: "B2 článek max U", battery_cell_tmin_2: "B2 článek min T", battery_cell_tmax_2: "B2 článek max T",
   battery_cell_nmin_2: "B2 č. článku min", battery_cell_nmax_2: "B2 č. článku max", battery_bms_current_2: "B2 proud BMS", battery_cycles_2: "B2 cykly",
   battery_bms_modules_2: "B2 modulů", battery_bms_cells_per_module_2: "B2 článků/modul",
+  backup_load_power: "Zátěž na záloze (backup)", backup_voltage_l1: "Backup napětí L1", backup_current_l1: "Backup proud L1",
+  backup_voltage_l2: "Backup napětí L2", backup_current_l2: "Backup proud L2", backup_voltage_l3: "Backup napětí L3", backup_current_l3: "Backup proud L3",
   energy_bat_charge_today: "Nabito dnes (měnič)", energy_bat_discharge_today: "Vybito dnes (měnič)", energy_import_today: "Odběr dnes (měnič)",
   energy_export_today: "Dodávka dnes (měnič)", energy_load_today: "Spotřeba dnes (měnič)", energy_bat_charge_total: "Nabito celkem (měnič)",
   energy_bat_discharge_total: "Vybito celkem (měnič)", energy_import_total: "Odběr celkem (měnič)", energy_export_total: "Dodávka celkem (měnič)", energy_load_total: "Spotřeba celkem (měnič)",
@@ -72,7 +74,8 @@ export const METRIC_GROUPS = [
     "energy_bat_charge_total", "energy_bat_discharge_total", "energy_import_total", "energy_export_total", "energy_load_total"] },
   { id: "tech", label: "Technické / křížové kontroly", icon: "sliders", metrics: [
     "inverter_state", "inverter_fault", "inverter_ac_power", "inverter_current_l1", "inverter_current_l2", "inverter_current_l3",
-    "house_load_inv", "battery_power_inv"] },
+    "house_load_inv", "battery_power_inv", "backup_load_power", "backup_voltage_l1", "backup_current_l1",
+    "backup_voltage_l2", "backup_current_l2", "backup_voltage_l3", "backup_current_l3"] },
 ];
 
 // Veličiny, které se NEPOČÍTAJÍ do limitu sledovaných (diagnostika a technické křížové kontroly —

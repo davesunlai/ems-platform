@@ -25,6 +25,13 @@ SOLIS_INPUT = {
     33130: ("grid_power", "s32", "W", "Činný výkon elektroměru na předávacím místě. Solis: + = DO sítě (export), − = ZE sítě (import). "
                                      "EMS znaménko otáčí (+ = odběr)."),
     33133: ("battery_voltage_1", "u16 ×0.1", "V", "Napětí baterie 1 (strana měniče)"),
+    33148: ("backup_load_power", "u16", "W", "Zátěž na zálohovaném výstupu (backup/EPS)"),
+    33153: ("backup_voltage_l1", "u16 ×0.1", "V", "Backup výstup — napětí fáze A"),
+    33154: ("backup_current_l1", "u16 ×0.1", "A", "Backup výstup — proud fáze A"),
+    33155: ("backup_voltage_l2", "u16 ×0.1", "V", "Backup výstup — napětí fáze B"),
+    33156: ("backup_current_l2", "u16 ×0.1", "A", "Backup výstup — proud fáze B"),
+    33157: ("backup_voltage_l3", "u16 ×0.1", "V", "Backup výstup — napětí fáze C"),
+    33158: ("backup_current_l3", "u16 ×0.1", "A", "Backup výstup — proud fáze C"),
     33161: ("energy_bat_charge_total", "u32", "kWh", "Nabito do baterie celkem (čítač měniče)"),
     33163: ("energy_bat_charge_today", "u16 ×0.1", "kWh", "Nabito do baterie dnes"),
     33165: ("energy_bat_discharge_total", "u32", "kWh", "Vybito z baterie celkem"),

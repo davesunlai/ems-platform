@@ -153,9 +153,13 @@ export default function BillingTable({ localityId }) {
       <p className="muted" style={{ fontSize: 11.5, marginTop: 8, lineHeight: 1.5 }}>
         {s.pricing_mode === "tariff"
           ? <>Ceny z pevného tarifu lokality ({s.tariff_import_czk} / {s.tariff_export_czk} Kč/kWh).</>
-          : <>Ceny podle <b>sazebníku lokality</b> (stejný model jako plánovač):
-              nákup = spot {s.spot_buy_surcharge ? `+ ${s.spot_buy_surcharge} Kč/MWh přirážka` : ""} + distribuce + poplatky;
-              prodej = spot {s.spot_sell_fee ? `− ${s.spot_sell_fee} Kč/MWh provize` : ""}.</>}
+          : s.tariff_mode === "fixed"
+          ? <>Ceny podle <b>sazebníku lokality (pevné)</b>: nákup {s.fix_buy_vt ?? "?"} Kč/kWh VT / {s.fix_buy_nt ?? "?"} Kč/kWh NT, prodej {s.fix_sell ?? "?"} Kč/kWh. Bez DPH.</>
+          : <>Ceny podle <b>sazebníku lokality</b> (stejný model jako plánovač), <b>bez DPH</b>:{" "}
+              <b>ze sítě</b> = spot + přirážka {Number(s.spot_buy_surcharge || 0)} + distribuce VT {Number(s.dist_buy_vt || 0)} / NT {Number(s.dist_buy_nt || 0)} + poplatky {Number(s.levies || 0)} Kč/MWh
+              {!(Number(s.dist_buy_vt) || Number(s.dist_buy_nt) || Number(s.levies)) && <span style={{ color: "var(--amber)" }}> (distribuce a poplatky nejsou v sazebníku vyplněné → cena je jen spot + přirážka)</span>};{" "}
+              <b>do sítě</b> = spot − provize {Number(s.spot_sell_fee || 0)} Kč/MWh.
+              {" "}Ø Kč/kWh: tučně podle sazebníku, šedě jen holý spot — vážený průměr z reálně odebraných/dodaných kWh v 15min slotech.</>}
         {" "}<b>Saldo</b> = do sítě − ze sítě (kladné = dodal jsi víc, než odebral).
         {b.fees_czk ? <> Paušály za období <b>{b.fees_czk.toFixed(0)} Kč</b> (nejsou v saldu).</> : null}
         {" "}Pozor: měření je z měniče, faktura dodavatele z fakturačního elektroměru — malý rozdíl je normální.

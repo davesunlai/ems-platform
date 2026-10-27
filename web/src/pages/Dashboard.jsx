@@ -818,6 +818,9 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                     </g>);
                 })}
             </g>
+            {(d.backup_w ?? 0) > 50 && (
+              <FlowNode m={1.5} x={250} y={474} w={140} h={74} icon="🔌" title="Záloha (backup)"
+                        value={`${f1(kw(d.backup_w))}`} sub="zálohovaný výstup" accent="#39c5cf" />)}
             {hp && (
               <FlowNode m={1.5} x={250} y={354} w={140} h={110} icon={ic.hp} title="Tep. čerpadlo"
                         value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
@@ -898,6 +901,9 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                     </g>);
                 })}
             </g>
+            {(d.backup_w ?? 0) > 50 && (
+              <FlowNode x={295} y={290} w={170} h={54} icon="🔌" title="Záloha (backup)"
+                        value={`${f1(kw(d.backup_w))}`} sub="zálohovaný výstup měniče" accent="#39c5cf" />)}
             {hp && (
               <FlowNode x={585} y={268} w={150} h={54} icon={ic.hp} title="Tepelné čerpadlo"
                         value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}

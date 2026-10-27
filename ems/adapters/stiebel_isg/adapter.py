@@ -154,8 +154,13 @@ class StiebelIsgAdapter:
         self._last_poll = now
         try:
             d = await asyncio.to_thread(self._fetch)
+            self.last_ok = time.monotonic()          # hlídač zařízení (collector) — v1.4.0
+            self.last_error = None
         except Exception as exc:
             logger.warning("Stiebel ISG %s: čtení selhalo: %s", self.host, exc)
+            self.last_error = str(exc)
+            if not hasattr(self, "last_ok"):
+                self.last_ok = time.monotonic() - 1   # první selhání hned po startu: počítej od teď
             try:
                 if self._client:
                     self._client.close()

@@ -97,6 +97,14 @@ class Metric(str, Enum):
     ENERGY_IMPORT_TOTAL = "energy_import_total"
     ENERGY_EXPORT_TOTAL = "energy_export_total"
     ENERGY_LOAD_TOTAL = "energy_load_total"
+    # Zálohovaný výstup (backup/EPS) Solisu: 33148 výkon, 33153–33158 U/I po fázích (v bloku BAT1 zdarma)
+    BACKUP_LOAD_POWER = "backup_load_power"
+    BACKUP_VOLTAGE_L1 = "backup_voltage_l1"
+    BACKUP_CURRENT_L1 = "backup_current_l1"
+    BACKUP_VOLTAGE_L2 = "backup_voltage_l2"
+    BACKUP_CURRENT_L2 = "backup_current_l2"
+    BACKUP_VOLTAGE_L3 = "backup_voltage_l3"
+    BACKUP_CURRENT_L3 = "backup_current_l3"
     # Energetické čítače měniče (33161–33180): dnes / celkem — křížová kontrola dopočtů. 1×/min.
     INVERTER_AC_POWER = "inverter_ac_power"    # AC výkon měniče
     INVERTER_CURRENT_L1 = "inverter_current_l1"
@@ -163,6 +171,8 @@ UNIT_OF: dict[Metric, str] = {
     Metric.PV_VOLTAGE_2: "V", Metric.PV_CURRENT_2: "A", Metric.PV_POWER_2: "W",
     Metric.PV_VOLTAGE_3: "V", Metric.PV_CURRENT_3: "A", Metric.PV_POWER_3: "W",
     Metric.PV_VOLTAGE_4: "V", Metric.PV_CURRENT_4: "A", Metric.PV_POWER_4: "W",
+    Metric.BACKUP_LOAD_POWER: "W", Metric.BACKUP_VOLTAGE_L1: "V", Metric.BACKUP_CURRENT_L1: "A",
+    Metric.BACKUP_VOLTAGE_L2: "V", Metric.BACKUP_CURRENT_L2: "A", Metric.BACKUP_VOLTAGE_L3: "V", Metric.BACKUP_CURRENT_L3: "A",
     Metric.BATTERY_CELL_VMIN_1: "V",
     Metric.BATTERY_CELL_VMAX_1: "V",
     Metric.BATTERY_CELL_TMIN_1: "°C",

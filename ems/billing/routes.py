@@ -156,6 +156,8 @@ async def locality_billing(loc_id: int, _: dict = Depends(require_permission("re
     settings["tariff_mode"] = (tariff or {}).get("mode")
     settings["spot_buy_surcharge"] = (tariff or {}).get("spot_buy_surcharge")
     settings["spot_sell_fee"] = (tariff or {}).get("spot_sell_fee")
+    for k in ("dist_buy_vt", "dist_buy_nt", "levies", "fix_buy_vt", "fix_buy_nt", "fix_sell"):
+        settings[k] = (tariff or {}).get(k)
 
     # Baseline (odběr/dodávka od začátku období do spuštění měření) — jen pro
     # aktuální období; po přechodu na další období se neuplatní.

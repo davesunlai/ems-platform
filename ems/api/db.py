@@ -197,6 +197,11 @@ async def aggregate_now(device_ids: list[str]) -> dict:
             "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
             "  WHERE device_id = ANY($1::text[]) AND metric='battery_soc' AND time > now() - interval '5 minutes'"
             "  ORDER BY device_id, time DESC) t", device_ids)
+        backup_w = await conn.fetchval(
+            "SELECT COALESCE(SUM(v),0) FROM ("
+            "  SELECT DISTINCT ON (device_id) value AS v FROM samples"
+            "  WHERE device_id = ANY($1::text[]) AND metric='backup_load_power' AND time > now() - interval '5 minutes'"
+            "  ORDER BY device_id, time DESC) t", device_ids)
         # poslední hodnoty sítě a baterie (pro dopočet spotřeby)
         grid = await conn.fetchval(
             "SELECT COALESCE(SUM(v),0) FROM ("
@@ -277,7 +282,7 @@ async def aggregate_now(device_ids: list[str]) -> dict:
     cons_today = max(0.0, cons_today)
     return {"pv_w": pv_w, "soc": float(soc) if soc is not None else None,
             "today_kwh": float(kwh or 0), "load_w": load_w,
-            "grid_w": grid_w, "battery_w": bat_w,
+            "grid_w": grid_w, "battery_w": bat_w, "backup_w": float(backup_w or 0),
             "battery_soc_1": round(float(soc1), 1) if soc1 is not None else None,
             "battery_soc_2": round(float(soc2), 1) if soc2 is not None else None,
             "battery_w_1": float(bat1) if bat1 is not None else None,

@@ -27,7 +27,7 @@ from .mapping import (
     CTRL_SOC_BACKUP, CTRL_SOC_FORCE,
     REG_ENERGY_TODAY, REG_ENERGY_TOTAL, REG_GRID_METER,
     REG_GRID_V_L1, REG_GRID_V_L2, REG_GRID_V_L3, REG_INV_TEMP, REG_INV_AC_POWER, REG_HOUSE_LOAD, REG_BAT_POWER_INV, REG_INV_I_L1, REG_INV_I_L2, REG_INV_I_L3, REG_PV_POWER, REG_MPPT,
-    BLOCK_BMS, BMS_BASE, BMS_OFF,
+    BLOCK_BMS, BMS_BASE, BMS_OFF, REG_BACKUP_LOAD, REG_BACKUP,
     REG_E_BAT_CHARGE_TOTAL, REG_E_BAT_CHARGE_TODAY, REG_E_BAT_DISCHARGE_TOTAL, REG_E_BAT_DISCHARGE_TODAY,
     REG_E_IMPORT_TOTAL, REG_E_IMPORT_TODAY, REG_E_EXPORT_TOTAL, REG_E_EXPORT_TODAY, REG_E_LOAD_TOTAL, REG_E_LOAD_TODAY,
 )
@@ -451,6 +451,11 @@ class SolisAdapter:
                         raw = cache.get(base + off)
                         if raw is not None:
                             add(Metric(f"battery_{key}_{pid}"), round(raw * scale, 3))
+            # zálohovaný výstup (backup/EPS) — v bloku BAT1 zdarma
+            add(Metric.BACKUP_LOAD_POWER, self._dec(cache, REG_BACKUP_LOAD))
+            for n, (rv, ri) in REG_BACKUP.items():
+                add(Metric(f"backup_voltage_l{n}"), self._dec(cache, rv))
+                add(Metric(f"backup_current_l{n}"), self._dec(cache, ri))
             # energetické čítače měniče (33161–33180, v bloku BAT1 zdarma)
             for metric, spec in ((Metric.ENERGY_BAT_CHARGE_TOTAL, REG_E_BAT_CHARGE_TOTAL), (Metric.ENERGY_BAT_CHARGE_TODAY, REG_E_BAT_CHARGE_TODAY),
                                  (Metric.ENERGY_BAT_DISCHARGE_TOTAL, REG_E_BAT_DISCHARGE_TOTAL), (Metric.ENERGY_BAT_DISCHARGE_TODAY, REG_E_BAT_DISCHARGE_TODAY),
