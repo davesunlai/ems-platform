@@ -173,7 +173,11 @@ function ControlBanners({ deviceIds, localityId }) {
 // Výkon (W → kW) na levé ose; napětí/proud na pravé ose (vlastní měřítko, čárkovaně).
 const MPPT_COLORS = ["#3fb950", "#58a6ff", "#f0883e", "#d2a8ff"];
 const MPPT_KINDS = [["power", "výkon", "W"], ["voltage", "napětí", "V"], ["current", "proud", "A"]];
-function MpptChart({ id, present, win, offset }) {
+function MpptChart({ id, present }) {
+  // vlastní okno a posun (výchozí 24 h) — nezávislé na grafu modulu níže
+  const [win, setWin] = useState(2);
+  const [offset, setOffset] = useState(0);
+  const step = (dir) => setOffset((o) => Math.max(0, Math.min(525600, o + dir * WIN[win].min)));
   const [sel, setSel] = useState(() => {
     try { const s = localStorage.getItem("mppt_sel_" + id); if (s) return new Set(JSON.parse(s)); } catch (e) { /* */ }
     return new Set(["pv_power_1", "pv_power_2", "pv_power_3", "pv_power_4"]);
@@ -206,6 +210,18 @@ function MpptChart({ id, present, win, offset }) {
   });
   return (
     <div style={{ margin: "4px 0 10px", padding: "8px 10px", border: "1px dashed var(--border, #30363d)", borderRadius: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", fontSize: 12, marginBottom: 6 }}>
+        <span className="muted" style={{ marginRight: 4 }}>Období:</span>
+        {WIN.map((w, i) => (
+          <button key={w.min} className="btn" onClick={() => { setWin(i); setOffset(0); }}
+                  style={{ padding: "2px 9px", fontSize: 12, fontWeight: i === win ? 700 : 400,
+                           outline: i === win ? "1.5px solid var(--blue, #58a6ff)" : "none" }}>{w.label}</button>))}
+        <span style={{ flex: 1 }} />
+        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
+        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
+        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
+        <span className="muted" style={{ marginLeft: 6 }}>{rangeLabel(WIN[win].min, offset)}</span>
+      </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 12, marginBottom: 4 }}>
         <span className="muted">Porovnat v grafu:</span>
         {MPPT_KINDS.map(([kind, lab, unit]) => (
@@ -223,7 +239,7 @@ function MpptChart({ id, present, win, offset }) {
         ? <MultiChart series={series} height={220} name={`${id}-mppt`} />
         : <p className="muted" style={{ fontSize: 12, margin: "6px 0" }}>Zaškrtni, co chceš porovnat.</p>}
       <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>
-        Výkon na levé ose (kW), napětí a proud čárkovaně na pravé ose (sdílené měřítko). Okno a posun bere z grafu modulu níže.
+        Výkon na levé ose (kW), napětí a proud čárkovaně na pravé ose (sdílené měřítko).
       </p>
     </div>
   );
@@ -333,7 +349,7 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
           <div className="cards">
             {g.items.map(renderCard)}
           </div>
-          {g.id === "mppt" && <MpptChart id={id} present={present} win={win} offset={offset} />}
+          {g.id === "mppt" && <MpptChart id={id} present={present} />}
         </div>
       ))}
       {active && (

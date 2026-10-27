@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v1.3.1 — graf MPPT: vlastní řádek období (6 h … 30 dní, výchozí 24 h) a posun ◀ ▶ / „teď“ jako u ostatních grafů (dřív přebíral okno z grafu modulu). Jen web.
+
 ## v1.3.0 — EMSBOX bez RTC: ochrana proti špatnému času po výpadku proudu. Incident 25. 10.: výpadek 3:02–6:08, RPi naběhlo s časem 3:02 (fake-hwclock), vzorky 6:08–13:14 zapsány jako 3:02–10:00 (−3 h 06), po NTP skok. Agent (emsbox/agent/clock.py): (1) stav kernelových hodin přes adjtimex STA_UNSYNC + drift vůči serveru (heartbeat vrací server_time); dokud hodiny „nevěří“ (kernel unsync bez potvrzení serverem, nebo drift > 60 s), telemetrie se NEodesílá, čeká v bufferu; (2) každý vzorek nese monotonic čas, boot_id a příznak synced; při odeslání se ts přepočítá ts = now − (mono_now − mono_sample), pokud se wall−mono vztah od pořízení posunul o > 5 s (skok NTP) a boot_id sedí; (3) vzorky z doby před rebootem s nesynchronizovanými hodinami se zahodí (čas neopravitelný). Heartbeat nese clock_synced. Buffer SQLite: sloupce mono, boot_id, synced (ALTER idempotentní). Oprava dnešních dat: SQL posun v deploy bloku. Nasazení: franta + ⬆ box.
 
 ## v1.2.3 — druhá vrstva incidentu s bufferem: nginx před API má výchozí `client_max_body_size 1m`; dávka 1000 řádků × ~60 veličin ≈ 2 MB → 413 ještě před API (proto se po 1.2.2 buffer nehnul, dokud si box nestáhl config s dávkou 40 ř.). Nyní 16m + proxy_read_timeout 60 s. Nasazení: franta (web). Kontrola: fleet → buffer klesá, 🔎 detail → epizoda bufferování.
