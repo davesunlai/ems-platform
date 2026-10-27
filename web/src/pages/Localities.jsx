@@ -205,6 +205,61 @@ function ForecastSection({ loc, onChange }) {
   );
 }
 
+// 🌫 Podlaha tmavého dne — korekce Open-Meteo při 100 % oblačnosti (kalibrace 27. 10. 2026).
+function DarkFloorSection({ loc }) {
+  const [c, setC] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.darkFloorGet(loc.id).then(setC).catch(() => {}); }, [loc.id]);
+  if (!c) return null;
+  const set = (k, v) => setC({ ...c, [k]: v });
+  const save = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const off = c.dark_offset_kwh === "" || c.dark_offset_kwh == null ? null : Number(c.dark_offset_kwh);
+      const r = await api.darkFloorPut(loc.id, { dark_enabled: !!c.dark_enabled, dark_slope: Number(c.dark_slope), dark_offset_kwh: off });
+      setC(r); setMsg("Uloženo — přepočítávám predikci…");
+      const f = await api.refreshForecast(loc.id);
+      try { await api.refreshPlanner(loc.id); } catch { /* plán se obnoví tickem */ }
+      setC(await api.darkFloorGet(loc.id));
+      setMsg(`Uloženo a přepočítáno (${f.points} bodů).`);
+    } catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  };
+  const inp = { width: 70, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
+  const days = Object.entries(c.days || {}).sort();
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
+        🌫 Podlaha tmavého dne (korekce Open-Meteo)
+        <label style={{ fontWeight: 400, fontSize: 12.5, display: "inline-flex", gap: 5, alignItems: "center" }}>
+          <input type="checkbox" checked={!!c.dark_enabled} onChange={(e) => set("dark_enabled", e.target.checked)} /> zapnuto
+        </label>
+      </div>
+      <div style={{ fontSize: 12.5, display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
+        <span>den D′ = max(D, <input style={inp} value={c.dark_slope} onChange={(e) => set("dark_slope", e.target.value)} /> × D + <input style={inp} value={c.dark_offset_kwh ?? ""} placeholder="auto" onChange={(e) => set("dark_offset_kwh", e.target.value)} /> kWh)</span>
+        <span className="muted">účinný offset {c.effective_offset_kwh} kWh{c.dark_offset_kwh == null ? ` (auto = ${c.auto_offset_per_kwp} kWh/kWp)` : ""}</span>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+        <button onClick={save} disabled={busy} style={{ fontWeight: 600 }}>Uložit a přepočítat</button>
+        {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+      </div>
+      {days.length > 0 && (
+        <table style={{ fontSize: 12, marginTop: 6 }}>
+          <thead><tr><th>Den</th><th>Open-Meteo</th><th>po korekci</th></tr></thead>
+          <tbody>{days.map(([d, v]) => (
+            <tr key={d}><td>{new Date(d).toLocaleDateString("cs-CZ", { weekday: "short", day: "numeric", month: "numeric" })}</td>
+              <td>{v.raw_kwh.toFixed(1)} kWh</td>
+              <td style={v.corr_kwh > v.raw_kwh + 0.05 ? { color: "#d29922", fontWeight: 700 } : {}}>{v.corr_kwh.toFixed(1)} kWh{v.corr_kwh > v.raw_kwh + 0.05 ? " ≈" : ""}</td></tr>))}
+          </tbody></table>)}
+      <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
+        Open-Meteo při 100 % oblačnosti hlásí záření ~20 W/m² a model z něj spočítá i 4 kWh/den; skutečnost pod mlhou je 1,5–5× vyšší
+        (3,6 → 18,1 kWh · 15,4 → 25,1 · 24,9 → 36,8; nad ~32 kWh sedí). Denní součet se zvedne na D′ a hodinová křivka se úměrně škáluje;
+        Forecast.Solar se nemění. Korigované dny mají v FVE boxu značku ≈. Každé stažení predikce se od v1.5.1 ukládá (180 dní) pro pozdější kalibraci.
+      </p>
+    </div>
+  );
+}
+
 const TINP = { width: "100%", padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
 
 // Číselné pole jako text (převod na číslo až při uložení) — definováno na úrovni
@@ -502,6 +557,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
       <EmsboxCard locId={loc.id} />
       <OutageSection loc={loc} onChange={onChange} />
       <ForecastSection loc={loc} onChange={onChange} />
+      <DarkFloorSection loc={loc} />
       <CellAlertSection loc={loc} />
       <TariffSection loc={loc} />
       <BillingSettings loc={loc} onSaved={onChange} />

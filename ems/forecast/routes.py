@@ -31,6 +31,25 @@ class PvBlocks(BaseModel):
     blocks: list[PvBlock] = Field(default_factory=list)
 
 
+class DarkFloorIn(BaseModel):
+    dark_enabled: bool | None = None
+    dark_slope: float | None = None
+    dark_offset_kwh: float | None = None     # None = auto (0,32 kWh/kWp)
+
+
+async def _dark_view(locality_id: int) -> dict:
+    from .model import DARK_OFFSET_PER_KWP, DARK_SLOPE_DEFAULT
+    cfg = await fdb.get_dark_cfg(locality_id)
+    loc = await loc_db.get(locality_id) or {}
+    kwp = float(loc.get("pv_kwp_total") or 0)
+    eff = cfg["dark_offset_kwh"] if cfg["dark_offset_kwh"] is not None else DARK_OFFSET_PER_KWP * kwp
+    cfg["effective_offset_kwh"] = round(float(eff), 1)
+    cfg["auto_offset_per_kwp"] = DARK_OFFSET_PER_KWP
+    cfg["default_slope"] = DARK_SLOPE_DEFAULT
+    cfg["days"] = await fdb.latest_om_days(locality_id)
+    return cfg
+
+
 @router.get("/geocode")
 async def geocode(q: str, _: dict = Depends(admin)):
     if not q or len(q) < 2:
@@ -70,6 +89,20 @@ async def refresh(locality_id: int, _: dict = Depends(admin)):
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("reason", "přepočet selhal"))
     return res
+
+
+@router.get("/{locality_id}/dark-floor")
+async def get_dark_floor(locality_id: int, _: dict = Depends(read)):
+    return await _dark_view(locality_id)
+
+
+@router.put("/{locality_id}/dark-floor")
+async def put_dark_floor(locality_id: int, body: DarkFloorIn, _: dict = Depends(admin)):
+    patch = body.model_dump(exclude_unset=True)
+    if "dark_slope" in patch and patch["dark_slope"] is not None and not (0 <= patch["dark_slope"] <= 1):
+        raise HTTPException(status_code=400, detail="sklon musí být 0–1")
+    await fdb.put_dark_cfg(locality_id, patch)
+    return await _dark_view(locality_id)
 
 
 @router.get("/{locality_id}/blocks")

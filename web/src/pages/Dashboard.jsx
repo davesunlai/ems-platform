@@ -601,6 +601,9 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
   const active = pvKw > 0.05;
   const fs = (v) => v * m;                       // svislé rozložení
   const ts = m * Math.min(1, w / 300);           // velikost písma — v užším boxu (mobil 185) menší, ať se sloupce nepřekrývají
+  const plan = (i) => fc[i] ? `${fc[i].corrected ? "≈" : ""}${fc[i].kwh.toFixed(0)} kWh` : "—";   // ≈ = podlaha tmavého dne (korekce Open-Meteo)
+  const planTitle = (i) => fc[i]?.corrected
+    ? `Open-Meteo hlásil ${fc[i].om_raw_kwh} kWh, podlaha tmavého dne zvedla na ${fc[i].om_corr_kwh} kWh (Lokality → Podlaha tmavého dne)` : null;
   const Col = ({ i, head, color, children }) => (<g>
     <text x={cx(i)} y={y + fs(11)} textAnchor="middle" fontSize={8 * ts} fontWeight="700" fill={color} letterSpacing="0.4">{Array.isArray(head) ? head[0] : head}</text>
     {Array.isArray(head) && head[1] && <text x={cx(i)} y={y + fs(19)} textAnchor="middle" fontSize={6.5 * ts} fill={color}>{head[1]}</text>}
@@ -614,7 +617,7 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
         <SunCloud cx={cx(0)} cy={y + fs(33)} base={fs(18)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[0]?.cloud_pct)} />
         <text x={cx(0)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[0]?.cloud_pct))} fill="var(--muted)">{word(cd[0]?.cloud_pct)}</text>
         <text x={cx(0)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">plán</text>
-        <text x={cx(0)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{fc[0] ? `${fc[0].kwh.toFixed(0)} kWh` : "—"}</text>
+        <text x={cx(0)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{planTitle(0) && <title>{planTitle(0)}</title>}{plan(0)}</text>
         <text x={cx(0)} y={y + fs(79)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">vyrobeno</text>
         <text x={cx(0)} y={y + fs(89)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={green}>{(d.today_kwh ?? 0).toFixed(1)} kWh</text>
       </Col>
@@ -623,7 +626,7 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
           <SunCloud cx={cx(i)} cy={y + fs(33)} base={fs(18)} sun={ic.sun} cloud={ic.cloud} frac={frac(cd[i]?.cloud_pct)} />
           <text x={cx(i)} y={y + fs(49)} textAnchor="middle" fontSize={wfs(word(cd[i]?.cloud_pct))} fill="var(--muted)">{word(cd[i]?.cloud_pct)}</text>
           <text x={cx(i)} y={y + fs(60)} textAnchor="middle" fontSize={7 * ts} fill="var(--muted)">plán</text>
-          <text x={cx(i)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{fc[i] ? `${fc[i].kwh.toFixed(0)} kWh` : "—"}</text>
+          <text x={cx(i)} y={y + fs(70)} textAnchor="middle" fontSize={10 * ts} fontWeight="700" fill={blue}>{planTitle(i) && <title>{planTitle(i)}</title>}{plan(i)}</text>
         </Col>))}
       <Col i={3} head="TEĎ" color="var(--muted)">
         <Ico icon={ic.pv} cx={cx(3)} cy={y + fs(33)} size={fs(20)} />
@@ -1112,8 +1115,8 @@ function LocalityNow({ deviceIds, localityId }) {
   const czk = (v) => `${v >= 100 ? v.toFixed(0) : v.toFixed(2)} Kč`;
   const fdays = d.pv_forecast_days || [];
   const fLabel = ["dnes", "zítra", "pozítří"];
-  const planMain = fdays.length ? `${fmt(fdays[0].kwh, 0)} kWh` : null;
-  const planSub = fdays.slice(1).map((x, i) => `${fLabel[i + 1]} ${fmt(x.kwh, 0)}`).join(" · ");
+  const planMain = fdays.length ? `${fdays[0].corrected ? "≈" : ""}${fmt(fdays[0].kwh, 0)} kWh` : null;
+  const planSub = fdays.slice(1).map((x, i) => `${fLabel[i + 1]} ${x.corrected ? "≈" : ""}${fmt(x.kwh, 0)}`).join(" · ");
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "stretch", margin: "8px 0 0", fontWeight: 400 }}>
       <Stat icon="🏠" label="Spotřeba" color="var(--amber, #d29922)"

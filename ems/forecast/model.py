@@ -38,6 +38,29 @@ def block_series(block_kwp: float, pr: float, panel_type: str, weather: list[dic
     return [{"ts": r["ts"], "pv_w": block_power_w(block_kwp, pr, panel_type, r)} for r in weather]
 
 
+DARK_SLOPE_DEFAULT = 0.5          # D' = max(D, slope·D + offset)  [kWh/den]
+DARK_OFFSET_PER_KWP = 0.32        # auto offset = 0,32 kWh/kWp (pilot ~16 kWh); kalibrace 27. 10. 2026
+
+
+def apply_dark_floor(series: list[dict], slope: float, offset_kwh: float, tz) -> tuple[list[dict], dict]:
+    """Korekce Open-Meteo pro zatažené dny. OM při 100 % oblačnosti hlásí GHI ~20 W/m², reálná
+    difuzní složka je 3–5× vyšší (3,6 → 18,1 kWh; 15,4 → 25,1; 24,9 → 36,8; nad ~32 kWh sedí).
+    Denní součet D (lokální den) se zvedne na D' = max(D, slope·D + offset) a hodinová křivka se
+    škáluje poměrem D'/D (tvar dne zůstává). Vrací (řada s pv_w_raw, {den: {raw, corr}})."""
+    days: dict = {}
+    for r in series:
+        d = r["ts"].astimezone(tz).date()
+        days[d] = days.get(d, 0.0) + r["pv_w"] / 1000.0
+    factor, info = {}, {}
+    for d, raw in days.items():
+        corr = max(raw, slope * raw + offset_kwh) if raw > 0 else raw
+        factor[d] = (corr / raw) if raw > 0 and corr > raw + 1e-6 else 1.0
+        info[d.isoformat()] = {"raw_kwh": round(raw, 2), "corr_kwh": round(corr, 2)}
+    out = [{"ts": r["ts"], "pv_w": r["pv_w"] * factor[r["ts"].astimezone(tz).date()], "pv_w_raw": r["pv_w"]}
+           for r in series]
+    return out, info
+
+
 def sum_series(series_list: list[list[dict]]) -> list[dict]:
     """Sečte výrobu více bloků po stejných časech (ts)."""
     acc: dict = {}

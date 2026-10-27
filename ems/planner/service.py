@@ -155,6 +155,10 @@ async def pv_forecast_days_kwh(locality_id: int) -> list[dict]:
         snap = await pdb.get_pv_forecast_days(locality_id, today, today + timedelta(days=1))
     except Exception:
         snap = {}
+    try:
+        om_days = await fdb.latest_om_days(locality_id)      # podlaha tmavého dne (v1.5.1)
+    except Exception:
+        om_days = {}
     out = []
     for i in range(3):
         day = today + timedelta(days=i)
@@ -166,7 +170,13 @@ async def pv_forecast_days_kwh(locality_id: int) -> list[dict]:
         elif day in sums and sums[day][1] >= 20:
             kwh = sums[day][0]
         if kwh is not None:
-            out.append({"day": day.isoformat(), "kwh": round(float(kwh), 1)})
+            row = {"day": day.isoformat(), "kwh": round(float(kwh), 1)}
+            od = om_days.get(day.isoformat())
+            if od and od["corr_kwh"] > od["raw_kwh"] + 0.05:
+                row["corrected"] = True
+                row["om_raw_kwh"] = round(od["raw_kwh"], 1)
+                row["om_corr_kwh"] = round(od["corr_kwh"], 1)
+            out.append(row)
     return out
 
 

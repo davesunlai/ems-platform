@@ -104,6 +104,24 @@ async def refresh_locality(locality_id: int) -> dict:
         return {"ok": False, "reason": "žádná data z Open-Meteo"}
     om_total = pv_model.sum_series(om_series_list)
 
+    # Podlaha tmavého dne (v1.5.1): OM při 100 % oblačnosti podstřeluje difuzní složku 1,5–5×.
+    dark_info: dict = {}
+    try:
+        dcfg = await fdb.get_dark_cfg(locality_id)
+        if dcfg.get("dark_enabled", True):
+            from zoneinfo import ZoneInfo
+            offset = dcfg.get("dark_offset_kwh")
+            if offset is None:
+                offset = pv_model.DARK_OFFSET_PER_KWP * total_kwp
+            om_total, dark_info = pv_model.apply_dark_floor(
+                om_total, float(dcfg.get("dark_slope") or pv_model.DARK_SLOPE_DEFAULT), float(offset),
+                ZoneInfo("Europe/Prague"))
+            for d, i in dark_info.items():
+                if i["corr_kwh"] > i["raw_kwh"] + 0.05:
+                    logger.info("Forecast lok %s %s: OM %.1f kWh → podlaha %.1f kWh", locality_id, d, i["raw_kwh"], i["corr_kwh"])
+    except Exception as exc:
+        logger.warning("Podlaha tmavého dne lok %s: %s", locality_id, exc)
+
     # Forecast.Solar: čerstvé sečíst a uložit, jinak recyklovat z cache pro pásmo.
     fs_fresh = bool(fs_series_list)
     if fs_fresh:
@@ -119,6 +137,10 @@ async def refresh_locality(locality_id: int) -> dict:
     await fdb.write_pv(locality_id, "avg", avg, fetched_at, pv_model.MODEL_VERSION)
     if weather_repr:
         await fdb.write_weather(locality_id, "open_meteo", weather_repr, fetched_at)
+    try:
+        await fdb.purge_history()
+    except Exception as exc:
+        logger.debug("purge_history: %s", exc)
 
     # predikce zátěže (medián hodina-v-týdnu z bilance) na stejný grid
     devs = []
@@ -138,7 +160,7 @@ async def refresh_locality(locality_id: int) -> dict:
     logger.info("Forecast lok %s: %d bodů, zdroje=%s", locality_id, len(avg),
                 "OM+FS" if fs_map else "OM")
     return {"ok": True, "points": len(avg), "sources": (2 if fs_map else 1),
-            "fetched_at": fetched_at.isoformat()}
+            "fetched_at": fetched_at.isoformat(), "dark_floor": dark_info}
 
 
 async def refresh_all() -> None:

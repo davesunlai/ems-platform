@@ -69,8 +69,77 @@ async def ensure_schema() -> None:
         )
         await conn.execute("CREATE INDEX IF NOT EXISTS pv_block_loc ON pv_block(locality_id)")
         # pásmo nejistoty (rozptyl zdrojů) — vyplněné jen u source='avg'
-        for col in ("pv_w_lo", "pv_w_hi"):
+        for col in ("pv_w_lo", "pv_w_hi", "pv_w_raw"):
             await conn.execute(f"ALTER TABLE pv_forecast ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION")
+        # v1.5.1: historie fetchů (ne přepis) — klíč rozšířen o fetched_at; starý klíč byl podmnožinou,
+        # takže existující řádky jsou pod novým klíčem unikátní. Retence HISTORY_DAYS (purge_history).
+        for tbl in ("pv_forecast", "weather_forecast"):
+            await conn.execute(f'''
+                DO $$ BEGIN
+                  IF (SELECT count(*) FROM information_schema.key_column_usage
+                      WHERE table_name='{tbl}' AND constraint_name='{tbl}_pkey') = 3 THEN
+                    ALTER TABLE {tbl} DROP CONSTRAINT {tbl}_pkey;
+                    ALTER TABLE {tbl} ADD PRIMARY KEY (locality_id, source, fetched_at, ts);
+                  END IF;
+                END $$''')
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pv_forecast_cfg (
+                locality_id      INTEGER PRIMARY KEY,
+                dark_enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+                dark_slope       DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+                dark_offset_kwh  DOUBLE PRECISION,          -- NULL = auto 0,32 kWh/kWp
+                updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+
+
+HISTORY_DAYS = 180
+
+
+async def get_dark_cfg(locality_id: int) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT dark_enabled, dark_slope, dark_offset_kwh FROM pv_forecast_cfg WHERE locality_id=$1", locality_id)
+    if row:
+        return dict(row)
+    return {"dark_enabled": True, "dark_slope": 0.5, "dark_offset_kwh": None}
+
+
+async def put_dark_cfg(locality_id: int, patch: dict) -> dict:
+    cur = await get_dark_cfg(locality_id)
+    cur.update({k: v for k, v in patch.items() if k in ("dark_enabled", "dark_slope", "dark_offset_kwh")})
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO pv_forecast_cfg (locality_id, dark_enabled, dark_slope, dark_offset_kwh, updated_at) "
+            "VALUES ($1,$2,$3,$4,now()) ON CONFLICT (locality_id) DO UPDATE SET dark_enabled=EXCLUDED.dark_enabled, "
+            "dark_slope=EXCLUDED.dark_slope, dark_offset_kwh=EXCLUDED.dark_offset_kwh, updated_at=now()",
+            locality_id, bool(cur["dark_enabled"]), float(cur["dark_slope"]),
+            None if cur["dark_offset_kwh"] is None else float(cur["dark_offset_kwh"]))
+    return cur
+
+
+async def purge_history(days: int = HISTORY_DAYS) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        for tbl in ("pv_forecast", "weather_forecast"):
+            await conn.execute(f"DELETE FROM {tbl} WHERE fetched_at < now() - ($1 || ' days')::interval", str(days))
+
+
+async def latest_om_days(locality_id: int) -> dict[str, dict]:
+    """Denní součty poslední Open-Meteo řady: {den: {raw_kwh, corr_kwh}} (raw = před podlahou)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT (ts AT TIME ZONE 'Europe/Prague')::date AS d, sum(pv_w)/1000 AS corr, "
+            "sum(coalesce(pv_w_raw, pv_w))/1000 AS raw, count(*) AS n "
+            "FROM pv_forecast WHERE locality_id=$1 AND source='open_meteo' "
+            "AND fetched_at=(SELECT max(fetched_at) FROM pv_forecast WHERE locality_id=$1 AND source='open_meteo') "
+            "GROUP BY 1", locality_id)
+    return {r["d"].isoformat(): {"raw_kwh": float(r["raw"]), "corr_kwh": float(r["corr"]), "n": r["n"]} for r in rows}
 
 
 # --- konfigurace bloků -------------------------------------------------------
@@ -114,7 +183,7 @@ async def write_weather(locality_id: int, source: str, rows: list[dict], fetched
         await conn.executemany(
             "INSERT INTO weather_forecast (locality_id, ts, source, ghi, gti, temp_c, cloud_pct, fetched_at) "
             "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) "
-            "ON CONFLICT (locality_id, source, ts) DO UPDATE SET "
+            "ON CONFLICT (locality_id, source, fetched_at, ts) DO UPDATE SET "
             "ghi=EXCLUDED.ghi, gti=EXCLUDED.gti, temp_c=EXCLUDED.temp_c, "
             "cloud_pct=EXCLUDED.cloud_pct, fetched_at=EXCLUDED.fetched_at",
             [(locality_id, r["ts"], source, r.get("ghi"), r.get("gti"),
@@ -128,13 +197,13 @@ async def write_pv(locality_id: int, source: str, rows: list[dict], fetched_at: 
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.executemany(
-            "INSERT INTO pv_forecast (locality_id, ts, source, pv_w, fetched_at, model_version, pv_w_lo, pv_w_hi) "
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) "
-            "ON CONFLICT (locality_id, source, ts) DO UPDATE SET "
-            "pv_w=EXCLUDED.pv_w, fetched_at=EXCLUDED.fetched_at, model_version=EXCLUDED.model_version, "
-            "pv_w_lo=EXCLUDED.pv_w_lo, pv_w_hi=EXCLUDED.pv_w_hi",
+            "INSERT INTO pv_forecast (locality_id, ts, source, pv_w, fetched_at, model_version, pv_w_lo, pv_w_hi, pv_w_raw) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) "
+            "ON CONFLICT (locality_id, source, fetched_at, ts) DO UPDATE SET "
+            "pv_w=EXCLUDED.pv_w, model_version=EXCLUDED.model_version, "
+            "pv_w_lo=EXCLUDED.pv_w_lo, pv_w_hi=EXCLUDED.pv_w_hi, pv_w_raw=EXCLUDED.pv_w_raw",
             [(locality_id, r["ts"], source, float(r["pv_w"]), fetched_at, model_version,
-              r.get("pv_w_lo"), r.get("pv_w_hi")) for r in rows])
+              r.get("pv_w_lo"), r.get("pv_w_hi"), r.get("pv_w_raw")) for r in rows])
 
 
 # --- cache čtení (poslední řada) --------------------------------------------
