@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v1.4.3 — Souhrn lokality: nová řada „Záloha (backup výstup měniče)“ (backup_load_power, tyrkysová; legendou lze skrýt). Zobrazí se, jakmile box po ⬆ 1.4.0 posílá backup metriky. Jen web.
+
 ## v1.4.2 — FVE box: jednotná barevná logika — MODRÁ = predikce/plán (plán dnes i zítra, stejný font/velikost), ZELENÁ = skutečnost (vyrobeno dnes, výkon teď); hlavičky sloupců neutrálně šedé, popisky „plán / vyrobeno / výkon“ nad hodnotami. Jen web.
 
 ## v1.4.1 — FVE box ve schématu přestavěn do tří sloupců: DNES (slunce/mrak podle oblačnosti, slovně, plán kWh, vyrobeno kWh zeleně) · ZÍTRA (slunce/mrak, slovně, plán kWh modře) · TEĎ (znak FVE, výkon kW zeleně). Barevné hlavičky sloupců (jantar/modrá/zelená), dělicí linky; desktop box 240×94, mobil 185×128. Audit tooltip zůstává na výkonu. Jen web.

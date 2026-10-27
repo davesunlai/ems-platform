@@ -1392,7 +1392,7 @@ function LocalityChart({ deviceIds }) {
 
   useEffect(() => {
     let alive = true;
-    const load = () => api.aggregate(deviceIds, ["pv_power", "load", "grid_power", "battery_power", "battery_soc"], WIN[win].min, offset)
+    const load = () => api.aggregate(deviceIds, ["pv_power", "load", "grid_power", "battery_power", "battery_soc", "backup_load_power"], WIN[win].min, offset)
       .then((r) => alive && setData(r.metrics)).catch(() => {});
     load();
     const t = offset === 0 ? setInterval(load, 60000) : null;
@@ -1404,6 +1404,7 @@ function LocalityChart({ deviceIds }) {
     { label: "Spotřeba lokality", color: "#d29922", points: data.load || [] },
     { label: "Síť (odběr +/dodávka −)", color: "#58a6ff", points: data.grid_power || [] },
     { label: "Baterie (+ nabíjení)", color: "#a371f7", points: data.battery_power || [] },
+    { label: "Záloha (backup výstup měniče)", color: "#39c5cf", points: data.backup_load_power || [] },
     { label: "SoC baterie", color: "#a371f7", axis: "pct", points: data.battery_soc || [] },
   ].filter((x) => x.points.length >= 2) : [];
 
