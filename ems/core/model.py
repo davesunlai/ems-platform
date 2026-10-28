@@ -134,6 +134,10 @@ class Metric(str, Enum):
     TANK_S_TOP = "tank_s_top"     # slave horní (I4)
     TANK_S_BOT = "tank_s_bot"     # slave dolní (I5) – T_max (STOP spirály)
     TEMP_AMBIENT = "temp_ambient" # technická místnost (I14) – ambient, NE buffer
+    AKU_PUMP = "aku_pump"                         # UVR: čerpadlo AKU1↔AKU2 (0/1) — výstup dle params.outputs (default O6)
+    UVR_O1 = "uvr_o1"; UVR_O2 = "uvr_o2"; UVR_O3 = "uvr_o3"; UVR_O4 = "uvr_o4"; UVR_O5 = "uvr_o5"   # všechny výstupy UVR (0/1)
+    UVR_O6 = "uvr_o6"; UVR_O7 = "uvr_o7"; UVR_O8 = "uvr_o8"; UVR_O9 = "uvr_o9"
+    UVR_D10 = "uvr_d10"; UVR_D12 = "uvr_d12"       # digitální vstupy (Jablotron: topení / radiátory)
     # --- Tepelné čerpadlo (Stiebel ISG) ---
     HP_T_OUTDOOR = "hp_t_outdoor"
     HP_T_TANK = "hp_t_tank"                     # reg 508 = „skut. teplota akumulace"

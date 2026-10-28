@@ -34,6 +34,10 @@ export const METRIC_LABEL = {
   inverter_current_l3: "Proud měniče L3", inverter_fault: "Porucha měniče", inverter_state: "Stav měniče",
   active_power: "Činný výkon", reactive_power: "Jalový výkon",
   voltage: "Napětí", current: "Proud", frequency: "Frekvence", temperature: "Teplota měniče",
+  aku_pump: "Čerpadlo AKU1↔2 (UVR)",
+  uvr_o1: "UVR O1 čerpadlo podlaha", uvr_o2: "UVR O2", uvr_o3: "UVR O3 čerpadlo krb", uvr_o4: "UVR O4 čerpadlo radiátory", uvr_o5: "UVR O5",
+  uvr_o6: "UVR O6 čerpadlo AKU1↔2", uvr_o7: "UVR O7 spirála GRID", uvr_o8: "UVR O8 spirála WATTr", uvr_o9: "UVR O9 wattrouter LT",
+  uvr_d10: "UVR I10 Jablotron topení", uvr_d12: "UVR I12 Jablotron radiátory",
 };
 
 // název SVG ikony (viz components/Icon.jsx) podle veličiny

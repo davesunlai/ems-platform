@@ -11,7 +11,7 @@ from ems.api.db import get_pool, list_devices
 from ems.modules import db as modules_db
 from . import db
 from .goodwe_control import read_battery_mode, set_battery_mode
-from .models import BatteryModeCommand, CommandRequest, CommandResult, SOLIS_ACTIONS
+from .models import BatteryModeCommand, CommandRequest, CommandResult, SOLIS_ACTIONS, ACTIONS_BY_ADAPTER
 
 logger = logging.getLogger("ems.control")
 router = APIRouter(prefix="/api/control", tags=["control"])
@@ -313,16 +313,17 @@ async def _get_solis(module_id: str):
     m = next((x for x in mods if x.id == module_id), None)
     if not m:
         raise HTTPException(status_code=404, detail="Modul nenalezen")
-    if m.adapter != "solis":
+    if m.adapter not in ACTIONS_BY_ADAPTER:
         raise HTTPException(status_code=400, detail="Fronta povelů je zatím pro adaptér solis")
     if not m.enabled:
         raise HTTPException(status_code=400, detail="Modul není aktivní (čtecí)")
     return m
 
 
-def _validate_command(action: str, params: dict) -> None:
-    if action not in SOLIS_ACTIONS:
-        raise HTTPException(status_code=400, detail=f"Neznámý povel '{action}'")
+def _validate_command(action: str, params: dict, adapter: str = "solis") -> None:
+    if action not in ACTIONS_BY_ADAPTER.get(adapter, SOLIS_ACTIONS):
+        raise HTTPException(status_code=400, detail=f"Neznámý povel '{action}' pro adaptér {adapter}")
+
     if action in ("force_charge", "force_discharge"):
         p = params.get("power")
         if p is not None and (not isinstance(p, int) or not (0 <= p <= 65535)):
@@ -350,8 +351,8 @@ async def enqueue_command(module_id: str, body: CommandRequest,
                           user: dict = Depends(require_permission("control"))):
     """Zařadí povel do fronty; kolektor ho provede do ~jednoho cyklu (~10 s).
     Stav lze pollovat na /api/control/command/{id}."""
-    await _get_solis(module_id)
-    _validate_command(body.action, body.params)
+    m = await _get_solis(module_id)
+    _validate_command(body.action, body.params, m.adapter)
     await db.ensure_queue_schema()
     if body.action == "force_discharge" and body.params.get("power") is not None:
         # 🛡 strop exportu má nejvyšší prioritu i pro ruční povely (pokuty)

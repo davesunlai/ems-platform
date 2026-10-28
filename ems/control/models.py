@@ -32,6 +32,9 @@ SOLIS_ACTIONS = {"force_charge", "force_discharge", "stop", "force_poke", "set_w
                  "read_controls", "write_holding", "read_holding", "read_input"}
 
 
+ACTIONS_BY_ADAPTER = {"solis": SOLIS_ACTIONS}     # uvr_cmi je read-only (rozhodnutí 28. 10.)
+
+
 class CommandRequest(BaseModel):
     action: str
     params: dict = Field(default_factory=dict)
