@@ -84,6 +84,15 @@ async def poll_device(adapter, sink, params: dict | None = None, entry: dict | N
                 await hp_service.on_snapshot(reading.device_id, snap)
             except Exception as exc:
                 logger.debug("hp_telemetry insert: %s", exc)
+        # ev_charger: snapshot do ev_telemetry + edge detektor relací (vzor TČ)
+        if snap is not None and adapter.__class__.__name__ == "GoeChargerAdapter" and reading.measurements:
+            try:
+                from ems.evcharger import db as ev_db
+                from ems.evcharger import service as ev_service
+                await ev_db.insert(reading.device_id, snap)
+                await ev_service.on_snapshot(reading.device_id, snap, (entry or {}).get("locality_id"))
+            except Exception as exc:
+                logger.debug("ev_telemetry insert: %s", exc)
     except Exception as exc:
         logger.warning("Čtení '%s' selhalo: %s", getattr(adapter, "device_id", "?"), exc)
         if entry is not None:
@@ -350,6 +359,8 @@ async def run() -> None:
         await planner_db.ensure_schema()
         from ems.heatpump import db as hp_db
         await hp_db.ensure_schema()
+        from ems.evcharger import db as ev_db
+        await ev_db.ensure_schema()
         from ems.emsbox import db as eb_db
         await eb_db.ensure_schema()
         from ems.alerts import db as alerts_db

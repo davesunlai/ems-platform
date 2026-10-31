@@ -17,8 +17,12 @@ export default function ModuleDiag() {
   const { id } = useParams();
   const [hours, setHours] = useState(24);
   const [d, setD] = useState(null);
+  const [ev, setEv] = useState(null);
   const [err, setErr] = useState("");
-  const load = () => api.moduleDiagnostics(id, hours).then(setD).catch((e) => setErr(e.message));
+  const load = () => api.moduleDiagnostics(id, hours).then((r) => {
+    setD(r);
+    if (r.module?.adapter === "goe_charger") api.evTimeline(id, hours).then(setEv).catch(() => setEv([]));
+  }).catch((e) => setErr(e.message));
   useEffect(() => { setD(null); load(); const t = setInterval(load, 30000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [id, hours]);
   if (err) return <p className="error">{err}</p>;
   if (!d) return <p className="muted">Načítám diagnostiku…</p>;
@@ -105,6 +109,28 @@ export default function ModuleDiag() {
               <tr key={i}><td>{fmt(e.time)}</td>
                 <td style={e.value === 4121 ? { color: "#f85149", fontWeight: 700 } : {}}>{e.value}</td></tr>))}
             </tbody></table>
+        </div>)}
+
+      {ev && (
+        <div className="panel" style={{ marginBottom: 14 }}>
+          <b style={{ fontSize: 14 }}>🚗 Wallbox — timeline stavu (modelStatus / auto / frc / fáze / proud)</b>
+          <p className="muted" style={{ fontSize: 12, margin: "4px 0 6px" }}>Jen změny. modelStatus říká, proč nabíječka (ne)nabíjí — 15 = výchozí fallback, 3/4 = vynuceno EMS, 23 = přepíná fáze, 32 = nesymetrie, 26 = chyba.</p>
+          {ev.length ? (
+            <table style={{ fontSize: 12 }}>
+              <thead><tr><th>Čas</th><th>Auto</th><th>modelStatus</th><th>frc</th><th>psm</th><th>amp / povol.</th><th>Výkon</th><th>Chyba</th></tr></thead>
+              <tbody>{ev.map((e, i) => (
+                <tr key={i}>
+                  <td>{fmt(e.ts)}</td>
+                  <td>{{ idle: "bez auta", charging: "⚡ nabíjí", wait_car: "čeká na auto", complete: "✅ hotovo", error: "⛔ chyba" }[e.car_state] || e.car}</td>
+                  <td>{e.model_status} · {e.model_status_cz}</td>
+                  <td>{["neutral", "OFF", "ON"][e.force] ?? e.force}</td>
+                  <td>{["auto", "1f", "3f"][e.phase_mode] ?? e.phase_mode}</td>
+                  <td>{e.amp_set} A{e.amp_allowed != null && e.amp_allowed !== e.amp_set ? <b style={{ color: "var(--amber)" }}> / {e.amp_allowed} A</b> : ""}</td>
+                  <td>{e.power_w != null ? `${(e.power_w / 1000).toFixed(1)} kW` : "—"}</td>
+                  <td style={e.error ? { color: "#f85149", fontWeight: 700 } : {}}>{e.error || "—"}</td>
+                </tr>))}
+              </tbody></table>
+          ) : <p className="muted" style={{ margin: "6px 0 0" }}>Zatím žádné záznamy v ev_telemetry.</p>}
         </div>)}
 
       <div className="panel">
