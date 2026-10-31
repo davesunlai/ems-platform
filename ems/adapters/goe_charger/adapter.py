@@ -21,8 +21,9 @@ from ems.core.model import Measurement, Metric, Reading, UNIT_OF
 
 logger = logging.getLogger(__name__)
 
+# `cbl` ve filtru FW 60.4 vrací HTTP 400 (ověřeno 31. 10.) → nečteme; limit kabelu je obsažen v `acu`.
 FILTER_KEYS = ("car", "alw", "acu", "amp", "ama", "psm", "frc", "lmo", "modelStatus", "err",
-               "nrg", "eto", "wh", "trx", "pnp", "cbl", "tma", "rbt")
+               "nrg", "eto", "wh", "trx", "pnp", "tma", "rbt")
 CAR_STATE = {0: "unknown", 1: "idle", 2: "charging", 3: "wait_car", 4: "complete", 5: "error"}
 MIN_WRITE_GAP_S = 60.0          # amp/psm: flash šetrnost (brief §3)
 
