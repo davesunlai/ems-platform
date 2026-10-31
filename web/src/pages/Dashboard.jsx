@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { EvPanel, EV_CAR } from "../components/EvPanel";
 import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
 import ForecastChart from "../components/ForecastChart";
@@ -738,6 +739,8 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [pl, setPl] = useState(null);
   const [outs, setOuts] = useState([]);
   const [hp, setHp] = useState(null);
+  const [ev, setEv] = useState(null);          // 🚗 wallbox (go-e) — stav + module_ids
+  const [evOpen, setEvOpen] = useState(false);
   const [mob, setMob] = useState(() => window.innerWidth <= 640);
   const [ewDev, setEwDev] = useState({});     // deviceid -> {on, online, power_w} z eWeLinku
   useEffect(() => {
@@ -762,6 +765,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
       api.getPlanner(locId).then((r) => alive && setPl(r)).catch(() => {});
       api.listOutputs().then((r) => alive && setOuts((r || []).filter((o) => o.locality_id == null || o.locality_id === locId))).catch(() => {});
       api.hpState(locId).then((r) => alive && setHp(r.state || null)).catch(() => alive && setHp(null));
+      api.evState(locId).then((r) => alive && setEv(r)).catch(() => alive && setEv(null));
     };
     load();
     const t = setInterval(load, 5000);
@@ -769,6 +773,12 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   }, [locId, deviceIds.join(",")]);
   const kw = (w) => Math.abs((w || 0) / 1000);
   const f1 = (v) => `${v.toFixed(1)} kW`;
+  const evS = ev?.state || null;
+  const evKw = evS ? (evS.power_w || 0) / 1000 : 0;
+  const evOn = evKw > 0.05;
+  const evTitle = evS ? (EV_CAR[evS.car_state] || "wallbox") : "wallbox";
+  const evSub = evS ? (evOn ? `${(evS.session_wh / 1000).toFixed(1)} kWh · ${evS.phases_active || "?"}f` : (evS.car_state === "idle" ? "bez auta" : `${((evS.session_wh || 0) / 1000).toFixed(1)} kWh`)) : null;
+  const evMod = ev?.module_ids?.[0] ? { id: ev.module_ids[0], name: "wallbox", locality_id: locId } : null;
   const pvKw = d ? kw(d.pv_w) : 0;
   const batW = d?.battery_w || 0;                 // + nabíjení / − vybíjení
   const gridW = d?.grid_w || 0;                   // + import / − export
@@ -805,7 +815,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
         {icOpen && <FlowIconPicker ic={ic} pick={pickIcon} extra={icExtra} onClose={() => setIcOpen(false)} />}
 
         {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
-          <svg viewBox="0 0 400 700" style={{ width: "100%", marginTop: 8 }}>
+          <svg viewBox={`0 0 400 ${ev ? 840 : 700}`} style={{ width: "100%", marginTop: 8 }}>
             <defs>
               {COLORS.map((c) => (
                 <marker key={c} id={`efarr-${c}`} viewBox="0 0 16 10" refX="14" refY="5" markerUnits="userSpaceOnUse" markerWidth="19" markerHeight="12" orient="auto-start-reverse">
@@ -886,6 +896,12 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
               <FlowNode key={o.id} m={1.5} x={i === 0 ? 10 : 205} y={556} w={185} h={128} icon={outIcon(o)} title={o.name}
                         value={outOn(o) ? "zapnuto" : "vypnuto"} sub={outSub(o)} accent={outOn(o) ? "#d29922" : null} />
             ))}
+            {ev && (
+              <g onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
+                <FlowEdge m={1.5} d="M200,324 C200,500 100,620 100,696" kw={evKw} active={evOn} color="#58a6ff" label={f1(evKw)} lx={168} ly={520} />
+                <FlowNode m={1.5} x={10} y={696} w={185} h={128} icon="🚗" title={`Wallbox · ${evTitle}`}
+                          value={evOn ? f1(evKw) : (evS?.car_state === "idle" ? "bez auta" : "0.0 kW")} sub={evSub} accent={evOn ? "#58a6ff" : null} />
+              </g>)}
           </svg>
         ) : (
           <svg viewBox="0 0 760 470" style={{ width: "100%", marginTop: 8 }}>
@@ -958,6 +974,12 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {(d.backup_w ?? 0) > 50 && (
               <FlowNode x={295} y={290} w={170} h={54} icon="🔌" title="Záloha (backup)"
                         value={`${f1(kw(d.backup_w))}`} sub="zálohovaný výstup měniče" accent="#39c5cf" />)}
+            {ev && (
+              <g onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
+                <FlowEdge d="M400,268 C410,300 395,330 380,356" kw={evKw} active={evOn} color="#58a6ff" label={f1(evKw)} lx={425} ly={322} />
+                <FlowNode x={295} y={356} w={170} h={54} icon="🚗" title={`Wallbox · ${evTitle}`}
+                          value={evOn ? f1(evKw) : (evS?.car_state === "idle" ? "bez auta" : "0.0 kW")} sub={evSub} accent={evOn ? "#58a6ff" : null} />
+              </g>)}
             {hp && (
               <FlowNode x={585} y={268} w={150} h={54} icon={ic.hp} title="Tepelné čerpadlo"
                         value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
@@ -996,6 +1018,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                     <span className="muted"> @ {src.ts ? new Date(src.ts).toLocaleTimeString("cs-CZ") : "?"} · reg {src.register} · {src.decode}</span></div>)}
             </div>
           </div>); })()}
+        {evOpen && <EvPanel locId={locId} mod={evMod} onClose={() => setEvOpen(false)} />}
         {snap != null && (
           <div onClick={() => setSnap(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(960px, 96vw)", height: "min(720px, 90vh)", display: "flex", flexDirection: "column" }}>
