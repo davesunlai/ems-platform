@@ -33,4 +33,9 @@ async def dispatch_command(adapter, action: str, params: dict) -> dict:
     if action == "read_holding":
         regs = await adapter.read_holding(int(p["addr"]), int(p.get("count", 1)))
         return {"addr": int(p["addr"]), "values": regs}
+    if action == "ev_set":
+        t = {k: p[k] for k in ("amp", "psm", "frc", "dwo") if k in p}
+        return await adapter.set_target(t, force=bool(p.get("force")))
+    if action == "ev_release":
+        return await adapter.release(permanent=bool(p.get("permanent")))
     raise ValueError(f"neznámý povel '{action}'")

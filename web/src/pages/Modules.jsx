@@ -100,7 +100,7 @@ export default function Modules() {
     else if (f.adapter === "stiebel_isg") p = { host: f.host, port: Number(f.port || 502), device_id: Number(f.unit || 1),
       hp_nominal_kw: Number(f.hp_nominal_kw || 3.5), nhz_kw: Number(f.nhz_kw || 0) };
     else if (f.adapter === "uvr_cmi") p = { host: f.host, user: f.cmi_user || "admin", password: f.cmi_pass, node: Number(f.cmi_node || 2) };
-    else if (f.adapter === "goe_charger") p = { host: f.host, port: Number(f.port || 80) };
+    else if (f.adapter === "goe_charger") p = { host: f.host, port: Number(f.port || 80), amp_1f_max: Number(f.amp_1f_max || 16), amp_3f_max: Number(f.amp_3f_max || 32) };
     if (f.hidden && f.hidden.length) p.hidden_metrics = f.hidden;
     if (f.control && f.control.length) p.control_enabled = f.control;
     return p;
@@ -136,6 +136,7 @@ export default function Modules() {
       baudrate: m.transport_params?.baudrate ?? 9600, parity: m.transport_params?.parity || "N",
       stopbits: m.transport_params?.stopbits ?? 1, bytesize: m.transport_params?.bytesize ?? 8,
       host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : (m.adapter === "goe_charger" ? 80 : 8899)),
+      amp_1f_max: p.amp_1f_max ?? 16, amp_3f_max: p.amp_3f_max ?? 32,
       device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1, battery_packs: p.battery_packs ?? "auto",
       cmi_user: p.user ?? "admin", cmi_pass: p.password ?? "", cmi_node: p.node ?? 2,
       hidden: p.hidden_metrics ?? [],
@@ -322,6 +323,14 @@ export default function Modules() {
             <div className="field" style={{ marginBottom: 0 }}>
               <label>HTTP port</label>
               <input value={f.port ?? 80} onChange={(e) => setF({ ...f, port: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }} title="Max. proud při 1f nabíjení (nabíječka má limit nesymetrie la1 — dokud není ověřen s autem, 16 A = 3,7 kW)">
+              <label>Max A při 1 fázi</label>
+              <input value={f.amp_1f_max} onChange={(e) => setF({ ...f, amp_1f_max: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }} title="Max. proud při 3f nabíjení (varianta 22 kW = 32 A, 11 kW = 16 A)">
+              <label>Max A při 3 fázích</label>
+              <input value={f.amp_3f_max} onChange={(e) => setF({ ...f, amp_3f_max: e.target.value })} />
             </div>
             <p className="muted" style={{ fontSize: 11.5, margin: "4px 0 0", flexBasis: "100%" }}>
               V aplikaci go-e musí být zapnuté lokální HTTP API v2 (bez hesla). Čtení à 30 s, při nabíjení à 10 s. Modbus/OCPP/MQTT se nepoužívají.

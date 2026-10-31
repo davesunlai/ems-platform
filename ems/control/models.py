@@ -32,7 +32,8 @@ SOLIS_ACTIONS = {"force_charge", "force_discharge", "stop", "force_poke", "set_w
                  "read_controls", "write_holding", "read_holding", "read_input"}
 
 
-ACTIONS_BY_ADAPTER = {"solis": SOLIS_ACTIONS}     # uvr_cmi je read-only (rozhodnutí 28. 10.)
+EV_ACTIONS = {"ev_set", "ev_release"}            # go-e wallbox (brief §3) — v1.6.2
+ACTIONS_BY_ADAPTER = {"solis": SOLIS_ACTIONS, "goe_charger": EV_ACTIONS}     # uvr_cmi je read-only
 
 
 class CommandRequest(BaseModel):

@@ -1219,6 +1219,64 @@ function PlannerPanel({ locId }) {
   );
 }
 
+// 🚗 Wallbox — ruční řízení (krok 3): cíl EMS = proud / fáze / start-stop; uvolnit = frc=0.
+const EV_CAR = { idle: "bez auta", charging: "⚡ nabíjí", wait_car: "auto připojeno, čeká", complete: "✅ nabito", error: "⛔ chyba", unknown: "?" };
+function EvControl({ mod }) {
+  const { has } = useAuth();
+  const [st, setSt] = useState(null);
+  const [live, setLive] = useState(null);
+  const [amp, setAmp] = useState(16);
+  const [psm, setPsm] = useState(2);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const refresh = () => {
+    api.controlStates(mod.id).then((r) => setSt((r?.states || {})[mod.id] || null)).catch(() => {});
+    if (mod.locality_id) api.evState(mod.locality_id).then((r) => setLive(r.state)).catch(() => {});
+  };
+  useEffect(() => { refresh(); const t = setInterval(refresh, 10000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [mod.id]);
+  const send = async (action, params, label) => {
+    setBusy(true); setMsg("");
+    try { await api.enqueueCommand(mod.id, action, { ...params, source: "manual", reason: label }); setMsg(`${label} — odesláno`); setTimeout(refresh, 4000); }
+    catch (e) { setMsg("Chyba: " + e.message); }
+    setBusy(false);
+  };
+  const tgt = st?.action === "ev_set" ? (st.params?.target || {}) : null;
+  const kw = live?.power_w != null ? (live.power_w / 1000).toFixed(1) : "?";
+  const estKw = (a, p) => ((p === 1 ? 1 : 3) * 230 * a / 1000).toFixed(1);
+  return (
+    <div className="card" style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <b>🚗 Wallbox</b><span className="muted" style={{ fontSize: 12 }}>{mod.name || mod.id}</span>
+        {live && <>
+          <span style={{ fontSize: 12.5 }}>{EV_CAR[live.car_state] || live.car}</span>
+          <span style={{ fontSize: 12.5 }}>výkon <b style={{ color: live.power_w > 50 ? "var(--green)" : "var(--fg)" }}>{kw} kW</b>{live.phases_active ? ` (${live.phases_active}f)` : ""}</span>
+          <span style={{ fontSize: 12.5 }}>relace <b>{((live.session_wh || 0) / 1000).toFixed(1)} kWh</b></span>
+          <span className="muted" style={{ fontSize: 12 }} title="modelStatus">{live.model_status_cz}</span>
+          {live.amp_allowed != null && live.amp_allowed < live.amp_set && <span style={{ color: "var(--amber)", fontSize: 12 }}>⚠ nabíječka omezuje na {live.amp_allowed} A</span>}
+          {live.error ? <span style={{ color: "#f85149", fontSize: 12 }}>⛔ chyba {live.error}</span> : null}
+        </>}
+        <span style={{ fontSize: 12.5 }}>řízení: <b>{tgt ? `EMS ${tgt.frc === 2 ? "NABÍJET" : tgt.frc === 1 ? "PAUZA" : "neutral"}${tgt.amp ? ` ${tgt.amp} A` : ""}${tgt.psm ? ` ${tgt.psm === 1 ? "1f" : "3f"}` : ""}` : "uvolněno (nabíječka sama)"}</b>{st?.params?.source && tgt ? <span className="muted"> · {st.params.source}</span> : null}</span>
+      </div>
+      {has("control") && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+          <label style={{ fontSize: 12 }}>proud <input style={{ ..._FLD, width: 56 }} value={amp} onChange={(e) => setAmp(e.target.value)} /> A</label>
+          <select style={_FLD} value={psm} onChange={(e) => setPsm(Number(e.target.value))}>
+            <option value={1}>1 fáze</option><option value={2}>3 fáze</option><option value={0}>auto</option>
+          </select>
+          <span className="muted" style={{ fontSize: 12 }}>≈ {estKw(Number(amp) || 0, psm)} kW</span>
+          <button className="btn primary" disabled={busy} onClick={() => send("ev_set", { amp: Number(amp), psm, frc: 2 }, `nabíjet ${amp} A ${psm === 1 ? "1f" : psm === 2 ? "3f" : "auto"}`)}>⚡ Nabíjet</button>
+          <button className="btn" disabled={busy} onClick={() => send("ev_set", { frc: 1 }, "pauza")}>⏸ Pauza</button>
+          <button className="btn" disabled={busy} onClick={() => send("ev_release", {}, "uvolnit řízení")}>↺ Uvolnit</button>
+          {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+        </div>)}
+      <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
+        Cíl EMS se na nabíječku zapisuje jen při změně (proud/fáze nejdřív 60 s od sebe, přepnutí fází nejdřív po 10 min — nabíječka to vynucuje sama).
+        Po restartu nabíječky se cíl obnoví; po výpadku spojení &gt; 5 min nebo vypnutí TERA se řízení uvolní (frc=0), aby auto nezůstalo zamčené.
+      </p>
+    </div>
+  );
+}
+
 function LocalitySection({ locId, locName, mods }) {
   const { vis } = useAuth();
   return (
@@ -1230,6 +1288,7 @@ function LocalitySection({ locId, locName, mods }) {
         ? <SolisControl key={m.id} mod={m} />
         : <GoodweControl key={m.id} mod={m} />)}
       {vis("ctl:outputs") && locId && <OutputsPanel locId={locId} />}
+      {vis("ctl:ev") && mods.filter((m) => m.adapter === "goe_charger").map((m) => <EvControl key={m.id} mod={m} />)}
     </section>
   );
 }

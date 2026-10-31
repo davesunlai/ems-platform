@@ -344,6 +344,18 @@ def _validate_command(action: str, params: dict, adapter: str = "solis") -> None
     if action == "write_holding":
         if not isinstance(params.get("addr"), int) or not isinstance(params.get("value"), int):
             raise HTTPException(status_code=400, detail="write_holding vyžaduje celé 'addr' a 'value'")
+    if action == "ev_set":
+        if not any(k in params for k in ("amp", "psm", "frc", "dwo")):
+            raise HTTPException(status_code=400, detail="ev_set vyžaduje aspoň jedno z amp/psm/frc/dwo")
+        a = params.get("amp")
+        if a is not None and (not isinstance(a, (int, float)) or not (6 <= a <= 32)):
+            raise HTTPException(status_code=400, detail="amp musí být 6–32 A")
+        for k in ("psm", "frc"):
+            if params.get(k) is not None and params[k] not in (0, 1, 2):
+                raise HTTPException(status_code=400, detail=f"{k} musí být 0, 1 nebo 2")
+        dw = params.get("dwo")
+        if dw is not None and (not isinstance(dw, (int, float)) or dw < 0):
+            raise HTTPException(status_code=400, detail="dwo = energetický limit relace ve Wh (null = bez limitu)")
 
 
 @router.post("/{module_id}/command")

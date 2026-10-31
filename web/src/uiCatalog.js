@@ -22,6 +22,7 @@ export const UI_CATALOG = [
     { key: "ctl:inverter", label: "Ruční řízení střídače (force / stop)" },
     { key: "ctl:sources", label: "Zdroje řízení modulu (🧠/⏰/⚡) + samoléčba" },
     { key: "ctl:outputs", label: "🔌 Spotřebiče / spínané výstupy" },
+    { key: "ctl:ev", label: "🚗 Wallbox — ruční řízení (proud, fáze, start/stop)" },
     { key: "ctl:audit", label: "📜 Audit povelů" },
     { key: "ctl:scan", label: "🔬 Sken registrů měniče (diagnostika BMS/článků)" },
   ]},

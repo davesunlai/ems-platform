@@ -240,6 +240,15 @@ async def process_queue(active: dict) -> None:
             res = await dispatch_command(adapter, c["action"], c["params"] or {})
             await control_db.complete(c["id"], True, res if isinstance(res, dict) else {"result": res})
             # aktuální stav zapisuj jen pro provozní režimy (ne limity/čtení)
+            if c["action"] in ("ev_set", "ev_release"):      # wallbox: stav = aktuální cíl EMS
+                try:
+                    tgt = getattr(adapter, "target", None)
+                    await control_db.set_state(c["module_id"], "ev_set" if tgt else "idle",
+                                               {**(c["params"] or {}), "target": tgt or {}},
+                                               source=(c["params"] or {}).get("source", "manual"),
+                                               username=c.get("username"))
+                except Exception:
+                    pass
             if c["action"] in ("force_charge", "force_discharge", "stop", "spiral"):
                 try:
                     act = "idle" if c["action"] == "stop" else c["action"]
