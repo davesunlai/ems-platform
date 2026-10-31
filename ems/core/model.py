@@ -30,6 +30,7 @@ class DeviceType(str, Enum):
     HYBRID = "hybrid"           # hybridní střídač: FVE + baterie + síť (+ backup) v jednom
     HEAT_PUMP = "heat_pump"     # tepelné čerpadlo (teplo × elektřina, vlastní sémantika)
     SENSOR = "sensor"           # čistě měřicí zařízení (teploty AKU z UVR/CMI apod.), bez řízení
+    EV_CHARGER = "ev_charger"   # wallbox (modulovaná odložitelná zátěž; go-e Charger)
 
 
 class Metric(str, Enum):
@@ -151,6 +152,22 @@ class Metric(str, Enum):
     HP_EL_DHW_TODAY = "hp_el_dhw_today"
     HP_HEAT_HEATING_TODAY = "hp_heat_heating_today"
     HP_HEAT_DHW_TODAY = "hp_heat_dhw_today"
+    # --- Wallbox (go-e Charger, HTTP API v2) ---
+    EV_POWER = "ev_power"                       # W — nrg[11]
+    EV_CURRENT_L1 = "ev_current_l1"; EV_CURRENT_L2 = "ev_current_l2"; EV_CURRENT_L3 = "ev_current_l3"
+    EV_VOLTAGE_L1 = "ev_voltage_l1"; EV_VOLTAGE_L2 = "ev_voltage_l2"; EV_VOLTAGE_L3 = "ev_voltage_l3"
+    EV_SESSION_KWH = "ev_session_kwh"           # od připojení auta (wh/1000)
+    EV_ENERGY_TOTAL = "ev_energy_total"         # kWh celkem (eto/1000)
+    EV_CAR_STATE = "ev_car_state"               # 0 unknown, 1 idle, 2 charging, 3 wait car, 4 complete, 5 error
+    EV_AMP_SET = "ev_amp_set"                   # A — náš actuator
+    EV_AMP_ALLOWED = "ev_amp_allowed"           # A — acu (efektivně povolený po všech limitech)
+    EV_PHASE_MODE = "ev_phase_mode"             # 0 auto, 1 1f, 2 3f
+    EV_FORCE = "ev_force"                       # 0 neutral, 1 off, 2 on
+    EV_PHASES_ACTIVE = "ev_phases_active"       # pnp
+    EV_MODEL_STATUS = "ev_model_status"         # proč (ne)nabíjí
+    EV_ERROR = "ev_error"                       # 0 = bez chyby
+    EV_TEMP = "ev_temp"                         # °C (max z tma)
+    EV_CABLE_LIMIT = "ev_cable_limit"           # A (cbl)
 
 
 UNIT_OF: dict[Metric, str] = {
@@ -244,6 +261,13 @@ UNIT_OF: dict[Metric, str] = {
     Metric.HP_EL_DHW_TODAY: "kWh",
     Metric.HP_HEAT_HEATING_TODAY: "kWh",
     Metric.HP_HEAT_DHW_TODAY: "kWh",
+    Metric.EV_POWER: "W",
+    Metric.EV_CURRENT_L1: "A", Metric.EV_CURRENT_L2: "A", Metric.EV_CURRENT_L3: "A",
+    Metric.EV_VOLTAGE_L1: "V", Metric.EV_VOLTAGE_L2: "V", Metric.EV_VOLTAGE_L3: "V",
+    Metric.EV_SESSION_KWH: "kWh", Metric.EV_ENERGY_TOTAL: "kWh",
+    Metric.EV_CAR_STATE: "", Metric.EV_AMP_SET: "A", Metric.EV_AMP_ALLOWED: "A",
+    Metric.EV_PHASE_MODE: "", Metric.EV_FORCE: "", Metric.EV_PHASES_ACTIVE: "",
+    Metric.EV_MODEL_STATUS: "", Metric.EV_ERROR: "", Metric.EV_TEMP: "°C", Metric.EV_CABLE_LIMIT: "A",
 }
 
 

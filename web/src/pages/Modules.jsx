@@ -36,13 +36,14 @@ function MpptDiag({ mod, onChanged }) {
   );
 }
 
-const ADAPTERS = ["goodwe", "solis", "stiebel_isg", "uvr_cmi", "mock"];
+const ADAPTERS = ["goodwe", "solis", "stiebel_isg", "uvr_cmi", "goe_charger", "mock"];
 // který model podporuje který typ zařízení (filtr výběru; mock umí vše — vývoj)
 const ADAPTER_TYPES = {
   solis: ["hybrid"],
   goodwe: ["hybrid", "storage"],
   stiebel_isg: ["heat_pump"],
   uvr_cmi: ["sensor"],
+  goe_charger: ["ev_charger"],
   mock: ["hybrid", "generation", "storage", "load", "grid_point", "sensor", "heat_pump"],
 };
 const modelsForType = (t) => ADAPTERS.filter((a) => (ADAPTER_TYPES[a] || []).includes(t));
@@ -50,6 +51,7 @@ const ADAPTER_LABEL = { stiebel_isg: "Stiebel Eltron HPA-O 13 C Premium (TČ, p�
   goodwe: "Goodwe — FVE + baterie (UDP/Modbus)",
   solis: "Solis S6-EH3P50K-H — FVE + baterie (Modbus TCP)",
   uvr_cmi: "UVR16x2 / CMI — teploty AKU (JSON API, read-only)",
+  goe_charger: "go-e Charger CORE / PRO — wallbox (HTTP API v2)",
   mock: "Mock — simulace (bez HW)",
 };
 // kind je interní pozůstatek fázového plánu — v UI se nevolí (schopnosti se odvozují z konfigurace)
@@ -63,6 +65,7 @@ const DTYPES = [
   { v: "grid_point", l: "🗼 Měření odběrného místa (elektroměr)" },
   { v: "sensor", l: "🌡️ Čidla (teploty, senzorová jednotka)" },
   { v: "heat_pump", l: "🌀 Tepelné čerpadlo" },
+  { v: "ev_charger", l: "🚗 Wallbox (nabíječka EV)" },
 ];
 const DTYPE_LABEL = Object.fromEntries(DTYPES.map((d) => [d.v, d.l]));
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.v, k.l]));
@@ -97,6 +100,7 @@ export default function Modules() {
     else if (f.adapter === "stiebel_isg") p = { host: f.host, port: Number(f.port || 502), device_id: Number(f.unit || 1),
       hp_nominal_kw: Number(f.hp_nominal_kw || 3.5), nhz_kw: Number(f.nhz_kw || 0) };
     else if (f.adapter === "uvr_cmi") p = { host: f.host, user: f.cmi_user || "admin", password: f.cmi_pass, node: Number(f.cmi_node || 2) };
+    else if (f.adapter === "goe_charger") p = { host: f.host, port: Number(f.port || 80) };
     if (f.hidden && f.hidden.length) p.hidden_metrics = f.hidden;
     if (f.control && f.control.length) p.control_enabled = f.control;
     return p;
@@ -131,7 +135,7 @@ export default function Modules() {
       serial_port: m.transport_params?.serial_port || "",
       baudrate: m.transport_params?.baudrate ?? 9600, parity: m.transport_params?.parity || "N",
       stopbits: m.transport_params?.stopbits ?? 1, bytesize: m.transport_params?.bytesize ?? 8,
-      host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : 8899),
+      host: p.host || "", port: p.port ?? (m.adapter === "solis" ? 502 : (m.adapter === "goe_charger" ? 80 : 8899)),
       device_id: p.device_id ?? 1, battery_pack: p.battery_pack ?? 1, battery_packs: p.battery_packs ?? "auto",
       cmi_user: p.user ?? "admin", cmi_pass: p.password ?? "", cmi_node: p.node ?? 2,
       hidden: p.hidden_metrics ?? [],
@@ -309,6 +313,19 @@ export default function Modules() {
               <label>El. dohřev NHZ (kW, 0 = není)</label>
               <input value={f.nhz_kw ?? 0} onChange={(e) => setF({ ...f, nhz_kw: e.target.value })} />
             </div>
+          </>)}
+          {f.adapter === "goe_charger" && (<>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>IP nabíječky (host)</label>
+              <input value={f.host} placeholder="192.168.7.216" onChange={(e) => setF({ ...f, host: e.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>HTTP port</label>
+              <input value={f.port ?? 80} onChange={(e) => setF({ ...f, port: e.target.value })} />
+            </div>
+            <p className="muted" style={{ fontSize: 11.5, margin: "4px 0 0", flexBasis: "100%" }}>
+              V aplikaci go-e musí být zapnuté lokální HTTP API v2 (bez hesla). Čtení à 30 s, při nabíjení à 10 s. Modbus/OCPP/MQTT se nepoužívají.
+            </p>
           </>)}
           {f.adapter === "uvr_cmi" && (<>
             <div className="field" style={{ marginBottom: 0 }}>

@@ -35,6 +35,12 @@ export const METRIC_LABEL = {
   active_power: "Činný výkon", reactive_power: "Jalový výkon",
   voltage: "Napětí", current: "Proud", frequency: "Frekvence", temperature: "Teplota měniče",
   aku_pump: "Čerpadlo AKU1↔2 (UVR)",
+  ev_power: "Wallbox výkon", ev_current_l1: "Wallbox proud L1", ev_current_l2: "Wallbox proud L2", ev_current_l3: "Wallbox proud L3",
+  ev_voltage_l1: "Wallbox napětí L1", ev_voltage_l2: "Wallbox napětí L2", ev_voltage_l3: "Wallbox napětí L3",
+  ev_session_kwh: "Wallbox nabito (relace)", ev_energy_total: "Wallbox celkem", ev_car_state: "Wallbox stav auta",
+  ev_amp_set: "Wallbox proud nastavený", ev_amp_allowed: "Wallbox proud povolený (acu)", ev_phase_mode: "Wallbox režim fází",
+  ev_force: "Wallbox vynucení (frc)", ev_phases_active: "Wallbox fáze aktivní", ev_model_status: "Wallbox stav logiky",
+  ev_error: "Wallbox chyba", ev_temp: "Wallbox teplota", ev_cable_limit: "Wallbox limit kabelu",
   uvr_o1: "UVR O1 čerpadlo podlaha", uvr_o2: "UVR O2", uvr_o3: "UVR O3 čerpadlo krb", uvr_o4: "UVR O4 čerpadlo radiátory", uvr_o5: "UVR O5",
   uvr_o6: "UVR O6 čerpadlo AKU1↔2", uvr_o7: "UVR O7 spirála GRID", uvr_o8: "UVR O8 spirála WATTr", uvr_o9: "UVR O9 wattrouter LT",
   uvr_d10: "UVR I10 Jablotron topení", uvr_d12: "UVR I12 Jablotron radiátory",
@@ -76,6 +82,9 @@ export const METRIC_GROUPS = [
   { id: "counters", label: "Čítače měniče (kWh)", icon: "chart", metrics: [
     "energy_bat_charge_today", "energy_bat_discharge_today", "energy_import_today", "energy_export_today", "energy_load_today",
     "energy_bat_charge_total", "energy_bat_discharge_total", "energy_import_total", "energy_export_total", "energy_load_total"] },
+  { id: "ev", label: "🚗 Wallbox", icon: "bolt", metrics: ["ev_power", "ev_session_kwh", "ev_energy_total", "ev_car_state",
+    "ev_amp_set", "ev_amp_allowed", "ev_phases_active", "ev_phase_mode", "ev_force", "ev_model_status", "ev_error",
+    "ev_current_l1", "ev_current_l2", "ev_current_l3", "ev_voltage_l1", "ev_voltage_l2", "ev_voltage_l3", "ev_temp", "ev_cable_limit"] },
   { id: "tech", label: "Technické / křížové kontroly", icon: "sliders", metrics: [
     "inverter_state", "inverter_fault", "inverter_ac_power", "inverter_current_l1", "inverter_current_l2", "inverter_current_l3",
     "house_load_inv", "battery_power_inv", "backup_load_power", "backup_voltage_l1", "backup_current_l1",
@@ -117,6 +126,8 @@ export const METRIC_CATALOG = {
     "grid_voltage_l1", "grid_voltage_l2", "grid_voltage_l3"],
   "solis:storage": ["battery_soc", "voltage", "current", "battery_power"],
   "solis:grid_point": ["grid_power"],
+  "goe_charger:ev_charger": ["ev_power", "ev_session_kwh", "ev_energy_total", "ev_car_state", "ev_amp_set", "ev_amp_allowed",
+    "ev_phases_active", "ev_model_status", "ev_error"],
 };
 export const metricsFor = (adapter, dtype, live) => {
   const cat = METRIC_CATALOG[`${adapter}:${dtype}`] || [];

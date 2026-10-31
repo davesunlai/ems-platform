@@ -39,6 +39,9 @@ def build_adapter(device: Device) -> TelemetryAdapter:
         if "device_id" in params and "unit" not in params:
             params["unit"] = params.pop("device_id")     # kolize s EMS device_id (jako u solis)
         return StiebelIsgAdapter(device_id=device.id, **params)
+    if name == "goe_charger":
+        from ems.adapters.goe_charger import GoeChargerAdapter
+        return GoeChargerAdapter(device_id=device.id, **params)
     if name == "uvr_cmi":
         from ems.adapters.uvr_cmi import UvrCmiAdapter
         return UvrCmiAdapter(device_id=device.id, **params)
