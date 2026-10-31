@@ -174,6 +174,11 @@ async def controllable_modules(_: dict = Depends(require_permission("control")))
             out.append({"id": d["device_id"], "name": d["device_id"], "adapter": "goodwe",
                         "locality_id": d.get("locality_id"), "locality": d.get("locality"),
                         "control_enabled": ["force_charge", "force_discharge", "stop"]})
+        elif adapter == "goe_charger":          # wallbox — karta 🚗 v Ovládání (v1.6.2)
+            out.append({"id": d["device_id"], "name": d.get("name") or d["device_id"], "adapter": "goe_charger",
+                        "locality_id": d.get("locality_id"), "locality": d.get("locality"),
+                        "control_enabled": ["ev_set", "ev_release"],
+                        "control_sources": d.get("control_sources") or {}})
     return out
 
 
