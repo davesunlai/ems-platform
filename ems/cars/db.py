@@ -290,6 +290,60 @@ async def odometer_at_day_start(vin: str, key: str) -> float | None:
     return float(v) if v is not None else None
 
 
+async def car_sessions(v: dict, start: datetime, end: datetime) -> list[dict]:
+    """Relace nabíjení AUTA (kdekoli — doma i Ionity) odvozené z historie: CHARGINGACTIVE → konec;
+    SoC od/do, kWh ≈ ΔSoC × kapacita, max výkon, poloha = poslední GPS do konce relace (auto ji posílá při zapojeném kabelu)."""
+    km = {**DEFAULT_KEY_MAP, **(v.get("key_map") or {})}
+    keys = [km["charging_status"], km["soc"], km["lat"], km["lon"], km["charging_power_kw"], km["odometer_km"]]
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT ts, key, value_num, value_txt FROM car_history WHERE vin=$1 AND key = ANY($2::text[]) "
+            "AND ts BETWEEN $3 - interval '2 days' AND $4 ORDER BY ts", v["vin"], keys, start, end)
+    cap = v.get("capacity_kwh")
+    by = {k: [] for k in keys}
+    for r in rows:
+        by[r["key"]].append((r["ts"], r["value_num"], r["value_txt"]))
+    if cap is None:
+        async with pool.acquire() as conn:
+            cap = await conn.fetchval("SELECT value_num FROM car_state WHERE vin=$1 AND key=$2", v["vin"], km["capacity_kwh"])
+    def last_before(k, ts, num=True):
+        best = None
+        for t, n, x in by[k]:
+            if t <= ts:
+                best = n if num else (n if n is not None else x)
+            else:
+                break
+        return best
+    def is_active(txt):
+        s = str(txt or "").upper().replace("_", "")
+        return s.startswith("CHARGINGACTIVE") or s == "CHARGING"
+    out, cur = [], None
+    for t, n, x in by[km["charging_status"]]:
+        act = is_active(x)
+        if act and cur is None:
+            cur = t
+        elif not act and cur is not None:
+            out.append((cur, t)); cur = None
+    if cur is not None:
+        out.append((cur, None))
+    res = []
+    for s, e in out:
+        e_eff = e or end
+        if e_eff < start or s > end:
+            continue
+        soc0, soc1 = last_before(km["soc"], s), last_before(km["soc"], e_eff)
+        kwh = round((soc1 - soc0) / 100.0 * float(cap), 1) if (soc0 is not None and soc1 is not None and cap) else None
+        pw = [n for t, n, _ in by[km["charging_power_kw"]] if s <= t <= e_eff and n is not None]
+        maxkw = round(max(pw) / (1000.0 if max(pw) > 100 else 1.0), 1) if pw else None
+        res.append({"vin": v["vin"], "name": v.get("name") or v.get("model") or v["vin"][-6:],
+                    "start": s.isoformat(), "end": e.isoformat() if e else None,
+                    "soc_from": soc0, "soc_to": soc1, "kwh": kwh, "max_kw": maxkw,
+                    "lat": last_before(km["lat"], e_eff), "lon": last_before(km["lon"], e_eff),
+                    "odometer_km": last_before(km["odometer_km"], e_eff)})
+    return res
+
+
 async def history(vin: str, key: str, hours: int = 48) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:

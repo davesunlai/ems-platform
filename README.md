@@ -1,3 +1,8 @@
+## v1.7.13 — Poloha nabíjení v detailu dne
+- API `/api/cars/sessions?locality_id&date|month`: relace nabíjení auta odvozené z CarData (CHARGINGACTIVE → konec, SoC od→do, ≈kWh, max kW, GPS).
+- Detail dne wallboxu: modré úseky = nabíjení auta kdekoli (i Ionity), zelené = wallbox; hover ukáže údaje + „📍 klikni pro mapu“;
+  klik otevře mapu (OSM embed + Google Maps). Tabulka relací aut s odkazem na mapu.
+
 ## v1.7.12 — REST kontejner s nestreamovatelnými klíči
 - `REST_EXTRA_KEYS` (historie nabíjení sessionsList, method, phaseNumber, lastChargingReason/Result, timeToFullyCharged, acAmpere/acVoltage)
   se přidávají do kontejneru telematicData; kontejner se znovu vytvoří, když se změní seznam (`car_accounts.container_keys`).

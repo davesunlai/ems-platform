@@ -130,9 +130,39 @@ function MonthChart({ month, daily, runs, onDay }) {
 }
 
 // Detail dne: průběh výkonu po minutě + úseky nabíjení + relace
+// 🗺 Mapa polohy nabíjení (OpenStreetMap embed + odkaz do Google Maps)
+export function MapModal({ lat, lon, title, onClose }) {
+  const dlt = 0.004;
+  const bbox = `${lon - dlt * 1.6},${lat - dlt},${lon + dlt * 1.6},${lat + dlt}`;
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.65)", zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(760px, 96vw)", padding: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <b>📍 {title || "Poloha nabíjení"}</b>
+          <span className="muted" style={{ fontSize: 12 }}>{lat.toFixed(5)}, {lon.toFixed(5)}</span>
+          <a className="btn" style={{ marginLeft: "auto", padding: "2px 8px", fontSize: 12 }} href={`https://maps.google.com/?q=${lat},${lon}`} target="_blank" rel="noreferrer">Google Maps ↗</a>
+          <button className="btn" style={{ padding: "2px 8px" }} onClick={onClose}>✕</button>
+        </div>
+        <iframe title="mapa" style={{ width: "100%", height: "min(420px, 60vh)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 8 }}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lon}`} />
+      </div>
+    </div>
+  );
+}
+
 function DayDetail({ locId, date, onClose }) {
   const [d, setD] = useState(null);
-  useEffect(() => { setD(null); api.evDay(locId, date).then(setD).catch(() => setD({ series: [], runs: [], sessions: [] })); }, [locId, date]);
+  const [carS, setCarS] = useState([]);           // relace aut (CarData) v tento den — s GPS
+  const [tip, setTip] = useState(null);            // {x, y, run|car}
+  const [map, setMap] = useState(null);            // {lat, lon, title}
+  useEffect(() => {
+    setD(null); setCarS([]);
+    api.evDay(locId, date).then(setD).catch(() => setD({ series: [], runs: [], sessions: [] }));
+    api.carsSessions(locId, `date=${date}`).then((r) => setCarS(r || [])).catch(() => {});
+  }, [locId, date]);
+  // poloha k úseku wallboxu = relace auta, která se s ním časově překrývá (auto posílá GPS při zapojení)
+  const carFor = (r) => carS.find((c) => c.lat != null && new Date(c.start) <= new Date(r.end) && new Date(c.end || Date.now()) >= new Date(r.start));
+  const showTip = (e, body) => { const b = e.currentTarget.ownerSVGElement.getBoundingClientRect(); setTip({ x: e.clientX - b.left, y: e.clientY - b.top, body }); };
   const W = 1400, H = 220, L = 44, B = 26, T = 12, R = 8;
   const ser = d?.series || [];
   const maxKw = Math.max(4, ...ser.map((p) => (p.power_w || 0) / 1000));
@@ -143,7 +173,7 @@ function DayDetail({ locId, date, onClose }) {
   const path = ser.length ? ser.map((p, i) => `${i ? "L" : "M"}${xs(p.ts).toFixed(1)},${yv((p.power_w || 0) / 1000).toFixed(1)}`).join(" ") : "";
   const tm = (iso) => new Date(iso).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, margin: "4px 0 12px" }}>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, margin: "4px 0 12px", position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <b style={{ fontSize: 13 }}>📅 {new Date(date).toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" })}</b>
         {d && <span className="muted" style={{ fontSize: 12 }}>úseků nabíjení: {d.runs.length} · celkem {d.kwh_runs ?? 0} kWh</span>}
@@ -158,17 +188,47 @@ function DayDetail({ locId, date, onClose }) {
           {Array.from({ length: 25 }, (_, h) => h).map((h) => (
             <g key={h}><line x1={L + (W - L - R) * h / 24} x2={L + (W - L - R) * h / 24} y1={H - B} y2={H - B + 4} stroke="var(--muted)" />
               {h % 2 === 0 && <text x={L + (W - L - R) * h / 24} y={H - B + 14} textAnchor="middle" fontSize="9" fill="var(--muted)">{h}:00</text>}</g>))}
+          {carS.map((c, i) => (
+            <rect key={`c${i}`} x={xs(c.start)} y={T} width={Math.max(2, xs(c.end || new Date().toISOString()) - xs(c.start))} height={H - T - B}
+                  fill="#58a6ff" opacity="0.14" style={{ cursor: "pointer" }}
+                  onMouseEnter={(e) => showTip(e, { kind: "car", c })} onMouseLeave={() => setTip(null)}
+                  onClick={() => c.lat != null && setMap({ lat: c.lat, lon: c.lon, title: `${c.name} · ${tm(c.start)}–${c.end ? tm(c.end) : "…"}` })} />))}
           {d.runs.map((r, i) => (
-            <rect key={i} x={xs(r.start)} y={T} width={Math.max(1, xs(r.end) - xs(r.start))} height={H - T - B} fill="var(--green)" opacity="0.12" />))}
+            <rect key={i} x={xs(r.start)} y={T} width={Math.max(1, xs(r.end) - xs(r.start))} height={H - T - B} fill="var(--green)" opacity="0.12" style={{ cursor: "pointer" }}
+                  onMouseEnter={(e) => showTip(e, { kind: "run", r, c: carFor(r) })} onMouseLeave={() => setTip(null)}
+                  onClick={() => { const c = carFor(r); if (c) setMap({ lat: c.lat, lon: c.lon, title: `wallbox · ${tm(r.start)}–${tm(r.end)}` }); }} />))}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
         </svg>
+        {tip && (
+          <div style={{ position: "absolute", left: Math.min(tip.x + 12, 900), top: tip.y + 36, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
+                        padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
+            {tip.body.kind === "run" ? (<>
+              <b>🚗 wallbox</b> {tm(tip.body.r.start)}–{tm(tip.body.r.end)} · <b>{tip.body.r.kwh.toFixed(2)} kWh</b> · max {tip.body.r.max_kw} kW
+              <div className="muted">{tip.body.c ? `📍 ${tip.body.c.name} — klikni pro mapu` : "📍 poloha: doma (auto polohu neposlalo)"}</div>
+            </>) : (<>
+              <b>🚘 {tip.body.c.name}</b> {tm(tip.body.c.start)}–{tip.body.c.end ? tm(tip.body.c.end) : "probíhá"}
+              {tip.body.c.soc_from != null && <> · {Math.round(tip.body.c.soc_from)} → {Math.round(tip.body.c.soc_to)} %</>}
+              {tip.body.c.kwh != null && <> · <b>≈ {tip.body.c.kwh} kWh</b></>}{tip.body.c.max_kw != null && <> · max {tip.body.c.max_kw} kW</>}
+              <div className="muted">{tip.body.c.lat != null ? "📍 klikni pro mapu polohy nabíječky" : "📍 poloha nepřišla"}</div>
+            </>)}
+          </div>)}
+        {map && <MapModal {...map} onClose={() => setMap(null)} />}
         <table style={{ fontSize: 12, width: "100%" }}>
           <thead><tr><th>#</th><th>Od</th><th>Do</th><th>Trvání</th><th>kWh</th><th>Ø kW</th><th>max kW</th><th>fáze</th></tr></thead>
           <tbody>{d.runs.map((r, i) => (
             <tr key={i}><td>{i + 1}</td><td>{tm(r.start)}</td><td>{tm(r.end)}</td><td>{dur((new Date(r.end) - new Date(r.start)) / 1000)}</td>
               <td><b>{r.kwh.toFixed(2)}</b></td><td>{r.avg_kw}</td><td>{r.max_kw}</td><td>{r.phases || "—"}</td></tr>))}
-            {!d.runs.length && <tr><td colSpan={8} className="muted">V tento den se nenabíjelo.</td></tr>}
+            {!d.runs.length && <tr><td colSpan={8} className="muted">V tento den se na wallboxu nenabíjelo.</td></tr>}
           </tbody></table>
+        {carS.length > 0 && (
+          <table style={{ fontSize: 12, width: "100%", marginTop: 8 }}>
+            <thead><tr><th>🚘 Auto (CarData)</th><th>Od</th><th>Do</th><th>SoC</th><th>≈ kWh</th><th>max kW</th><th>Poloha</th></tr></thead>
+            <tbody>{carS.map((c, i) => (
+              <tr key={i}><td>{c.name}</td><td>{tm(c.start)}</td><td>{c.end ? tm(c.end) : "probíhá"}</td>
+                <td>{c.soc_from != null ? `${Math.round(c.soc_from)} → ${c.soc_to != null ? Math.round(c.soc_to) : "?"} %` : "—"}</td>
+                <td><b>{c.kwh ?? "—"}</b></td><td>{c.max_kw ?? "—"}</td>
+                <td>{c.lat != null ? <a href="#map" onClick={(e) => { e.preventDefault(); setMap({ lat: c.lat, lon: c.lon, title: `${c.name} · ${tm(c.start)}` }); }}>📍 mapa</a> : <span className="muted">—</span>}</td></tr>))}
+            </tbody></table>)}
         {d.sessions.length > 0 && <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
           Relace (připojení kabelu) zasahující do dne: {d.sessions.map((s) => `${dt(s.started_at)} → ${s.ended_at ? dt(s.ended_at) : "probíhá"} (${(((s.wh ?? s.wh_max) || 0) / 1000).toFixed(1)} kWh)`).join(" · ")}</p>}
       </>)}
