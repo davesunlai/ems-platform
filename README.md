@@ -1,3 +1,6 @@
+## v1.7.14 — Které auto nabíjelo
+- Panel wallboxu: sloupec „Auto“ v úsecích dne i v měsíční historii relací + v hoveru; určeno překryvem s relací auta z CarData.
+
 ## v1.7.13 — Poloha nabíjení v detailu dne
 - API `/api/cars/sessions?locality_id&date|month`: relace nabíjení auta odvozené z CarData (CHARGINGACTIVE → konec, SoC od→do, ≈kWh, max kW, GPS).
 - Detail dne wallboxu: modré úseky = nabíjení auta kdekoli (i Ionity), zelené = wallbox; hover ukáže údaje + „📍 klikni pro mapu“;

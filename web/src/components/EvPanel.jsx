@@ -161,7 +161,9 @@ function DayDetail({ locId, date, onClose }) {
     api.carsSessions(locId, `date=${date}`).then((r) => setCarS(r || [])).catch(() => {});
   }, [locId, date]);
   // poloha k úseku wallboxu = relace auta, která se s ním časově překrývá (auto posílá GPS při zapojení)
-  const carFor = (r) => carS.find((c) => c.lat != null && new Date(c.start) <= new Date(r.end) && new Date(c.end || Date.now()) >= new Date(r.start));
+  const overlaps = (c, s, e) => new Date(c.start) <= new Date(e || Date.now()) && new Date(c.end || Date.now()) >= new Date(s);
+  const carAny = (r) => carS.find((c) => overlaps(c, r.start, r.end));                     // které auto (podle CarData) v tu dobu nabíjelo
+  const carFor = (r) => carS.find((c) => c.lat != null && overlaps(c, r.start, r.end));    // totéž, ale s GPS
   const showTip = (e, body) => { const b = e.currentTarget.ownerSVGElement.getBoundingClientRect(); setTip({ x: e.clientX - b.left, y: e.clientY - b.top, body }); };
   const W = 1400, H = 220, L = 44, B = 26, T = 12, R = 8;
   const ser = d?.series || [];
@@ -203,8 +205,8 @@ function DayDetail({ locId, date, onClose }) {
           <div style={{ position: "absolute", left: Math.min(tip.x + 12, 900), top: tip.y + 36, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
                         padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
             {tip.body.kind === "run" ? (<>
-              <b>🚗 wallbox</b> {tm(tip.body.r.start)}–{tm(tip.body.r.end)} · <b>{tip.body.r.kwh.toFixed(2)} kWh</b> · max {tip.body.r.max_kw} kW
-              <div className="muted">{tip.body.c ? `📍 ${tip.body.c.name} — klikni pro mapu` : "📍 poloha: doma (auto polohu neposlalo)"}</div>
+              <b>🚗 wallbox{carAny(tip.body.r) ? ` · 🚘 ${carAny(tip.body.r).name}` : ""}</b> {tm(tip.body.r.start)}–{tm(tip.body.r.end)} · <b>{tip.body.r.kwh.toFixed(2)} kWh</b> · max {tip.body.r.max_kw} kW
+              <div className="muted">{tip.body.c ? "📍 klikni pro mapu" : carAny(tip.body.r) ? "📍 poloha: doma (auto GPS neposlalo)" : "🚘 auto neurčeno (CarData v tu dobu nehlásilo nabíjení)"}</div>
             </>) : (<>
               <b>🚘 {tip.body.c.name}</b> {tm(tip.body.c.start)}–{tip.body.c.end ? tm(tip.body.c.end) : "probíhá"}
               {tip.body.c.soc_from != null && <> · {Math.round(tip.body.c.soc_from)} → {Math.round(tip.body.c.soc_to)} %</>}
@@ -214,11 +216,11 @@ function DayDetail({ locId, date, onClose }) {
           </div>)}
         {map && <MapModal {...map} onClose={() => setMap(null)} />}
         <table style={{ fontSize: 12, width: "100%" }}>
-          <thead><tr><th>#</th><th>Od</th><th>Do</th><th>Trvání</th><th>kWh</th><th>Ø kW</th><th>max kW</th><th>fáze</th></tr></thead>
+          <thead><tr><th>#</th><th>Auto</th><th>Od</th><th>Do</th><th>Trvání</th><th>kWh</th><th>Ø kW</th><th>max kW</th><th>fáze</th></tr></thead>
           <tbody>{d.runs.map((r, i) => (
-            <tr key={i}><td>{i + 1}</td><td>{tm(r.start)}</td><td>{tm(r.end)}</td><td>{dur((new Date(r.end) - new Date(r.start)) / 1000)}</td>
+            <tr key={i}><td>{i + 1}</td><td>{carAny(r) ? <b>🚘 {carAny(r).name}</b> : <span className="muted">—</span>}</td><td>{tm(r.start)}</td><td>{tm(r.end)}</td><td>{dur((new Date(r.end) - new Date(r.start)) / 1000)}</td>
               <td><b>{r.kwh.toFixed(2)}</b></td><td>{r.avg_kw}</td><td>{r.max_kw}</td><td>{r.phases || "—"}</td></tr>))}
-            {!d.runs.length && <tr><td colSpan={8} className="muted">V tento den se na wallboxu nenabíjelo.</td></tr>}
+            {!d.runs.length && <tr><td colSpan={9} className="muted">V tento den se na wallboxu nenabíjelo.</td></tr>}
           </tbody></table>
         {carS.length > 0 && (
           <table style={{ fontSize: 12, width: "100%", marginTop: 8 }}>
@@ -244,11 +246,14 @@ export function EvPanel({ locId, mod, onClose }) {
   const [runs, setRuns] = useState([]);
   const [day, setDay] = useState(null);           // rozkliknutý den (YYYY-MM-DD)
   const [cars, setCars] = useState([]);
+  const [carM, setCarM] = useState([]);           // relace aut (CarData) za měsíc → které auto nabíjelo na wallboxu
+  const carOfSession = (s) => carM.find((c) => new Date(c.start) <= new Date(s.ended_at || Date.now()) && new Date(c.end || Date.now()) >= new Date(s.started_at));
   const [month, setMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; });
   const load = () => {
     api.evState(locId).then((r) => setLive(r.state)).catch(() => {});
     api.carsVehicles(locId).then(setCars).catch(() => {});
     api.evSessionsMonth(locId, month).then(setSessions).catch(() => {});
+    api.carsSessions(locId, `month=${month}`).then((r) => setCarM(r || [])).catch(() => {});
     api.evMonth(locId, month).then((r) => { setDaily(r.daily || []); setRuns(r.runs || []); }).catch(() => {});
   };
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [locId, month]);
@@ -295,9 +300,10 @@ export function EvPanel({ locId, mod, onClose }) {
         <b style={{ fontSize: 13 }}>Historie relací</b>
         {sessions.length ? (
           <table style={{ fontSize: 12, marginTop: 6, width: "100%" }}>
-            <thead><tr><th>Od</th><th>Do</th><th>Nabíjení</th><th>kWh</th><th>max kW</th><th>fáze</th><th>ze sítě</th><th>z FVE/baterie</th><th>Kč</th><th>konec</th></tr></thead>
+            <thead><tr><th>Auto</th><th>Od</th><th>Do</th><th>Nabíjení</th><th>kWh</th><th>max kW</th><th>fáze</th><th>ze sítě</th><th>z FVE/baterie</th><th>Kč</th><th>konec</th></tr></thead>
             <tbody>{sessions.map((s) => (
               <tr key={s.id}>
+                <td>{carOfSession(s) ? <b>🚘 {carOfSession(s).name}</b> : <span className="muted">—</span>}</td>
                 <td>{dt(s.started_at)}</td><td>{s.ended_at ? dt(s.ended_at) : <b style={{ color: "var(--green)" }}>probíhá</b>}</td>
                 <td>{dur(s.charging_s || 0)}</td><td><b>{(((s.wh ?? s.wh_max) || 0) / 1000).toFixed(1)}</b></td>
                 <td>{((s.max_power_w || 0) / 1000).toFixed(1)}</td><td>{s.phases || "—"}</td>
