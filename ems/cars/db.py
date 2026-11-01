@@ -264,6 +264,19 @@ async def state(vin: str) -> dict:
                        "unit": r["unit"], "ts": r["ts"].isoformat(), "source": r["source"]} for r in rows}
 
 
+async def odometer_at_day_start(vin: str, key: str) -> float | None:
+    """Stav tachometru na začátku dnešního dne (Europe/Prague) = poslední hodnota před půlnocí; když není, první dnešní."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        v = await conn.fetchval(
+            "SELECT value_num FROM car_history WHERE vin=$1 AND key=$2 AND value_num IS NOT NULL "
+            "AND ts < date_trunc('day', now() AT TIME ZONE 'Europe/Prague') AT TIME ZONE 'Europe/Prague' ORDER BY ts DESC LIMIT 1", vin, key)
+        if v is None:
+            v = await conn.fetchval(
+                "SELECT value_num FROM car_history WHERE vin=$1 AND key=$2 AND value_num IS NOT NULL ORDER BY ts ASC LIMIT 1", vin, key)
+    return float(v) if v is not None else None
+
+
 async def history(vin: str, key: str, hours: int = 48) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:

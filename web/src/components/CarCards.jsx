@@ -32,7 +32,8 @@ export function CarCard({ car }) {
         {car.target_soc != null && <span>cíl <b>{Math.round(Number(car.target_soc))} %</b></span>}
         {car.kwh_to_target != null && <span>do cíle <b>{car.kwh_to_target} kWh</b></span>}
         {car.capacity_kwh != null && <span className="muted">{Number(car.capacity_kwh).toFixed(0)} kWh</span>}
-        {car.odometer_km != null && <span className="muted">{Math.round(Number(car.odometer_km)).toLocaleString("cs-CZ")} km</span>}
+        {car.km_today != null && <span>dnes <b>{Math.round(Number(car.km_today))} km</b></span>}
+        {car.odometer_km != null && <span className="muted">{Math.round(Number(car.odometer_km)).toLocaleString("cs-CZ")} km celkem</span>}
         {car.lat != null && car.lon != null && <a className="muted" href={`https://maps.google.com/?q=${car.lat},${car.lon}`} target="_blank" rel="noreferrer">📍 poloha</a>}
       </div>
       {!car.keys_received && <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>Zatím žádná data — čeká se na stream / REST.</div>}

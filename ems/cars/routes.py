@@ -80,7 +80,12 @@ async def vehicles(locality_id: int | None = None, _: dict = Depends(read)):
     out = []
     for v in await db.list_vehicles(locality_id):
         st = await db.state(v["vin"])
-        out.append({**service.car_view(v, st), "enabled": v.get("enabled", True), "key_map": {**db.DEFAULT_KEY_MAP, **(v.get("key_map") or {})}})
+        cv = service.car_view(v, st)
+        cv["km_today"] = None
+        if isinstance(cv.get("odometer_km"), (int, float)):
+            base = await db.odometer_at_day_start(v["vin"], cv["key_map_odometer"])
+            cv["km_today"] = round(max(0.0, float(cv["odometer_km"]) - base), 1) if base is not None else None
+        out.append({**cv, "enabled": v.get("enabled", True), "key_map": {**db.DEFAULT_KEY_MAP, **(v.get("key_map") or {})}})
     return out
 
 

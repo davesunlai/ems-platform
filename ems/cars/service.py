@@ -373,6 +373,7 @@ def car_view(v: dict, st: dict) -> dict:
         if e and (last_ts is None or e["ts"] > last_ts):
             last_ts = e["ts"]
     out["updated_at"] = last_ts
+    out["key_map_odometer"] = km["odometer_km"]
     cap = v.get("capacity_kwh") or (float(out["capacity_kwh"]) if isinstance(out.get("capacity_kwh"), (int, float)) else None)
     out["capacity_kwh"] = cap
     # katalog BMW udává charging.power ve W; některé vozy/integrace hlásí kW → podle jednotky, jinak podle velikosti

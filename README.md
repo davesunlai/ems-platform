@@ -1,3 +1,8 @@
+## v1.7.6 — Tlustší hrany, km u aut
+- Dashboard: neaktivní přerušované hrany 3× tlustší (3.6 px, opacity 0.6).
+- Auta v dashboardu i na kartě: „dnes N km · celkem N km“ (z historie `travelledDistance`, start dne Europe/Prague). Boxy aut vyšší.
+- Teploty (venkovní/vnitřní) BMW CarData zákaznické API nenabízí (ověřeno v katalogu 1. 11. 2026).
+
 ## v1.7.5 — Který vůz je na wallboxu + kabel do zástrčky
 - Dashboard: vůz u wallboxu se vybírá skórem (BMW nabíjí 4 · CONNECTED 3 · přiřazený wallbox 1 · DISCONNECTED −10); remíza bez důkazu → žádný.
   Jen vybraný vůz má zelený kabel a zástrčku; bliká jen při nabíjení. Kabel vede od wallboxu přímo do konektoru v autě.
