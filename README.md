@@ -1,3 +1,8 @@
+## v1.7.5 — Který vůz je na wallboxu + kabel do zástrčky
+- Dashboard: vůz u wallboxu se vybírá skórem (BMW nabíjí 4 · CONNECTED 3 · přiřazený wallbox 1 · DISCONNECTED −10); remíza bez důkazu → žádný.
+  Jen vybraný vůz má zelený kabel a zástrčku; bliká jen při nabíjení. Kabel vede od wallboxu přímo do konektoru v autě.
+- nginx (web): `resolver 127.0.0.11` + proxy_pass přes proměnnou — web přežije novou IP kontejneru api bez restartu.
+
 ## v1.7.4 — CarData: prázdné hodnoty a stav nabíjení
 - `write_values` ignoruje položky s `value: null` / INVALID / -NA- (REST je vrací a přemazávaly poslední platnou hodnotu).
 - `charging` = `CHARGINGACTIVE` (BMW hlásí `NOCHARGING`, které dřívější test bral jako nabíjení).
