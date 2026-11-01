@@ -1,3 +1,10 @@
+## v1.7.1 — Auta v dashboardu + ověřené klíče CarData
+- Dashboard: pod uzlem Wallbox podboxy vozů (🚘 název, SoC %, kWh v baterii, ⚡/🔌); klik otevře panel wallboxu. Max 2 vozy.
+- BMW CarData: výchozí mapování opraveno podle oficiálního katalogu (zástrčka = `vehicle.body.chargingPort.status`,
+  cíl = `vehicle.powertrain.electric.battery.stateOfCharge.target`, výkon nabíjení je ve W → převod na kW).
+  Nové role: zbývající čas, energie do plna, AC limit v autě, SoH. `car_view` vrací `kwh_now`.
+- Auta: panel „📡 Klíče pro CarData Stream“ — 14 doporučených deskriptorů s důvodem, tlačítko kopírovat; popisky rolí z API.
+
 # 📦 EMSBOX — připojení a konfigurace (přehled)
 
 **Co to je:** edge krabička (Raspberry Pi 4) u klienta — čte zařízení lokálně, data syncuje na

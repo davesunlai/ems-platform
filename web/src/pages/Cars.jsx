@@ -113,6 +113,8 @@ export default function Cars() {
             </tbody></table>)}
       </div>
 
+      {roles?.stream_keys?.length > 0 && <StreamKeys keys={roles.stream_keys} />}
+
       {keysFor && roles && (
         <div onClick={() => setKeysFor(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(900px, 96vw)", maxHeight: "90vh", overflow: "auto", padding: 14 }}>
@@ -131,11 +133,41 @@ export default function Cars() {
   );
 }
 
+function StreamKeys({ keys }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const txt = keys.map((k) => k.key).join("\n");
+  const copy = async () => { try { await navigator.clipboard.writeText(txt); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* bez clipboardu */ } };
+  return (
+    <div className="panel" style={{ marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setOpen(!open)}>
+        <b style={{ fontSize: 14 }}>📡 Klíče pro CarData Stream ({keys.length})</b>
+        <span className="muted" style={{ fontSize: 12 }}>co zaškrtnout v My BMW → BMW CarData → Datový stream</span>
+        <span style={{ marginLeft: "auto" }}>{open ? "▴" : "▾"}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 8, fontSize: 12.5 }}>
+          <p className="muted" style={{ margin: "0 0 8px" }}>
+            Stream posílá jen klíče zaškrtnuté v portálu; neposílá nic, dokud se hodnota v autě nezmění. Tohle je minimum, se kterým TERA pracuje
+            (dashboard, kWh do cíle, plánovač nabíjení). Katalog se liší podle modelu — klíč, který auto nemá, zůstane prázdný a nic nerozbije.
+          </p>
+          <table style={{ width: "100%", fontSize: 12 }}>
+            <tbody>{keys.map((k, i) => (
+              <tr key={k.key}><td className="muted" style={{ width: 24 }}>{i + 1}.</td><td><code style={{ fontSize: 11.5 }}>{k.key}</code></td><td className="muted">{k.why}</td></tr>))}
+            </tbody></table>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+            <button className="btn" onClick={copy}>{copied ? "✅ zkopírováno" : "📋 kopírovat seznam"}</button>
+            <span className="muted" style={{ fontSize: 11.5 }}>Stejný seznam si TERA vyžádá i pro REST kontejner (doplňkové čtení à 40 min).</span>
+          </div>
+        </div>)}
+    </div>
+  );
+}
+
 function KeyMapEditor({ car, roles, keys, onSave }) {
   const [km, setKm] = useState({ ...roles.default_key_map, ...(car?.key_map || {}) });
   const opts = Object.keys(keys);
-  const LBL = { soc: "SoC (%)", capacity_kwh: "kapacita (kWh)", charging_status: "stav nabíjení", charging_power_kw: "výkon nabíjení (kW)", plugged: "zapojený kabel",
-    target_soc: "cílové SoC (%)", range_km: "dojezd (km)", odometer_km: "km celkem", lat: "zem. šířka", lon: "zem. délka" };
+  const LBL = roles.role_labels || {};
   return (
     <div style={{ fontSize: 12.5, marginTop: 8 }}>
       <div className="muted" style={{ marginBottom: 4 }}>Mapování rolí → deskriptor (katalog se liší podle modelu; vyber z toho, co auto opravdu posílá):</div>

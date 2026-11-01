@@ -368,6 +368,15 @@ def car_view(v: dict, st: dict) -> dict:
     out["updated_at"] = last_ts
     cap = v.get("capacity_kwh") or (float(out["capacity_kwh"]) if isinstance(out.get("capacity_kwh"), (int, float)) else None)
     out["capacity_kwh"] = cap
+    # katalog BMW udává charging.power ve W; některé vozy/integrace hlásí kW → podle jednotky, jinak podle velikosti
+    pw = out.get("charging_power_kw")
+    if isinstance(pw, (int, float)):
+        unit = str((st.get(km["charging_power_kw"]) or {}).get("unit") or "").lower()
+        out["charging_power_kw"] = round(pw / 1000.0, 2) if (unit in ("w", "watt") or (not unit and abs(pw) > 100)) else round(float(pw), 2)
+    try:
+        out["kwh_now"] = round(float(out["soc"]) / 100.0 * cap, 1) if cap and out.get("soc") is not None else None
+    except (TypeError, ValueError):
+        out["kwh_now"] = None
     try:
         soc, tgt = float(out["soc"]), float(out["target_soc"]) if out.get("target_soc") is not None else 100.0
         out["kwh_to_target"] = round(max(0.0, (tgt - soc) / 100.0 * cap), 1) if cap else None
@@ -376,5 +385,6 @@ def car_view(v: dict, st: dict) -> dict:
     cs = str(out.get("charging_status") or "").upper()
     out["charging"] = ("CHARG" in cs and "NOT" not in cs) or (isinstance(out.get("charging_power_kw"), (int, float)) and out["charging_power_kw"] > 0.2)
     p = out.get("plugged")
-    out["plugged_bool"] = (p in (1, 1.0, True, "true", "CONNECTED", "PLUGGED")) if p is not None else None
+    ps = str(p).upper() if p is not None else ""
+    out["plugged_bool"] = (p in (1, 1.0, True, "true") or ps.startswith("CONNECTED") or ps == "PLUGGED") if p is not None and ps not in ("INVALID", "-NA-") else None
     return out

@@ -103,4 +103,5 @@ async def vehicle_history(vin: str, key: str, hours: int = 48, _: dict = Depends
 
 @router.get("/roles")
 async def roles(_: dict = Depends(read)):
-    return {"roles": db.ROLES, "default_key_map": db.DEFAULT_KEY_MAP}
+    return {"roles": db.ROLES, "role_labels": db.ROLE_LABELS, "default_key_map": db.DEFAULT_KEY_MAP,
+            "stream_keys": [{"key": k, "why": w} for k, w in db.STREAM_KEYS]}

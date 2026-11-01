@@ -10,19 +10,48 @@ from datetime import datetime, timezone
 from ems.api.db import get_pool
 
 # výchozí mapování rolí → deskriptor (podle integrací komunity; ověří se živě proti tomu, co auto posílá)
+# Role → technický deskriptor (TDC). Názvy ověřeny proti BMW CarData Telematics Data Catalogue (1. 11. 2026)
+# a integracím evcc / HA; dostupnost se liší po modelech (Neue Klasse neposílá batteryManagement.header).
 DEFAULT_KEY_MAP = {
-    "soc": "vehicle.drivetrain.batteryManagement.header",
-    "capacity_kwh": "vehicle.drivetrain.batteryManagement.maxEnergy",
-    "charging_status": "vehicle.drivetrain.electricEngine.charging.status",
-    "charging_power_kw": "vehicle.powertrain.electric.battery.charging.power",
-    "plugged": "vehicle.drivetrain.electricEngine.charging.plugConnected",
-    "target_soc": "vehicle.drivetrain.electricEngine.charging.targetSoc",
+    "soc": "vehicle.drivetrain.batteryManagement.header",                      # % SoC VN baterie
+    "capacity_kwh": "vehicle.drivetrain.batteryManagement.maxEnergy",          # kWh využitelné (plně nabito, predikce)
+    "charging_status": "vehicle.drivetrain.electricEngine.charging.status",    # CHARGING / NOT_CHARGING / …
+    "charging_power_kw": "vehicle.powertrain.electric.battery.charging.power", # katalog udává W → převod v car_view
+    "plugged": "vehicle.body.chargingPort.status",                             # CONNECTED / DISCONNECTED
+    "target_soc": "vehicle.powertrain.electric.battery.stateOfCharge.target",  # % cílové SoC
+    "time_remaining_min": "vehicle.drivetrain.electricEngine.charging.timeRemaining",
+    "kwh_to_full": "vehicle.drivetrain.electricEngine.charging.smeEnergyDeltaFullyCharged",
+    "ac_limit_a": "vehicle.powertrain.electric.battery.charging.acLimit.selected",
+    "soh_pct": "vehicle.powertrain.electric.battery.stateOfHealth.displayed",
     "range_km": "vehicle.drivetrain.electricEngine.kombiRemainingElectricRange",
     "odometer_km": "vehicle.vehicle.travelledDistance",
     "lat": "vehicle.cabin.infotainment.navigation.currentLocation.latitude",
-    "lon": "vehicle.cabin.infotainment.navigation.currentLocation.longitude",
+    "lon": "vehicle.cabin.infotainment.navigation.currentLocation.longitude",  # jen při zapojeném kabelu
 }
 ROLES = list(DEFAULT_KEY_MAP)
+ROLE_LABELS = {
+    "soc": "SoC baterie (%)", "capacity_kwh": "kapacita (kWh)", "charging_status": "stav nabíjení",
+    "charging_power_kw": "výkon nabíjení", "plugged": "zástrčka zapojena", "target_soc": "cílové SoC (%)",
+    "time_remaining_min": "zbývá do konce (min)", "kwh_to_full": "energie do plna (kWh)", "ac_limit_a": "AC limit v autě (A)",
+    "soh_pct": "zdraví baterie SoH (%)", "range_km": "dojezd (km)", "odometer_km": "tachometr (km)", "lat": "poloha — šířka", "lon": "poloha — délka",
+}
+# Doporučený výběr pro CarData Stream v portálu My BMW (co TERA skutečně používá). Pořadí = priorita.
+STREAM_KEYS = [
+    ("vehicle.drivetrain.batteryManagement.header", "SoC — základ všeho (dashboard, plánovač)"),
+    ("vehicle.body.chargingPort.status", "zapojení kabelu (CONNECTED/DISCONNECTED) — pozná auto u wallboxu"),
+    ("vehicle.drivetrain.electricEngine.charging.status", "stav nabíjení"),
+    ("vehicle.powertrain.electric.battery.charging.power", "výkon nabíjení (W) — kontrola proti wallboxu"),
+    ("vehicle.powertrain.electric.battery.stateOfCharge.target", "cílové SoC nastavené v autě → kWh do cíle"),
+    ("vehicle.drivetrain.batteryManagement.maxEnergy", "využitelná kapacita (kWh) → přepočet % na kWh"),
+    ("vehicle.drivetrain.electricEngine.charging.timeRemaining", "odhad zbývajícího času nabíjení"),
+    ("vehicle.drivetrain.electricEngine.charging.smeEnergyDeltaFullyCharged", "energie do plna (kWh) — křížová kontrola"),
+    ("vehicle.drivetrain.electricEngine.kombiRemainingElectricRange", "dojezd na displeji"),
+    ("vehicle.vehicle.travelledDistance", "tachometr (spotřeba na km, servis)"),
+    ("vehicle.powertrain.electric.battery.charging.acLimit.selected", "AC limit zvolený v autě — vysvětlí, proč auto nebere víc"),
+    ("vehicle.powertrain.electric.battery.stateOfHealth.displayed", "zdraví baterie (dlouhodobě)"),
+    ("vehicle.cabin.infotainment.navigation.currentLocation.latitude", "poloha (jen při zapojeném kabelu)"),
+    ("vehicle.cabin.infotainment.navigation.currentLocation.longitude", "poloha (jen při zapojeném kabelu)"),
+]
 
 
 async def ensure_schema() -> None:

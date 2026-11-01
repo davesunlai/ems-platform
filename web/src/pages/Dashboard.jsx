@@ -847,6 +847,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [outs, setOuts] = useState([]);
   const [hp, setHp] = useState(null);
   const [ev, setEv] = useState(null);          // 🚗 wallbox (go-e) — stav + module_ids
+  const [cars, setCars] = useState([]);        // 🚘 vozy (BMW CarData) této lokality — podboxy pod wallboxem
   const [evOpen, setEvOpen] = useState(false);
   const [node, setNode] = useState(null);      // rozkliknutý uzel: pv | grid | home | bat | hp | backup | out:<id>
   const [mob, setMob] = useState(() => window.innerWidth <= 640);
@@ -874,6 +875,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
       api.listOutputs().then((r) => alive && setOuts((r || []).filter((o) => o.locality_id == null || o.locality_id === locId))).catch(() => {});
       api.hpState(locId).then((r) => alive && setHp(r.state || null)).catch(() => alive && setHp(null));
       api.evState(locId).then((r) => alive && setEv(r)).catch(() => alive && setEv(null));
+      api.carsVehicles(locId).then((r) => alive && setCars((r || []).filter((c) => c.enabled !== false))).catch(() => alive && setCars([]));
     };
     load();
     const t = setInterval(load, 5000);
@@ -887,6 +889,15 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const evTitle = evS ? (EV_CAR[evS.car_state] || "wallbox") : "wallbox";
   const evSub = evS ? (evOn ? `${(evS.session_wh / 1000).toFixed(1)} kWh · ${evS.phases_active || "?"}f` : (evS.car_state === "idle" ? "bez auta" : `${((evS.session_wh || 0) / 1000).toFixed(1)} kWh`)) : null;
   const evMod = ev?.module_ids?.[0] ? { id: ev.module_ids[0], name: "wallbox", locality_id: locId } : null;
+  const carShown = ev ? cars.slice(0, 2) : [];
+  const carVal = (c) => (c.soc != null ? `${Math.round(Number(c.soc))} %` : "—");
+  const carSub = (c) => {
+    const kwh = c.kwh_now != null ? `${Number(c.kwh_now).toFixed(0)} kWh` : (c.range_km != null ? `${Math.round(Number(c.range_km))} km` : null);
+    const st = c.charging ? "⚡" : c.plugged_bool ? "🔌" : null;
+    return [kwh, st].filter(Boolean).join(" · ") || (c.keys_received ? null : "čeká na data");
+  };
+  const carAcc = (c) => (c.charging ? "#58a6ff" : c.soc != null && Number(c.soc) < 20 ? "#f85149" : null);
+  const carName = (c) => String(c.name || c.model || c.vin.slice(-6)).slice(0, mob || carShown.length < 2 ? 14 : 10);
   const pvKw = d ? kw(d.pv_w) : 0;
   const batW = d?.battery_w || 0;                 // + nabíjení / − vybíjení
   const gridW = d?.grid_w || 0;                   // + import / − export
@@ -923,7 +934,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
         {icOpen && <FlowIconPicker ic={ic} pick={pickIcon} extra={icExtra} onClose={() => setIcOpen(false)} />}
 
         {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
-          <svg viewBox={`0 0 400 ${ev ? 840 : 700}`} style={{ width: "100%", marginTop: 8 }}>
+          <svg viewBox={`0 0 400 ${ev ? (carShown.length ? 850 : 840) : 700}`} style={{ width: "100%", marginTop: 8 }}>
             <defs>
               {COLORS.map((c) => (
                 <marker key={c} id={`efarr-${c}`} viewBox="0 0 16 10" refX="14" refY="5" markerUnits="userSpaceOnUse" markerWidth="19" markerHeight="12" orient="auto-start-reverse">
@@ -1016,9 +1027,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 <FlowNode m={1.5} x={10} y={696} w={185} h={128} icon="🚗" title={`Wallbox · ${evTitle}`}
                           value={evOn ? f1(evKw) : (evS?.car_state === "idle" ? "bez auta" : "0.0 kW")} sub={evSub} accent={evOn ? "#58a6ff" : null} />
               </g>)}
+            {carShown.map((c, i) => (
+              <g key={c.vin} onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
+                <FlowNode m={1.5} x={205} y={696 + i * 78} w={185} h={70} icon="🚘" title={carName(c)} value={carVal(c)} sub={carSub(c)} accent={carAcc(c)} />
+              </g>))}
           </svg>
         ) : (
-          <svg viewBox="0 0 760 470" style={{ width: "100%", marginTop: 8 }}>
+          <svg viewBox={`0 0 760 ${carShown.length ? 482 : 470}`} style={{ width: "100%", marginTop: 8 }}>
             <defs>
               {COLORS.map((c) => (
                 <marker key={c} id={`efarr-${c}`} viewBox="0 0 16 10" refX="14" refY="5" markerUnits="userSpaceOnUse" markerWidth="19" markerHeight="12" orient="auto-start-reverse">
@@ -1100,6 +1115,12 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 <FlowNode x={295} y={356} w={170} h={54} icon="🚗" title={`Wallbox · ${evTitle}`}
                           value={evOn ? f1(evKw) : (evS?.car_state === "idle" ? "bez auta" : "0.0 kW")} sub={evSub} accent={evOn ? "#58a6ff" : null} />
               </g>)}
+            {carShown.map((c, i) => (
+              <g key={c.vin} onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
+                <line x1={380} y1={410} x2={carShown.length === 1 ? 380 : 338 + i * 86} y2={422} stroke="var(--border)" strokeWidth="1.2" />
+                <FlowNode x={carShown.length === 1 ? 295 : 295 + i * 86} y={422} w={carShown.length === 1 ? 170 : 84} h={52}
+                          icon="🚘" title={carName(c)} value={carVal(c)} sub={carSub(c)} accent={carAcc(c)} />
+              </g>))}
             {hp && (
               <FlowNode x={585} y={268} w={150} h={54} icon={ic.hp} title="Tepelné čerpadlo" onClick={() => setNode("hp")}
                         value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
