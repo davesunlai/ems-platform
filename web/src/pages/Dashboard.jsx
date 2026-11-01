@@ -400,7 +400,7 @@ function SunCloud({ cx, cy, base, sun, cloud, frac }) {
   </>);
 }
 
-function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1, overlay, auditKey, onAudit }) {
+function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1, overlay, auditKey, onAudit, shape }) {
   const hov = auditKey && onAudit ? { onMouseEnter: (e) => onAudit(auditKey, e), onMouseLeave: () => onAudit(null),
                                       style: { cursor: "help", textDecoration: "underline dotted" } } : {};
   if (h < 80 * m) {   // kompaktní box (výstupy, TČ v desktop layoutu): ikona vlevo, texty se vejdou DOVNITŘ
@@ -418,7 +418,9 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
   }
   return (
     <g>
-      <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
+      {shape === "ellipse"
+        ? <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2 + 6 * m} ry={h / 2 + 4 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
+        : <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />}
       {overlay
         ? <>
             <Ico icon={icon} cx={x + w / 2 - 24 * m} cy={y + 22 * m} size={26 * m} />
@@ -849,12 +851,19 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={i === 0 ? 92 : 312} ly={470} />
             ))}
+            {/* dům → záloha (backup výstup měniče) */}
+            {(d.backup_w ?? 0) > 50 && (
+              <FlowEdge m={1.5} d="M260,324 C340,360 330,430 320,474" kw={kw(d.backup_w)} active={kw(d.backup_w) > 0.05} color="#39c5cf"
+                        label={f1(kw(d.backup_w))} lx={350} ly={420} />)}
+            {/* dům → wallbox (hrany jsou vždy POD boxy — kreslí se dřív než uzly) */}
+            {ev && (
+              <FlowEdge m={1.5} d="M200,324 C200,500 100,620 100,696" kw={evKw} active={evOn} color="#58a6ff" label={f1(evKw)} lx={168} ly={520} />)}
             <PvNode m={1.4} x={10} y={10} w={185} h={128} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} />
             <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit}
                       value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode m={1.5} x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
+            <FlowNode m={1.5} shape="ellipse" x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.xcheck?.house_load_inv != null ? `měnič (33147): ${(d.xcheck.house_load_inv / 1000).toFixed(2)} kW · dopočet vs měřeno` : "výkon / dnes celkem"} accent="var(--amber, #d29922)" />
             {/* baterie — velký box s pod-boxy (mobil) */}
             <g>
@@ -898,7 +907,6 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             ))}
             {ev && (
               <g onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
-                <FlowEdge m={1.5} d="M200,324 C200,500 100,620 100,696" kw={evKw} active={evOn} color="#58a6ff" label={f1(evKw)} lx={168} ly={520} />
                 <FlowNode m={1.5} x={10} y={696} w={185} h={128} icon="🚗" title={`Wallbox · ${evTitle}`}
                           value={evOn ? f1(evKw) : (evS?.car_state === "idle" ? "bez auta" : "0.0 kW")} sub={evSub} accent={evOn ? "#58a6ff" : null} />
               </g>)}
@@ -938,11 +946,18 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         kw={outKw(o) ?? 1} active={outOn(o)} color="#d29922"
                         label={outLabel(o)} lx={505} ly={330 + i * 55} />
             ))}
+            {/* dům → záloha */}
+            {(d.backup_w ?? 0) > 50 && (
+              <FlowEdge d="M395,268 C400,276 400,282 395,290" kw={kw(d.backup_w)} active={kw(d.backup_w) > 0.05} color="#39c5cf"
+                        label={f1(kw(d.backup_w))} lx={470} ly={284} />)}
+            {/* dům → wallbox (obchází zálohu zleva; hrany vždy POD boxy) */}
+            {ev && (
+              <FlowEdge d="M340,268 C290,290 272,330 300,362" kw={evKw} active={evOn} color="#58a6ff" label={f1(evKw)} lx={262} ly={325} />)}
             <PvNode x={10} y={48} w={280} h={94} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} />
             <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit} value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode x={295} y={188} w={170} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
+            <FlowNode shape="ellipse" x={295} y={188} w={170} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.xcheck?.house_load_inv != null ? `měnič (33147): ${(d.xcheck.house_load_inv / 1000).toFixed(2)} kW · dopočet vs měřeno` : "výkon / dnes celkem"} accent="var(--amber, #d29922)" />
             <g>
               <rect x={45} y={330} width={200} height={124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
@@ -976,7 +991,6 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                         value={`${f1(kw(d.backup_w))}`} sub="zálohovaný výstup měniče" accent="#39c5cf" />)}
             {ev && (
               <g onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
-                <FlowEdge d="M400,268 C410,300 395,330 380,356" kw={evKw} active={evOn} color="#58a6ff" label={f1(evKw)} lx={425} ly={322} />
                 <FlowNode x={295} y={356} w={170} h={54} icon="🚗" title={`Wallbox · ${evTitle}`}
                           value={evOn ? f1(evKw) : (evS?.car_state === "idle" ? "bez auta" : "0.0 kW")} sub={evSub} accent={evOn ? "#58a6ff" : null} />
               </g>)}

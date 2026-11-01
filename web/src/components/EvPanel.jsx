@@ -5,7 +5,8 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 
-export const EV_CAR = { idle: "bez auta", charging: "⚡ nabíjí", wait_car: "auto připojeno, čeká", complete: "✅ nabito", error: "⛔ chyba", unknown: "?" };
+// go-e car: 1 = bez auta, 2 = nabíjí, 3 = připojeno a čeká na auto, 4 = připojeno, nenabíjí (auto nežádá / plné / pauza) — „Complete" u go-e NEZNAMENÁ plnou baterii
+export const EV_CAR = { idle: "bez auta", charging: "⚡ nabíjí", wait_car: "🔌 připojeno · čeká na auto", complete: "🔌 připojeno · nenabíjí", error: "⛔ chyba", unknown: "?" };
 const FLD = { padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" };
 const dt = (iso) => (iso ? new Date(iso).toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 const dur = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.round(s / 60)} min`);
@@ -14,12 +15,18 @@ const dur = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 360
 export function EvControl({ mod, live, onSent }) {
   const { has } = useAuth();
   const [st, setSt] = useState(null);
-  const [amp, setAmp] = useState(16);
-  const [psm, setPsm] = useState(2);
+  const [amp, setAmp] = useState("");
+  const [psm, setPsm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const refresh = () => api.controlStates(mod.id).then((r) => setSt((r?.states || {})[mod.id] || null)).catch(() => {});
   useEffect(() => { refresh(); const t = setInterval(refresh, 10000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [mod.id]);
+  // předvyplnit AKTUÁLNÍ hodnoty (cíl EMS, jinak co je na nabíječce) — ne default
+  useEffect(() => {
+    const t = st?.action === "ev_set" ? (st.params?.target || {}) : {};
+    if (amp === "" && (t.amp ?? live?.amp_set) != null) setAmp(t.amp ?? live.amp_set);
+    if (psm == null && (t.psm ?? live?.phase_mode) != null) setPsm(t.psm ?? live.phase_mode);
+    /* eslint-disable-next-line */ }, [st, live]);
   const send = async (action, params, label) => {
     setBusy(true); setMsg("");
     try { await api.enqueueCommand(mod.id, action, { ...params, source: "manual", reason: label }); setMsg(`${label} — odesláno`); setTimeout(() => { refresh(); onSent && onSent(); }, 4000); }
@@ -35,11 +42,11 @@ export function EvControl({ mod, live, onSent }) {
       {has("control") ? (
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
           <label style={{ fontSize: 12 }}>proud <input style={{ ...FLD, width: 56 }} value={amp} onChange={(e) => setAmp(e.target.value)} /> A</label>
-          <select style={FLD} value={psm} onChange={(e) => setPsm(Number(e.target.value))}>
+          <select style={FLD} value={psm ?? 0} onChange={(e) => setPsm(Number(e.target.value))}>
             <option value={1}>1 fáze</option><option value={2}>3 fáze</option><option value={0}>auto</option>
           </select>
-          <span className="muted" style={{ fontSize: 12 }}>≈ {estKw(Number(amp) || 0, psm)} kW</span>
-          <button className="btn primary" disabled={busy} onClick={() => send("ev_set", { amp: Number(amp), psm, frc: 2 }, `nabíjet ${amp} A ${psm === 1 ? "1f" : psm === 2 ? "3f" : "auto"}`)}>⚡ Nabíjet</button>
+          <span className="muted" style={{ fontSize: 12 }}>≈ {estKw(Number(amp) || 0, psm ?? 0)} kW</span>
+          <button className="btn primary" disabled={busy || !(Number(amp) >= 6)} onClick={() => send("ev_set", { amp: Number(amp), psm: psm ?? 0, frc: 2 }, `nabíjet ${amp} A ${psm === 1 ? "1f" : psm === 2 ? "3f" : "auto"}`)}>⚡ Nabíjet</button>
           <button className="btn" disabled={busy} onClick={() => send("ev_set", { frc: 1 }, "pauza")}>⏸ Pauza</button>
           <button className="btn" disabled={busy} onClick={() => send("ev_release", {}, "uvolnit řízení")}>↺ Uvolnit</button>
           {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
@@ -54,19 +61,69 @@ export function EvControl({ mod, live, onSent }) {
 }
 
 // Celý panel (modal na dashboardu): stav + řízení + historie
+// Měsíční sloupcový graf: den = celková energie (z čítače), uvnitř dílky = relace začínající ten den.
+function MonthChart({ month, daily, sessions }) {
+  const [y, m] = month.split("-").map(Number);
+  const nDays = new Date(y, m, 0).getDate();
+  const byDay = {};
+  daily.forEach((x) => { byDay[Number(x.day.slice(8, 10))] = x.kwh || 0; });
+  const segs = {};
+  sessions.forEach((s) => {
+    const d = new Date(s.started_at); if (d.getFullYear() !== y || d.getMonth() + 1 !== m) return;
+    const k = (((s.wh ?? s.wh_max) || 0) / 1000);
+    if (k > 0.05) (segs[d.getDate()] = segs[d.getDate()] || []).push({ kwh: k, id: s.id, t: d });
+  });
+  const totals = Array.from({ length: nDays }, (_, i) => Math.max(byDay[i + 1] || 0, (segs[i + 1] || []).reduce((a, b) => a + b.kwh, 0)));
+  const maxV = Math.max(5, ...totals);
+  const step = maxV <= 10 ? 2 : maxV <= 30 ? 5 : maxV <= 60 ? 10 : 20;
+  const top = Math.ceil(maxV / step) * step;
+  const W = 720, H = 230, L = 38, B = 28, T = 14, R = 6;
+  const cw = (W - L - R) / nDays, bw = cw * 0.7;
+  const yv = (v) => T + (H - T - B) * (1 - v / top);
+  const COLORS = ["#3fb950", "#58a6ff", "#a371f7", "#d29922", "#39c5cf"];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", margin: "6px 0 10px" }}>
+      {Array.from({ length: top / step + 1 }, (_, i) => i * step).map((v) => (
+        <g key={v}><line x1={L} x2={W - R} y1={yv(v)} y2={yv(v)} stroke="var(--border)" strokeWidth="0.6" />
+          <text x={L - 4} y={yv(v) + 3} textAnchor="end" fontSize="9" fill="var(--muted)">{v}</text></g>))}
+      <text x={6} y={T + 4} fontSize="9" fill="var(--muted)">kWh</text>
+      {totals.map((tot, i) => {
+        const x = L + i * cw + (cw - bw) / 2;
+        const sg = segs[i + 1] || [];
+        let acc = 0;
+        const parts = sg.map((s, j) => { const y0 = yv(acc + s.kwh), h = yv(acc) - y0; acc += s.kwh;
+          return <g key={s.id}><rect x={x} y={y0} width={bw} height={Math.max(1, h)} fill={COLORS[j % COLORS.length]} stroke="var(--bg)" strokeWidth="0.8" />
+            {h > 11 && <text x={x + bw / 2} y={y0 + h / 2 + 3} textAnchor="middle" fontSize="8" fill="#000">{s.kwh.toFixed(1)}</text>}</g>; });
+        const rest = tot - acc;
+        return (
+          <g key={i}>
+            {parts}
+            {rest > 0.05 && <rect x={x} y={yv(tot)} width={bw} height={Math.max(1, yv(acc) - yv(tot))} fill="var(--green)" opacity="0.45" />}
+            {tot <= 0.05 && <rect x={x} y={yv(0) - 1} width={bw} height={1} fill="var(--muted)" opacity="0.5" />}
+            <text x={x + bw / 2} y={yv(tot) - 3} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="var(--fg)">{tot.toFixed(tot >= 10 ? 0 : 1)}</text>
+            <text x={x + bw / 2} y={H - B + 12} textAnchor="middle" fontSize="8.5" fill="var(--muted)">{i + 1}.</text>
+          </g>);
+      })}
+      <text x={(L + W - R) / 2} y={H - 4} textAnchor="middle" fontSize="9" fill="var(--muted)">den v měsíci</text>
+    </svg>
+  );
+}
+
 export function EvPanel({ locId, mod, onClose }) {
   const { has } = useAuth();
   const [live, setLive] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [daily, setDaily] = useState([]);
+  const [month, setMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; });
   const load = () => {
     api.evState(locId).then((r) => setLive(r.state)).catch(() => {});
-    api.evSessions(locId, 30).then(setSessions).catch(() => {});
-    api.evDaily(locId, 14).then(setDaily).catch(() => {});
+    api.evSessionsMonth(locId, month).then(setSessions).catch(() => {});
+    api.evDailyMonth(locId, month).then(setDaily).catch(() => {});
   };
-  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [locId]);
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [locId, month]);
   const kw = live?.power_w != null ? (live.power_w / 1000).toFixed(1) : "?";
-  const maxDay = Math.max(0.1, ...daily.map((x) => x.kwh || 0));
+  const shiftMonth = (k) => { const [y, m] = month.split("-").map(Number); const d = new Date(y, m - 1 + k, 1); setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
+  const monthLabel = (() => { const [y, m] = month.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("cs-CZ", { month: "long", year: "numeric" }); })();
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(760px, 96%)", maxHeight: "92vh", overflow: "auto", padding: 14 }}>
@@ -90,17 +147,14 @@ export function EvPanel({ locId, mod, onClose }) {
         ) : <p className="muted">Načítám…</p>}
         {mod?.id && <div style={{ padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 10 }}><EvControl mod={mod} live={live} onSent={load} /></div>}
 
-        <b style={{ fontSize: 13 }}>Nabito po dnech (14 dní)</b>
-        {daily.length ? (
-          <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 70, margin: "6px 0 10px" }}>
-            {daily.map((x) => (
-              <div key={x.day} title={`${new Date(x.day).toLocaleDateString("cs-CZ")}: ${x.kwh} kWh · max ${x.max_power_kw} kW`} style={{ flex: 1, textAlign: "center", fontSize: 10 }}>
-                <div style={{ height: Math.max(2, 50 * (x.kwh || 0) / maxDay), background: "var(--green)", borderRadius: 3, opacity: x.kwh ? 0.9 : 0.25 }} />
-                <div className="muted">{new Date(x.day).getDate()}.</div>
-                <div>{x.kwh ? x.kwh.toFixed(0) : ""}</div>
-              </div>))}
-          </div>
-        ) : <p className="muted" style={{ fontSize: 12 }}>Zatím bez denních dat (agregát se plní po hodině).</p>}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+          <b style={{ fontSize: 13 }}>Nabito po dnech</b>
+          <button className="btn" style={{ padding: "1px 8px" }} onClick={() => shiftMonth(-1)} title="předchozí měsíc">◀</button>
+          <span style={{ fontSize: 13, minWidth: 120, textAlign: "center" }}>{monthLabel}</span>
+          <button className="btn" style={{ padding: "1px 8px" }} onClick={() => shiftMonth(1)} title="další měsíc">▶</button>
+          <span className="muted" style={{ fontSize: 11.5 }}>sloupec = den (kWh), dílky = jednotlivé relace</span>
+        </div>
+        <MonthChart month={month} daily={daily} sessions={sessions} />
 
         <b style={{ fontSize: 13 }}>Historie relací</b>
         {sessions.length ? (

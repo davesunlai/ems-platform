@@ -2,6 +2,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+_TZ = ZoneInfo("Europe/Prague")
+
+
+def _month_range(month: str) -> tuple[datetime, datetime]:
+    y, m = (int(x) for x in month.split("-")[:2])
+    start = datetime(y, m, 1, tzinfo=_TZ)
+    end = datetime(y + (m // 12), (m % 12) + 1, 1, tzinfo=_TZ)
+    return start, end
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -37,14 +47,26 @@ async def ev_state(locality_id: int, _: dict = Depends(read)) -> dict:
 
 
 @router.get("/localities/{locality_id}/ev/sessions")
-async def ev_sessions(locality_id: int, limit: int = 50, _: dict = Depends(read)) -> list[dict]:
+async def ev_sessions(locality_id: int, limit: int = 50, month: str | None = None, _: dict = Depends(read)) -> list[dict]:
     mods = await _ev_modules(locality_id); _need(mods)
+    if month:
+        try:
+            s, e = _month_range(month)
+        except Exception:
+            raise HTTPException(status_code=400, detail="month = YYYY-MM")
+        return await ev_db.sessions(mods, max(1, min(limit, 500)), s, e)
     return await ev_db.sessions(mods, max(1, min(limit, 500)))
 
 
 @router.get("/localities/{locality_id}/ev/daily")
-async def ev_daily(locality_id: int, days: int = 31, _: dict = Depends(read)) -> list[dict]:
+async def ev_daily(locality_id: int, days: int = 31, month: str | None = None, _: dict = Depends(read)) -> list[dict]:
     mods = await _ev_modules(locality_id); _need(mods)
+    if month:
+        try:
+            s, e = _month_range(month)
+        except Exception:
+            raise HTTPException(status_code=400, detail="month = YYYY-MM")
+        return await ev_db.daily(mods, s, e, live=True)
     end = datetime.now(timezone.utc) + timedelta(days=1)
     return await ev_db.daily(mods, end - timedelta(days=max(1, min(days, 366))), end)
 

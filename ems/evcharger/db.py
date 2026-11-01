@@ -91,12 +91,18 @@ async def latest_for_modules(module_ids: list[str]) -> dict | None:
     return dict(row) if row else None
 
 
-async def sessions(module_ids: list[str], limit: int = 50) -> list[dict]:
+async def sessions(module_ids: list[str], limit: int = 50, start: datetime | None = None,
+                   end: datetime | None = None) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM ev_sessions WHERE module_id = ANY($1::text[]) ORDER BY started_at DESC LIMIT $2",
-            module_ids, limit)
+        if start and end:
+            rows = await conn.fetch(
+                "SELECT * FROM ev_sessions WHERE module_id = ANY($1::text[]) AND started_at >= $3 AND started_at < $4 "
+                "ORDER BY started_at DESC LIMIT $2", module_ids, limit, start, end)
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM ev_sessions WHERE module_id = ANY($1::text[]) ORDER BY started_at DESC LIMIT $2",
+                module_ids, limit)
     out = []
     for r in rows:
         d = dict(r)
@@ -107,14 +113,23 @@ async def sessions(module_ids: list[str], limit: int = 50) -> list[dict]:
     return out
 
 
-async def daily(module_ids: list[str], start: datetime, end: datetime) -> list[dict]:
-    """kWh/den z delty eto (reset čítače → bere jen kladné přírůstky mezi dny)."""
+async def daily(module_ids: list[str], start: datetime, end: datetime, live: bool = False) -> list[dict]:
+    """kWh/den z delty eto (reset čítače → bere jen kladné přírůstky mezi dny).
+    live=True počítá přímo z ev_telemetry (včetně dneška, bez zpoždění agregátu) — pro měsíční pohled."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """SELECT day, module_id, eto_min, eto_max, max_power_w, charging_samples
-               FROM ev_daily WHERE module_id = ANY($1::text[]) AND day >= $2 AND day < $3 ORDER BY day, module_id""",
-            module_ids, start, end)
+        if live:
+            rows = await conn.fetch(
+                """SELECT time_bucket('1 day', ts, 'Europe/Prague') AS day, module_id,
+                          min(energy_total_wh) AS eto_min, max(energy_total_wh) AS eto_max, max(power_w) AS max_power_w,
+                          count(*) FILTER (WHERE car = 2) AS charging_samples
+                   FROM ev_telemetry WHERE module_id = ANY($1::text[]) AND ts >= $2 AND ts < $3
+                   GROUP BY 1, 2 ORDER BY 1, 2""", module_ids, start, end)
+        else:
+            rows = await conn.fetch(
+                """SELECT day, module_id, eto_min, eto_max, max_power_w, charging_samples
+                   FROM ev_daily WHERE module_id = ANY($1::text[]) AND day >= $2 AND day < $3 ORDER BY day, module_id""",
+                module_ids, start, end)
     out, prev_max = [], {}
     for r in rows:
         m = r["module_id"]
