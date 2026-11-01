@@ -3,6 +3,9 @@ Vzor hp_telemetry / hp_runs (GOE-ADAPTER-BRIEF §2)."""
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_TZ = ZoneInfo("Europe/Prague")
 
 from ems.api.db import get_pool
 
@@ -137,7 +140,8 @@ async def daily(module_ids: list[str], start: datetime, end: datetime, live: boo
         base = pm if (pm is not None and r["eto_min"] is not None and r["eto_min"] >= pm) else r["eto_min"]
         kwh = max(0.0, float((r["eto_max"] or 0) - (base or 0))) / 1000.0
         prev_max[m] = r["eto_max"]
-        out.append({"day": r["day"].date().isoformat(), "module_id": m, "kwh": round(kwh, 2),
+        day_local = r["day"].astimezone(_TZ).date() if r["day"].tzinfo else r["day"].date()   # bucket = pražská půlnoc (23:00 UTC!) → datum v Praze
+        out.append({"day": day_local.isoformat(), "module_id": m, "kwh": round(kwh, 2),
                     "max_power_kw": round(float(r["max_power_w"] or 0) / 1000.0, 1),
                     "charging_min": None if r["charging_samples"] is None else int(r["charging_samples"]) })
     return out
