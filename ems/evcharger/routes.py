@@ -77,6 +77,47 @@ async def ev_series(locality_id: int, hours: int = 24, _: dict = Depends(read)) 
     return await ev_db.series(mods, max(1, min(hours, 720)))
 
 
+@router.get("/localities/{locality_id}/ev/month")
+async def ev_month(locality_id: int, month: str, _: dict = Depends(read)) -> dict:
+    """Měsíční přehled: dny (kWh z čítače) + úseky nabíjení rozdělené po dnech (z telemetrie)."""
+    mods = await _ev_modules(locality_id); _need(mods)
+    try:
+        s, e = _month_range(month)
+    except Exception:
+        raise HTTPException(status_code=400, detail="month = YYYY-MM")
+    daily = await ev_db.daily(mods, s, e, live=True)
+    runs = await ev_db.charging_runs(mods, s, e)
+    return {"month": month, "daily": daily, "runs": runs}
+
+
+@router.get("/localities/{locality_id}/ev/day")
+async def ev_day(locality_id: int, date: str, _: dict = Depends(read)) -> dict:
+    """Detail dne: průběh výkonu po minutě, úseky nabíjení, relace zasahující do dne."""
+    mods = await _ev_modules(locality_id); _need(mods)
+    try:
+        y, m, d = (int(x) for x in date.split("-")[:3])
+        s = datetime(y, m, d, tzinfo=_TZ); e = s + timedelta(days=1)
+    except Exception:
+        raise HTTPException(status_code=400, detail="date = YYYY-MM-DD")
+    series = await ev_db.day_series(mods, s, e)
+    runs = await ev_db.charging_runs(mods, s, e)
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        srows = await conn.fetch(
+            "SELECT * FROM ev_sessions WHERE module_id = ANY($1::text[]) AND started_at < $3 AND COALESCE(ended_at, now()) >= $2 ORDER BY started_at",
+            mods, s, e)
+    sessions = []
+    for r in srows:
+        dd = dict(r)
+        for k in ("started_at", "ended_at"):
+            if dd.get(k):
+                dd[k] = dd[k].isoformat()
+        sessions.append(dd)
+    tot = round(sum(r["kwh"] for r in runs), 2)
+    return {"date": date, "series": series, "runs": runs, "sessions": sessions, "kwh_runs": tot}
+
+
 @router.get("/admin/modules/{module_id}/ev-timeline")
 async def ev_timeline(module_id: str, hours: int = 24, _: dict = Depends(read)) -> list[dict]:
     from ems.adapters.goe_charger.adapter import MODEL_STATUS_CZ, CAR_STATE

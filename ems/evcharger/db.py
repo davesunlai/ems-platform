@@ -147,6 +147,76 @@ async def daily(module_ids: list[str], start: datetime, end: datetime, live: boo
     return out
 
 
+RUN_GAP_S = 90.0     # mezera ve vzorcích car=2 delší než toto = nový úsek nabíjení
+
+
+async def charging_runs(module_ids: list[str], start: datetime, end: datetime) -> list[dict]:
+    """Úseky nabíjení (souvislé car=2) z ev_telemetry, rozdělené pražskou půlnocí.
+    kWh = Σ výkon × Δt (Δt do dalšího vzorku, max RUN_GAP_S). Vrací [{module_id, day, start, end, kwh, avg_kw, max_kw, phases}]."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT module_id, ts, car, power_w, phases_active, i_l1, i_l2, i_l3
+               FROM ev_telemetry WHERE module_id = ANY($1::text[]) AND ts >= $2 - interval '2 minutes' AND ts < $3
+               ORDER BY module_id, ts""", module_ids, start, end)
+    runs: list[dict] = []
+    cur = None
+    prev = None
+
+    def close(c):
+        if c and c["kwh"] > 0.01:
+            c["avg_kw"] = round(c["kwh"] / max(1e-6, (c["end"] - c["start"]).total_seconds() / 3600), 2)
+            c["kwh"] = round(c["kwh"], 3); c["max_kw"] = round(c["max_kw"], 2)
+            runs.append(c)
+
+    for r in rows:
+        ts = r["ts"]
+        charging = r["car"] == 2 and (r["power_w"] or 0) > 100
+        ph = r["phases_active"] or sum(1 for k in ("i_l1", "i_l2", "i_l3") if (r[k] or 0) > 0.5)
+        if prev is not None and prev["module_id"] == r["module_id"]:
+            dt = min(RUN_GAP_S, (ts - prev["ts"]).total_seconds())
+        else:
+            dt = 0.0
+        if cur and (not charging or prev is None or prev["module_id"] != r["module_id"]
+                    or (ts - prev["ts"]).total_seconds() > RUN_GAP_S
+                    or ts.astimezone(_TZ).date() != cur["day"]):
+            # připiš poslední dílek před přerušením / půlnocí
+            if charging and dt > 0 and prev is not None and prev["car"] == 2:
+                cur["kwh"] += (prev["power_w"] or 0) * dt / 3.6e6
+                cur["end"] = ts
+            close(cur); cur = None
+        if charging:
+            if cur is None:
+                cur = {"module_id": r["module_id"], "day": ts.astimezone(_TZ).date(), "start": ts, "end": ts,
+                       "kwh": 0.0, "max_kw": 0.0, "phases": 0}
+            elif dt > 0 and prev is not None and prev["car"] == 2:
+                cur["kwh"] += (prev["power_w"] or 0) * dt / 3.6e6
+            cur["end"] = ts
+            cur["max_kw"] = max(cur["max_kw"], (r["power_w"] or 0) / 1000)
+            cur["phases"] = max(cur["phases"], ph or 0)
+        prev = r
+    close(cur)
+    out = []
+    for c in runs:
+        if c["start"] < start:
+            continue
+        out.append({**c, "day": c["day"].isoformat(), "start": c["start"].isoformat(), "end": c["end"].isoformat()})
+    return out
+
+
+async def day_series(module_ids: list[str], start: datetime, end: datetime) -> list[dict]:
+    """Průběh výkonu po minutě pro detail dne."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT time_bucket('1 minute', ts) AS t, avg(power_w) AS power_w, max(car) AS car,
+                      max(amp_set) AS amp_set, max(amp_allowed) AS amp_allowed, max(force) AS force, max(model_status) AS ms
+               FROM ev_telemetry WHERE module_id = ANY($1::text[]) AND ts >= $2 AND ts < $3 GROUP BY 1 ORDER BY 1""",
+            module_ids, start, end)
+    return [{"ts": r["t"].isoformat(), "power_w": r["power_w"], "car": r["car"], "amp_set": r["amp_set"],
+             "amp_allowed": r["amp_allowed"], "force": r["force"], "model_status": r["ms"]} for r in rows]
+
+
 async def status_timeline(module_id: str, hours: int = 24) -> list[dict]:
     """Změny modelStatus / car / force v čase (jen hrany) — diagnostika „proč (ne)nabíjí"."""
     pool = await get_pool()

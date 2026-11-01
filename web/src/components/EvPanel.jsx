@@ -67,16 +67,16 @@ export function EvControl({ mod, live, onSent }) {
 
 // Celý panel (modal na dashboardu): stav + řízení + historie
 // Měsíční sloupcový graf: den = celková energie (z čítače), uvnitř dílky = relace začínající ten den.
-function MonthChart({ month, daily, sessions }) {
+function MonthChart({ month, daily, runs, onDay }) {
   const [y, m] = month.split("-").map(Number);
   const nDays = new Date(y, m, 0).getDate();
   const byDay = {};
   daily.forEach((x) => { byDay[Number(x.day.slice(8, 10))] = x.kwh || 0; });
   const segs = {};
-  sessions.forEach((s) => {
-    const d = new Date(s.started_at); if (d.getFullYear() !== y || d.getMonth() + 1 !== m) return;
-    const k = (((s.wh ?? s.wh_max) || 0) / 1000);
-    if (k > 0.05) (segs[d.getDate()] = segs[d.getDate()] || []).push({ kwh: k, id: s.id, t: d });
+  (runs || []).forEach((r, idx) => {
+    const dn = Number(r.day.slice(8, 10));
+    if (r.day.slice(0, 7) !== month) return;
+    (segs[dn] = segs[dn] || []).push({ kwh: r.kwh, id: idx, t: new Date(r.start), ph: r.phases });
   });
   const totals = Array.from({ length: nDays }, (_, i) => Math.max(byDay[i + 1] || 0, (segs[i + 1] || []).reduce((a, b) => a + b.kwh, 0)));
   const maxV = Math.max(5, ...totals);
@@ -96,16 +96,18 @@ function MonthChart({ month, daily, sessions }) {
         const x = L + i * cw + (cw - bw) / 2;
         const sg = (segs[i + 1] || []).slice().sort((a, b) => a.t - b.t);
         const n = sg.length, sw = n ? Math.max(3, (bw - 2 * (n - 1)) / n) : 0;
+        const dayIso = `${month}-${String(i + 1).padStart(2, "0")}`;
         return (
-          <g key={i}>
+          <g key={i} onClick={() => onDay && onDay(dayIso)} style={{ cursor: "pointer" }}>
+            <rect x={L + i * cw} y={T} width={cw} height={H - T - B} fill="transparent" />
             {/* celkem za den — světlý široký sloupec v pozadí */}
             {tot > 0.05 && <rect x={x} y={yv(tot)} width={bw} height={Math.max(1, yv(0) - yv(tot))} fill="var(--green)" opacity="0.22" rx="2" />}
             {tot <= 0.05 && <rect x={x} y={yv(0) - 1} width={bw} height={1} fill="var(--muted)" opacity="0.5" />}
             {/* relace — tenké sloupečky vedle sebe, každý od nuly */}
             {sg.map((s, j) => { const sx = x + j * (sw + 2), y0 = yv(s.kwh), h = yv(0) - y0;
               return <g key={s.id}><rect x={sx} y={y0} width={sw} height={Math.max(1, h)} fill={COLORS[j % COLORS.length]} rx="1.5" />
-                <title>{`${s.t.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })} · ${s.kwh.toFixed(1)} kWh`}</title>
-                {h > 12 && sw > 14 && <text x={sx + sw / 2} y={y0 - 2} textAnchor="middle" fontSize="7.5" fill="var(--fg)">{s.kwh.toFixed(1)}</text>}</g>; })}
+                <title>{`${s.t.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })} · ${s.kwh.toFixed(1)} kWh · ${s.ph || "?"}f`}</title>
+                {sw > 10 && <text x={sx + sw / 2} y={Math.min(y0 - 2, yv(0) - 3)} textAnchor="middle" fontSize="7.5" fill="var(--fg)">{s.kwh.toFixed(1)}</text>}</g>; })}
             <text x={x + bw / 2} y={yv(tot) - (n ? 12 : 3)} textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--fg)">{tot > 0.05 ? tot.toFixed(tot >= 10 ? 0 : 1) : ""}</text>
             <text x={x + bw / 2} y={H - B + 12} textAnchor="middle" fontSize="9" fill="var(--muted)">{i + 1}.</text>
           </g>);
@@ -115,16 +117,65 @@ function MonthChart({ month, daily, sessions }) {
   );
 }
 
+// Detail dne: průběh výkonu po minutě + úseky nabíjení + relace
+function DayDetail({ locId, date, onClose }) {
+  const [d, setD] = useState(null);
+  useEffect(() => { setD(null); api.evDay(locId, date).then(setD).catch(() => setD({ series: [], runs: [], sessions: [] })); }, [locId, date]);
+  const W = 1400, H = 220, L = 44, B = 26, T = 12, R = 8;
+  const ser = d?.series || [];
+  const maxKw = Math.max(4, ...ser.map((p) => (p.power_w || 0) / 1000));
+  const top = Math.ceil(maxKw / 2) * 2;
+  const t0 = new Date(`${date}T00:00:00`); const dayMs = 86400000;
+  const xs = (iso) => L + (W - L - R) * Math.max(0, Math.min(1, (new Date(iso) - t0) / dayMs));
+  const yv = (kw) => T + (H - T - B) * (1 - kw / top);
+  const path = ser.length ? ser.map((p, i) => `${i ? "L" : "M"}${xs(p.ts).toFixed(1)},${yv((p.power_w || 0) / 1000).toFixed(1)}`).join(" ") : "";
+  const tm = (iso) => new Date(iso).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, margin: "4px 0 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <b style={{ fontSize: 13 }}>📅 {new Date(date).toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" })}</b>
+        {d && <span className="muted" style={{ fontSize: 12 }}>úseků nabíjení: {d.runs.length} · celkem {d.kwh_runs ?? 0} kWh</span>}
+        <button className="btn" style={{ marginLeft: "auto", padding: "1px 8px" }} onClick={onClose}>✕</button>
+      </div>
+      {!d ? <p className="muted">Načítám…</p> : (<>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", marginTop: 6 }}>
+          {Array.from({ length: top / 2 + 1 }, (_, i) => i * 2).map((v) => (
+            <g key={v}><line x1={L} x2={W - R} y1={yv(v)} y2={yv(v)} stroke="var(--border)" strokeWidth="0.6" />
+              <text x={L - 4} y={yv(v) + 3} textAnchor="end" fontSize="9" fill="var(--muted)">{v}</text></g>))}
+          <text x={6} y={T + 4} fontSize="9" fill="var(--muted)">kW</text>
+          {Array.from({ length: 25 }, (_, h) => h).map((h) => (
+            <g key={h}><line x1={L + (W - L - R) * h / 24} x2={L + (W - L - R) * h / 24} y1={H - B} y2={H - B + 4} stroke="var(--muted)" />
+              {h % 2 === 0 && <text x={L + (W - L - R) * h / 24} y={H - B + 14} textAnchor="middle" fontSize="9" fill="var(--muted)">{h}:00</text>}</g>))}
+          {d.runs.map((r, i) => (
+            <rect key={i} x={xs(r.start)} y={T} width={Math.max(1, xs(r.end) - xs(r.start))} height={H - T - B} fill="var(--green)" opacity="0.12" />))}
+          {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
+        </svg>
+        <table style={{ fontSize: 12, width: "100%" }}>
+          <thead><tr><th>#</th><th>Od</th><th>Do</th><th>Trvání</th><th>kWh</th><th>Ø kW</th><th>max kW</th><th>fáze</th></tr></thead>
+          <tbody>{d.runs.map((r, i) => (
+            <tr key={i}><td>{i + 1}</td><td>{tm(r.start)}</td><td>{tm(r.end)}</td><td>{dur((new Date(r.end) - new Date(r.start)) / 1000)}</td>
+              <td><b>{r.kwh.toFixed(2)}</b></td><td>{r.avg_kw}</td><td>{r.max_kw}</td><td>{r.phases || "—"}</td></tr>))}
+            {!d.runs.length && <tr><td colSpan={8} className="muted">V tento den se nenabíjelo.</td></tr>}
+          </tbody></table>
+        {d.sessions.length > 0 && <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
+          Relace (připojení kabelu) zasahující do dne: {d.sessions.map((s) => `${dt(s.started_at)} → ${s.ended_at ? dt(s.ended_at) : "probíhá"} (${(((s.wh ?? s.wh_max) || 0) / 1000).toFixed(1)} kWh)`).join(" · ")}</p>}
+      </>)}
+    </div>
+  );
+}
+
 export function EvPanel({ locId, mod, onClose }) {
   const { has } = useAuth();
   const [live, setLive] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [daily, setDaily] = useState([]);
+  const [runs, setRuns] = useState([]);
+  const [day, setDay] = useState(null);           // rozkliknutý den (YYYY-MM-DD)
   const [month, setMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; });
   const load = () => {
     api.evState(locId).then((r) => setLive(r.state)).catch(() => {});
     api.evSessionsMonth(locId, month).then(setSessions).catch(() => {});
-    api.evDailyMonth(locId, month).then(setDaily).catch(() => {});
+    api.evMonth(locId, month).then((r) => { setDaily(r.daily || []); setRuns(r.runs || []); }).catch(() => {});
   };
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [locId, month]);
   const kw = live?.power_w != null ? (live.power_w / 1000).toFixed(1) : "?";
@@ -158,14 +209,15 @@ export function EvPanel({ locId, mod, onClose }) {
           <button className="btn" style={{ padding: "1px 8px" }} onClick={() => shiftMonth(-1)} title="předchozí měsíc">◀</button>
           <span style={{ fontSize: 13, minWidth: 120, textAlign: "center" }}>{monthLabel}</span>
           <button className="btn" style={{ padding: "1px 8px" }} onClick={() => shiftMonth(1)} title="další měsíc">▶</button>
-          <span className="muted" style={{ fontSize: 11.5 }}>světlý sloupec = celkem za den (kWh) · tenké sloupečky od nuly = jednotlivé relace</span>
+          <span className="muted" style={{ fontSize: 11.5 }}>světlý sloupec = celkem za den (kWh) · tenké sloupečky od nuly = jednotlivé úseky nabíjení (pauza = nový úsek) · klik na den = detail</span>
         </div>
-        <MonthChart month={month} daily={daily} sessions={sessions} />
+        <MonthChart month={month} daily={daily} runs={runs} onDay={setDay} />
+        {day && <DayDetail locId={locId} date={day} onClose={() => setDay(null)} />}
 
         <b style={{ fontSize: 13 }}>Historie relací</b>
         {sessions.length ? (
           <table style={{ fontSize: 12, marginTop: 6, width: "100%" }}>
-            <thead><tr><th>Od</th><th>Do</th><th>Nabíjení</th><th>kWh</th><th>max kW</th><th>fáze</th><th>ze sítě</th><th>z FVE</th><th>Kč</th><th>konec</th></tr></thead>
+            <thead><tr><th>Od</th><th>Do</th><th>Nabíjení</th><th>kWh</th><th>max kW</th><th>fáze</th><th>ze sítě</th><th>z FVE/baterie</th><th>Kč</th><th>konec</th></tr></thead>
             <tbody>{sessions.map((s) => (
               <tr key={s.id}>
                 <td>{dt(s.started_at)}</td><td>{s.ended_at ? dt(s.ended_at) : <b style={{ color: "var(--green)" }}>probíhá</b>}</td>
@@ -176,7 +228,7 @@ export function EvPanel({ locId, mod, onClose }) {
               </tr>))}
             </tbody></table>
         ) : <p className="muted" style={{ fontSize: 12 }}>Zatím žádná relace (začne připojením auta).</p>}
-        <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>ze sítě / z FVE = rozdělení podle okamžitého importu lokality během nabíjení; Kč = síťová část × efektivní cena importu z ceníku.</p>
+        <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>ze sítě / z FVE+baterie = rozdělení podle okamžitého importu lokality během nabíjení (v noci je „z FVE/baterie" = z domácí baterie); Kč = síťová část × efektivní cena importu z ceníku. Relace = jedno připojení kabelu; úseky nabíjení uvnitř relace jsou v grafu a v detailu dne.</p>
       </div>
     </div>
   );

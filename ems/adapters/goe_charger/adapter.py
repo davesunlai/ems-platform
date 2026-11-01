@@ -117,6 +117,11 @@ class GoeChargerAdapter:
             "transaction": raw.get("trx"), "phases_active": raw.get("pnp"), "cable_limit_a": raw.get("cbl"),
             "uptime_ms": raw.get("rbt"),
         }
+        # FW 60.4 hlásí pnp=0 i při 3f nabíjení (ověřeno 1. 11.) → fáze odvodit z proudů (> 0,5 A)
+        if not d.get("phases_active"):
+            n_ph = sum(1 for k in ("i_l1", "i_l2", "i_l3") if (d.get(k) or 0) > 0.5)
+            if n_ph:
+                d["phases_active"] = n_ph
         tma = [t for t in (raw.get("tma") or []) if isinstance(t, (int, float))]
         d["temp_c"] = max(tma) if tma else None
         d["model_status_cz"] = MODEL_STATUS_CZ.get(d["model_status"], str(d["model_status"]))

@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v1.6.8 — wallbox: úseky nabíjení + detail dne. Zjištění 1. 11.: relace (= připojení kabelu) běžela přes půlnoc, graf ji přiřazoval dni začátku; go-e `pnp` hlásí 0 i při 3f (fáze nově z proudů > 0,5 A, v adaptéru i zpětně v dotazech); „z FVE" v noci = z domácí baterie (přejmenováno „z FVE/baterie"; battery HOLD při nabíjení auta přijde v kroku 5). Nově `charging_runs()` z ev_telemetry: souvislé úseky car=2 s výkonem > 100 W (mezera > 90 s / pauza / půlnoc = nový úsek), kWh = Σ P·Δt, Ø/max kW, fáze; rozdělené pražskou půlnocí. API `/ev/month?month=` (dny z čítače + úseky) a `/ev/day?date=` (průběh po minutě, úseky, relace zasahující do dne). Panel: tenké sloupečky = úseky nabíjení (každý od nuly, hodnota vždy nad sloupečkem, tooltip čas·kWh·fáze); **klik na den** → detail dne (křivka výkonu 0–24 h s podbarvenými úseky, tabulka úseků od–do/trvání/kWh/Ø/max/fáze, relace zasahující do dne). Nasazení: franta (api + web + collector kvůli fázím).
+
 ## v1.6.7 — detail wallboxu na celou šířku prohlížeče; měsíční graf: světlý široký sloupec = celkem za den, uvnitř tenké sloupečky vedle sebe = jednotlivé relace, každá od nuly (tooltip s časem začátku a kWh; hodnota nad sloupečkem, když je místo). Jen web.
 
 ## v1.6.6 — oprava: denní kWh wallboxu připsané o den dřív (`time_bucket` s TZ vrací pražskou půlnoc = 23:00 UTC, `.date()` bez převodu dalo předchozí den) → datum se převádí do Europe/Prague. Jen api.

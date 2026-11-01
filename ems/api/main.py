@@ -88,7 +88,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="1.6.7", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="1.6.8", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

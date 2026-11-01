@@ -77,6 +77,8 @@ export const api = {
   evSessions: (loc, limit = 50) => request(`/api/localities/${loc}/ev/sessions?limit=${limit}`),
   evDaily: (loc, days = 31) => request(`/api/localities/${loc}/ev/daily?days=${days}`),
   evDailyMonth: (loc, month) => request(`/api/localities/${loc}/ev/daily?month=${month}`),
+  evMonth: (loc, month) => request(`/api/localities/${loc}/ev/month?month=${month}`),
+  evDay: (loc, date) => request(`/api/localities/${loc}/ev/day?date=${date}`),
   evSessionsMonth: (loc, month) => request(`/api/localities/${loc}/ev/sessions?month=${month}&limit=500`),
   evSeries: (loc, hours = 24) => request(`/api/localities/${loc}/ev/series?hours=${hours}`),
   emsboxResetUiPassword: (id) => request(`/api/emsboxes/${id}/reset-localui-password`, { method: "POST" }),
