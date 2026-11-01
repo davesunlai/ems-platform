@@ -8,7 +8,14 @@ export function CarCard({ car }) {
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 22 }}>🚘</span>
+        <span style={{ fontSize: 22, position: "relative", display: "inline-block" }}>🚘
+          {car.plugged_bool && (
+            <svg viewBox="0 0 20 20" width="18" height="18" style={{ position: "absolute", left: -8, bottom: -4, animation: `plugblink ${car.charging ? 0.7 : 1.6}s ease-in-out infinite` }} title="kabel zapojen">
+              <style>{`@keyframes plugblink{0%,100%{opacity:1}50%{opacity:.2}}`}</style>
+              <path d="M3,20 C3,14 7,13 8,9" fill="none" stroke="#3fb950" strokeWidth="1.8" strokeLinecap="round" />
+              <rect x="5" y="4" width="7" height="6" rx="1.5" fill="#3fb950" /><rect x="12" y="5" width="4" height="1.4" fill="#3fb950" /><rect x="12" y="7.6" width="4" height="1.4" fill="#3fb950" />
+            </svg>)}
+        </span>
         <div><b>{car.name}</b>{car.model && car.model !== car.name ? <span className="muted" style={{ fontSize: 12 }}> · {car.model}</span> : null}
           <div className="muted" style={{ fontSize: 11 }}>{car.vin} · {age(car.updated_at)}</div></div>
         <div style={{ marginLeft: "auto", textAlign: "right" }}>

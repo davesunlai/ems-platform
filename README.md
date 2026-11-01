@@ -1,3 +1,6 @@
+## v1.7.2 — Zástrčka u auta
+- Dashboard i karty vozů: při `chargingPort.status = CONNECTED` je u ikony auta zasunutá zelená zástrčka s kabelem, bliká (při nabíjení rychleji, s ⚡).
+
 ## v1.7.1 — Auta v dashboardu + ověřené klíče CarData
 - Dashboard: pod uzlem Wallbox podboxy vozů (🚘 název, SoC %, kWh v baterii, ⚡/🔌); klik otevře panel wallboxu. Max 2 vozy.
 - BMW CarData: výchozí mapování opraveno podle oficiálního katalogu (zástrčka = `vehicle.body.chargingPort.status`,
