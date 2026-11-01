@@ -1,3 +1,6 @@
+## v1.7.8 — Popis km u aut
+- Box auta: řádek „ujeto dnes / celkem“ a pod ním „0 / 2 222 km“ (sub3 v kompaktním FlowNode); boxy vyšší (desktop 78, mobil 110).
+
 ## v1.7.7 — Pauza u zapojeného auta
 - Dashboard + karta vozu: kabel zapojen a nenabíjí → žlutý ⏸ kroužek nad zástrčkou, text „⏸ pauza“; při nabíjení ⚡ a blikání.
 
