@@ -230,7 +230,7 @@ async def modules_for_box(box_id: int) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, name, adapter, params, transport_params, device_type "
+            "SELECT id, name, adapter, params, transport_params, device_type, locality_id "
             "FROM modules WHERE emsbox_id = $1", box_id)
     out = []
     for r in rows:

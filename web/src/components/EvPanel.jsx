@@ -110,10 +110,16 @@ function MonthChart({ month, daily, runs, onDay }) {
             {tot <= 0.05 && <rect x={x} y={yv(0) - 1} width={bw} height={1} fill="var(--muted)" opacity="0.5" />}
             {/* relace — tenké sloupečky vedle sebe, každý od nuly */}
             {sg.map((s, j) => { const sx = x + j * (sw + 2), y0 = yv(s.kwh), h = yv(0) - y0;
+              // popisek: vedle sebe, když se vejde (šířka ≈ 4,2 px/znak); jinak NAD SEBOU (schodovitě), vždy centrovaný na svůj sloupeček
+              const lbl = s.kwh.toFixed(1), lw = lbl.length * 4.6, fits = sw >= lw;
+              const ly = fits ? y0 - 2 : y0 - 2 - (n - 1 - j) * 9;
               return <g key={s.id}><rect x={sx} y={y0} width={sw} height={Math.max(1, h)} fill={COLORS[j % COLORS.length]} rx="1.5" />
                 <title>{`${s.t.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })} · ${s.kwh.toFixed(1)} kWh · ${s.ph || "?"}f`}</title>
-                {sw > 10 && <text x={sx + sw / 2} y={Math.min(y0 - 2, yv(0) - 3)} textAnchor="middle" fontSize="7.5" fill="var(--fg)">{s.kwh.toFixed(1)}</text>}</g>; })}
-            <text x={x + bw / 2} y={yv(tot) - (n ? 12 : 3)} textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--fg)">{tot > 0.05 ? tot.toFixed(tot >= 10 ? 0 : 1) : ""}</text>
+                {!fits && <line x1={sx + sw / 2} x2={sx + sw / 2} y1={ly + 1} y2={y0} stroke={COLORS[j % COLORS.length]} strokeWidth="0.6" opacity="0.8" />}
+                <text x={sx + sw / 2} y={ly} textAnchor="middle" fontSize="7.5" fill={COLORS[j % COLORS.length]} fontWeight="600">{lbl}</text></g>; })}
+            {(() => { const lblTop = n ? Math.min(...sg.map((s, j) => (sw >= s.kwh.toFixed(1).length * 4.6 ? yv(s.kwh) - 2 : yv(s.kwh) - 2 - (n - 1 - j) * 9))) : yv(tot);
+              const ty = Math.min(yv(tot) - 3, lblTop - 9);
+              return <text x={x + bw / 2} y={Math.max(T + 8, ty)} textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--fg)">{tot > 0.05 ? tot.toFixed(tot >= 10 ? 0 : 1) : ""}</text>; })()}
             <text x={x + bw / 2} y={H - B + 12} textAnchor="middle" fontSize="9" fill="var(--muted)">{i + 1}.</text>
           </g>);
       })}

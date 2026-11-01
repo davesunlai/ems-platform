@@ -268,10 +268,11 @@ class Agent:
                 # -t 1: cíl PID 1 hosta; -m/-u/-i/-n/-p: mount/uts/ipc/net/pid namespace hosta.
                 # `-i` (interaktivní), NE `-l` — login shell čte profil a když nikdo PTY hned
                 # nečte, doběhne a pošle EOF (session padala za ~370 ms). (lekce 9. 9.)
-                _os.execvp("nsenter", ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p",
-                                       "--", "/bin/bash", "-i"])
-                _os.execvp("nsenter", ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p",
-                                       "--", "/bin/sh", "-i"])   # kdyby bash na hostu nebyl
+                # v1.6.11: když nsenter selže (chybí --pid host / capability po restartu), spadni do shellu
+                # kontejneru místo okamžitého konce session; chybová hláška zůstane v terminálu vidět.
+                _os.execvp("/bin/sh", ["/bin/sh", "-c",
+                    "nsenter -t 1 -m -u -i -n -p -- /bin/bash -i || nsenter -t 1 -m -u -i -n -p -- /bin/sh -i "
+                    "|| { echo '[konzole] nsenter do hosta selhal — shell KONTEJNERU'; exec /bin/bash -i; }"])
             _os.execvp("/bin/bash", ["/bin/bash", "-i"])         # fallback: kontejner
             _os.execvp("/bin/sh", ["/bin/sh", "-i"])
             return
