@@ -82,8 +82,8 @@ function MonthChart({ month, daily, sessions }) {
   const maxV = Math.max(5, ...totals);
   const step = maxV <= 10 ? 2 : maxV <= 30 ? 5 : maxV <= 60 ? 10 : 20;
   const top = Math.ceil(maxV / step) * step;
-  const W = 720, H = 230, L = 38, B = 28, T = 14, R = 6;
-  const cw = (W - L - R) / nDays, bw = cw * 0.7;
+  const W = 1400, H = 300, L = 44, B = 30, T = 16, R = 8;
+  const cw = (W - L - R) / nDays, bw = cw * 0.78;
   const yv = (v) => T + (H - T - B) * (1 - v / top);
   const COLORS = ["#3fb950", "#58a6ff", "#a371f7", "#d29922", "#39c5cf"];
   return (
@@ -94,19 +94,20 @@ function MonthChart({ month, daily, sessions }) {
       <text x={6} y={T + 4} fontSize="9" fill="var(--muted)">kWh</text>
       {totals.map((tot, i) => {
         const x = L + i * cw + (cw - bw) / 2;
-        const sg = segs[i + 1] || [];
-        let acc = 0;
-        const parts = sg.map((s, j) => { const y0 = yv(acc + s.kwh), h = yv(acc) - y0; acc += s.kwh;
-          return <g key={s.id}><rect x={x} y={y0} width={bw} height={Math.max(1, h)} fill={COLORS[j % COLORS.length]} stroke="var(--bg)" strokeWidth="0.8" />
-            {h > 11 && <text x={x + bw / 2} y={y0 + h / 2 + 3} textAnchor="middle" fontSize="8" fill="#000">{s.kwh.toFixed(1)}</text>}</g>; });
-        const rest = tot - acc;
+        const sg = (segs[i + 1] || []).slice().sort((a, b) => a.t - b.t);
+        const n = sg.length, sw = n ? Math.max(3, (bw - 2 * (n - 1)) / n) : 0;
         return (
           <g key={i}>
-            {parts}
-            {rest > 0.05 && <rect x={x} y={yv(tot)} width={bw} height={Math.max(1, yv(acc) - yv(tot))} fill="var(--green)" opacity="0.45" />}
+            {/* celkem za den — světlý široký sloupec v pozadí */}
+            {tot > 0.05 && <rect x={x} y={yv(tot)} width={bw} height={Math.max(1, yv(0) - yv(tot))} fill="var(--green)" opacity="0.22" rx="2" />}
             {tot <= 0.05 && <rect x={x} y={yv(0) - 1} width={bw} height={1} fill="var(--muted)" opacity="0.5" />}
-            <text x={x + bw / 2} y={yv(tot) - 3} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="var(--fg)">{tot.toFixed(tot >= 10 ? 0 : 1)}</text>
-            <text x={x + bw / 2} y={H - B + 12} textAnchor="middle" fontSize="8.5" fill="var(--muted)">{i + 1}.</text>
+            {/* relace — tenké sloupečky vedle sebe, každý od nuly */}
+            {sg.map((s, j) => { const sx = x + j * (sw + 2), y0 = yv(s.kwh), h = yv(0) - y0;
+              return <g key={s.id}><rect x={sx} y={y0} width={sw} height={Math.max(1, h)} fill={COLORS[j % COLORS.length]} rx="1.5" />
+                <title>{`${s.t.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })} · ${s.kwh.toFixed(1)} kWh`}</title>
+                {h > 12 && sw > 14 && <text x={sx + sw / 2} y={y0 - 2} textAnchor="middle" fontSize="7.5" fill="var(--fg)">{s.kwh.toFixed(1)}</text>}</g>; })}
+            <text x={x + bw / 2} y={yv(tot) - (n ? 12 : 3)} textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--fg)">{tot > 0.05 ? tot.toFixed(tot >= 10 ? 0 : 1) : ""}</text>
+            <text x={x + bw / 2} y={H - B + 12} textAnchor="middle" fontSize="9" fill="var(--muted)">{i + 1}.</text>
           </g>);
       })}
       <text x={(L + W - R) / 2} y={H - 4} textAnchor="middle" fontSize="9" fill="var(--muted)">den v měsíci</text>
@@ -131,7 +132,7 @@ export function EvPanel({ locId, mod, onClose }) {
   const monthLabel = (() => { const [y, m] = month.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("cs-CZ", { month: "long", year: "numeric" }); })();
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(760px, 96%)", maxHeight: "92vh", overflow: "auto", padding: 14 }}>
+      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "98vw", maxWidth: "none", maxHeight: "94vh", overflow: "auto", padding: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <b style={{ fontSize: 15 }}>🚗 Wallbox — {mod?.name || mod?.id || "nabíječka"}</b>
           {has("admin") && mod?.id && <Link to="/modules" className="muted" style={{ fontSize: 12 }} title="nastavení modulu (IP, max A při 1f/3f)">⚙ nastavení modulu</Link>}
@@ -157,7 +158,7 @@ export function EvPanel({ locId, mod, onClose }) {
           <button className="btn" style={{ padding: "1px 8px" }} onClick={() => shiftMonth(-1)} title="předchozí měsíc">◀</button>
           <span style={{ fontSize: 13, minWidth: 120, textAlign: "center" }}>{monthLabel}</span>
           <button className="btn" style={{ padding: "1px 8px" }} onClick={() => shiftMonth(1)} title="další měsíc">▶</button>
-          <span className="muted" style={{ fontSize: 11.5 }}>sloupec = den (kWh), dílky = jednotlivé relace</span>
+          <span className="muted" style={{ fontSize: 11.5 }}>světlý sloupec = celkem za den (kWh) · tenké sloupečky od nuly = jednotlivé relace</span>
         </div>
         <MonthChart month={month} daily={daily} sessions={sessions} />
 

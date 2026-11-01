@@ -4,6 +4,8 @@
 teraems, vykonává povely z fronty. Při výpadku internetu ukládá do lokálního bufferu (SQLite)
 a po obnově vše dohraje.
 
+## v1.6.7 — detail wallboxu na celou šířku prohlížeče; měsíční graf: světlý široký sloupec = celkem za den, uvnitř tenké sloupečky vedle sebe = jednotlivé relace, každá od nuly (tooltip s časem začátku a kWh; hodnota nad sloupečkem, když je místo). Jen web.
+
 ## v1.6.6 — oprava: denní kWh wallboxu připsané o den dřív (`time_bucket` s TZ vrací pražskou půlnoc = 23:00 UTC, `.date()` bez převodu dalo předchozí den) → datum se převádí do Europe/Prague. Jen api.
 
 ## v1.6.5 — horní menu + posuvník proudu. Menu (desktop): sekce se rozbaluje **jen najetím myší**, odjetím zmizí (prodleva 220 ms + neviditelný můstek pod tlačítkem, aby mezera mezi tlačítkem a podmenu hover nezavřela); klik na název sekce už podmenu nepřepíná — otevře první stránku sekce (Přehled → Dashboard, Řízení → Řízení, Zařízení → EMSBOXy, Správa → Uživatelé). Ikony konzistentně u KAŽDÉ položky (📊 Dashboard, 🌀 TČ, 🎛 Řízení, ⚡ SPOT, 🔌 eWeLink, 📦 EMSBOXy, 🧩 Moduly, 📍 Lokality, 👥 Uživatelé, 📚 Datová diagnostika; účet: 🧭 Průvodce, 🎨 Vzhled, 🔑 Heslo, 🚪 Odhlásit) v jednotném sloupci (`.navico`). Wallbox: volba proudu posuvníkem 6…ama A po 1 A s živým přepočtem na kW podle zvolených fází (1f ×230 V, 3f/auto ×690 V). Jen web.
