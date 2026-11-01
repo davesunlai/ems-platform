@@ -412,7 +412,13 @@ function PlugBadge({ x, y, h, m = 1, charging, blink, cable }) {
       <rect x={x + 9 * m} y={cy + 0.5 * m} width={7 * m} height={6 * m} rx={1.5 * m} fill={g} />
       <rect x={x + 16 * m} y={cy + 1.6 * m} width={3.2 * m} height={1.3 * m} fill={g} />
       <rect x={x + 16 * m} y={cy + 4.1 * m} width={3.2 * m} height={1.3 * m} fill={g} />
-      {charging && <text x={x + 12.5 * m} y={cy - 1.5 * m} textAnchor="middle" fontSize={7 * m} fill={g}>⚡</text>}
+      {charging
+        ? <text x={x + 12.5 * m} y={cy - 1.5 * m} textAnchor="middle" fontSize={7 * m} fill={g}>⚡</text>
+        : <g>{/* ⏸ zapojeno, nenabíjí — žlutý kroužek s pauzou nad zástrčkou */}
+            <circle cx={x + 12.5 * m} cy={cy - 5 * m} r={5 * m} fill="var(--amber, #d29922)" stroke="var(--bg)" strokeWidth={1 * m} />
+            <rect x={x + 10.2 * m} y={cy - 7.8 * m} width={1.6 * m} height={5.6 * m} fill="var(--bg)" />
+            <rect x={x + 13.2 * m} y={cy - 7.8 * m} width={1.6 * m} height={5.6 * m} fill="var(--bg)" />
+          </g>}
     </g>
   );
 }
@@ -928,7 +934,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const carVal = (c) => (c.soc != null ? `${Math.round(Number(c.soc))} %` : "—");
   const carSub = (c) => {
     const kwh = c.kwh_now != null ? `${Number(c.kwh_now).toFixed(0)} kWh` : (c.range_km != null ? `${Math.round(Number(c.range_km))} km` : null);
-    const st = carCharging(c) ? "⚡ nabíjí" : null;   // zapojený kabel kreslí PlugBadge + propoj
+    const st = carCharging(c) ? "⚡ nabíjí" : carAtWb(c) ? "⏸ pauza" : null;   // zapojený kabel kreslí PlugBadge + propoj
     return [kwh, st].filter(Boolean).join(" · ") || (c.keys_received ? null : "čeká na data");
   };
   const nkm = (v) => Math.round(Number(v)).toLocaleString("cs-CZ");

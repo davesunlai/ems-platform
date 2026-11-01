@@ -14,6 +14,7 @@ export function CarCard({ car }) {
               <style>{`@keyframes plugblink{0%,100%{opacity:1}50%{opacity:.2}}`}</style>
               <path d="M3,20 C3,14 7,13 8,9" fill="none" stroke="#3fb950" strokeWidth="1.8" strokeLinecap="round" />
               <rect x="5" y="4" width="7" height="6" rx="1.5" fill="#3fb950" /><rect x="12" y="5" width="4" height="1.4" fill="#3fb950" /><rect x="12" y="7.6" width="4" height="1.4" fill="#3fb950" />
+              {!car.charging && <g><circle cx="15" cy="3.5" r="3.5" fill="#d29922" /><rect x="13.4" y="1.7" width="1.1" height="3.6" fill="#0d1117" /><rect x="15.5" y="1.7" width="1.1" height="3.6" fill="#0d1117" /></g>}
             </svg>)}
         </span>
         <div><b>{car.name}</b>{car.model && car.model !== car.name ? <span className="muted" style={{ fontSize: 12 }}> · {car.model}</span> : null}
@@ -28,7 +29,7 @@ export function CarCard({ car }) {
         {car.target_soc != null && <div style={{ position: "relative", top: -8, left: `${Math.min(100, Number(car.target_soc))}%`, width: 2, height: 10, background: "var(--fg)" }} title={`cíl ${car.target_soc} %`} />}
       </div>}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12.5 }}>
-        <span>{car.charging ? "⚡ nabíjí" : car.plugged_bool ? "🔌 zapojeno" : car.plugged_bool === false ? "odpojeno" : "—"}{car.charging && car.charging_power_kw != null ? ` ${Number(car.charging_power_kw).toFixed(1)} kW` : ""}</span>
+        <span>{car.charging ? "⚡ nabíjí" : car.plugged_bool ? "⏸ zapojeno · nenabíjí" : car.plugged_bool === false ? "odpojeno" : "—"}{car.charging && car.charging_power_kw != null ? ` ${Number(car.charging_power_kw).toFixed(1)} kW` : ""}</span>
         {car.target_soc != null && <span>cíl <b>{Math.round(Number(car.target_soc))} %</b></span>}
         {car.kwh_to_target != null && <span>do cíle <b>{car.kwh_to_target} kWh</b></span>}
         {car.capacity_kwh != null && <span className="muted">{Number(car.capacity_kwh).toFixed(0)} kWh</span>}

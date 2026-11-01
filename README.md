@@ -1,3 +1,6 @@
+## v1.7.7 — Pauza u zapojeného auta
+- Dashboard + karta vozu: kabel zapojen a nenabíjí → žlutý ⏸ kroužek nad zástrčkou, text „⏸ pauza“; při nabíjení ⚡ a blikání.
+
 ## v1.7.6 — Tlustší hrany, km u aut
 - Dashboard: neaktivní přerušované hrany 3× tlustší (3.6 px, opacity 0.6).
 - Auta v dashboardu i na kartě: „dnes N km · celkem N km“ (z historie `travelledDistance`, start dne Europe/Prague). Boxy aut vyšší.
