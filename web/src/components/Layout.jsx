@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { PAGE_BY_PATH } from "../uiCatalog";
 import { api } from "../api";
@@ -101,26 +101,28 @@ function SpotChip() {
 }
 
 // Struktura menu (sekce → položky). perm = potřebné oprávnění, vk = klíč viditelnosti role.
+// Každá položka má ikonu (konzistentně všude); sekce se rozbaluje najetím myši, odjetím zmizí — klik na sekci nic nepřepíná.
 const NAV_GROUPS = [
   { label: "Přehled", icon: "📊", items: [
-    { to: "/", end: true, label: "Dashboard", vk: "page:dashboard" },
-    { to: "/heatpump", label: "🌀 Tepelné čerpadlo", vk: "page:heatpump" },
+    { to: "/", end: true, icon: "📊", label: "Dashboard", vk: "page:dashboard" },
+    { to: "/heatpump", icon: "🌀", label: "Tepelné čerpadlo", vk: "page:heatpump" },
   ]},
   { label: "Řízení", icon: "🎛", items: [
-    { to: "/control", label: "Řízení (plánovač, časový plán, spotřebiče)", perm: "control", vk: "page:control" },
-    { to: "/automation", label: "SPOT pravidla", perm: "admin", vk: "page:automation" },
-    { to: "/ewelink", label: "eWeLink spínače", perm: "admin", vk: "page:ewelink" },
+    { to: "/control", icon: "🎛", label: "Řízení (plánovač, časový plán, spotřebiče)", perm: "control", vk: "page:control" },
+    { to: "/automation", icon: "⚡", label: "SPOT pravidla", perm: "admin", vk: "page:automation" },
+    { to: "/ewelink", icon: "🔌", label: "eWeLink spínače", perm: "admin", vk: "page:ewelink" },
   ]},
-  { label: "Zařízení", icon: "🔌", items: [
-    { to: "/emsboxes", label: "📦 EMSBOXy (fleet)", vk: "page:emsboxes" },
-    { to: "/modules", label: "Moduly", perm: "admin", vk: "page:modules" },
-    { to: "/localities", label: "Lokality", perm: "admin", vk: "page:localities" },
+  { label: "Zařízení", icon: "🧩", items: [
+    { to: "/emsboxes", icon: "📦", label: "EMSBOXy (fleet)", vk: "page:emsboxes" },
+    { to: "/modules", icon: "🧩", label: "Moduly", perm: "admin", vk: "page:modules" },
+    { to: "/localities", icon: "📍", label: "Lokality", perm: "admin", vk: "page:localities" },
   ]},
   { label: "Správa", icon: "⚙️", items: [
-    { to: "/users", label: "Uživatelé a role", perm: "admin", vk: "page:users" },
-    { to: "/data-diag", label: "📚 Datová diagnostika portálu", perm: "admin", vk: "page:datadiag" },
+    { to: "/users", icon: "👥", label: "Uživatelé a role", perm: "admin", vk: "page:users" },
+    { to: "/data-diag", icon: "📚", label: "Datová diagnostika portálu", perm: "admin", vk: "page:datadiag" },
   ]},
 ];
+const HOVER_CLOSE_MS = 220;   // prodleva při odjetí myší (mezera mezi tlačítkem a podmenu nesmí podmenu zavřít)
 
 function useVersion() {
   const [v, setV] = useState("");
@@ -144,6 +146,10 @@ export default function Layout() {
     if (!hasLocalTheme()) api.getGlobalTheme().then(applyGlobalTheme).catch(() => {});
   }, []);
   const close = () => { setMenuOpen(false); setGrpOpen(null); };
+  const navigate = useNavigate();
+  const leaveTimer = useRef(null);
+  const hoverIn = (k) => { if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; } setGrpOpen(k); };
+  const hoverOut = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); leaveTimer.current = setTimeout(() => setGrpOpen(null), HOVER_CLOSE_MS); };
   return (
     <>
       <header className="topbar">
@@ -161,22 +167,23 @@ export default function Layout() {
             const activeIn = items.some((it) => (it.end ? location.pathname === it.to : location.pathname.startsWith(it.to)));
             return (
               <div key={g.label} className={`navgrp ${grpOpen === g.label ? "open" : ""} ${activeIn ? "active" : ""}`}
-                   onMouseEnter={() => setGrpOpen(g.label)} onMouseLeave={() => setGrpOpen(null)}>
-                <button className="navgrp-btn desktop-only" onClick={() => setGrpOpen(grpOpen === g.label ? null : g.label)}>
+                   onMouseEnter={() => hoverIn(g.label)} onMouseLeave={hoverOut}>
+                <button className="navgrp-btn desktop-only" title={`${g.label} — najetím se rozbalí, klik otevře ${items[0].label}`}
+                        onClick={() => { close(); navigate(items[0].to); }}>
                   {g.icon} {g.label} <span className="navgrp-caret">▾</span>
                 </button>
                 <div className="navgrp-hdr mobile-only">{g.icon} {g.label}</div>
                 <div className="navgrp-items">
-                  {items.map((it) => <NavLink key={it.to} to={it.to} end={it.end} onClick={close}>{it.label}</NavLink>)}
+                  {items.map((it) => <NavLink key={it.to} to={it.to} end={it.end} onClick={close}><span className="navico">{it.icon}</span> {it.label}</NavLink>)}
                 </div>
               </div>);
           })}
           <div className="nav-account mobile-only">
             <div className="nav-id">{user?.username} · {user?.role}</div>
-            <button className="navbtn" onClick={() => { close(); setTour(true); }}>Průvodce</button>
-            {vis("page:vzhled") && <NavLink to="/vzhled" onClick={close}>Vzhled</NavLink>}
-            <NavLink to="/change-password" onClick={close}>Změnit heslo</NavLink>
-            <button className="navbtn" onClick={logout}>Odhlásit</button>
+            <button className="navbtn" onClick={() => { close(); setTour(true); }}><span className="navico">🧭</span> Průvodce</button>
+            {vis("page:vzhled") && <NavLink to="/vzhled" onClick={close}><span className="navico">🎨</span> Vzhled</NavLink>}
+            <NavLink to="/change-password" onClick={close}><span className="navico">🔑</span> Změnit heslo</NavLink>
+            <button className="navbtn" onClick={logout}><span className="navico">🚪</span> Odhlásit</button>
           </div>
         </nav>
         <div className="spacer" />
@@ -184,16 +191,16 @@ export default function Layout() {
           <AlertsBell />
           <SpotChip />
           <div className={`navgrp ${grpOpen === "účet" ? "open" : ""} desktop-only`}
-               onMouseEnter={() => setGrpOpen("účet")} onMouseLeave={() => setGrpOpen(null)}>
-            <button className="navgrp-btn" onClick={() => setGrpOpen(grpOpen === "účet" ? null : "účet")}>
+               onMouseEnter={() => hoverIn("účet")} onMouseLeave={hoverOut}>
+            <button className="navgrp-btn" title="účet — najetím se rozbalí">
               👤 {user?.username} <span className="navgrp-caret">▾</span>
             </button>
             <div className="navgrp-items right">
               <div className="nav-id">{user?.username} · {user?.role}</div>
-              <button className="navbtn" onClick={() => { setGrpOpen(null); setTour(true); }}>Průvodce</button>
-              {vis("page:vzhled") && <NavLink to="/vzhled" onClick={close}>Vzhled</NavLink>}
-              <NavLink to="/change-password" onClick={close}>Změnit heslo</NavLink>
-              <button className="navbtn" onClick={logout}>Odhlásit</button>
+              <button className="navbtn" onClick={() => { setGrpOpen(null); setTour(true); }}><span className="navico">🧭</span> Průvodce</button>
+              {vis("page:vzhled") && <NavLink to="/vzhled" onClick={close}><span className="navico">🎨</span> Vzhled</NavLink>}
+              <NavLink to="/change-password" onClick={close}><span className="navico">🔑</span> Změnit heslo</NavLink>
+              <button className="navbtn" onClick={logout}><span className="navico">🚪</span> Odhlásit</button>
             </div>
           </div>
           <button className="menu-toggle" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>

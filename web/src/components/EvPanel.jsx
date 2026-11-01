@@ -41,11 +41,16 @@ export function EvControl({ mod, live, onSent }) {
         {live?.amp_allowed != null && live?.amp_set != null && live.amp_allowed < live.amp_set && <span style={{ color: "var(--amber)", marginLeft: 8 }}>⚠ nabíječka omezuje na {live.amp_allowed} A</span>}</div>
       {has("control") ? (
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
-          <label style={{ fontSize: 12 }}>proud <input style={{ ...FLD, width: 56 }} value={amp} onChange={(e) => setAmp(e.target.value)} /> A</label>
           <select style={FLD} value={psm ?? 0} onChange={(e) => setPsm(Number(e.target.value))}>
             <option value={1}>1 fáze</option><option value={2}>3 fáze</option><option value={0}>auto</option>
           </select>
-          <span className="muted" style={{ fontSize: 12 }}>≈ {estKw(Number(amp) || 0, psm ?? 0)} kW</span>
+          <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6, flex: "1 1 220px", minWidth: 220 }}>
+            <span>6 A</span>
+            <input type="range" min={6} max={live?.amp_max || 32} step={1} value={Number(amp) || 6} style={{ flex: 1 }}
+                   onChange={(e) => setAmp(Number(e.target.value))} title="výkon po 1 A" />
+            <span>{live?.amp_max || 32} A</span>
+          </label>
+          <span style={{ fontSize: 13, minWidth: 120 }}><b>{Number(amp) || 0} A</b> ≈ <b>{estKw(Number(amp) || 0, psm ?? 0)} kW</b>{(psm ?? 0) === 0 ? <span className="muted"> (3f)</span> : null}</span>
           <button className="btn primary" disabled={busy || !(Number(amp) >= 6)} onClick={() => send("ev_set", { amp: Number(amp), psm: psm ?? 0, frc: 2 }, `nabíjet ${amp} A ${psm === 1 ? "1f" : psm === 2 ? "3f" : "auto"}`)}>⚡ Nabíjet</button>
           <button className="btn" disabled={busy} onClick={() => send("ev_set", { frc: 1 }, "pauza")}>⏸ Pauza</button>
           <button className="btn" disabled={busy} onClick={() => send("ev_release", {}, "uvolnit řízení")}>↺ Uvolnit</button>
