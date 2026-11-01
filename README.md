@@ -1,3 +1,7 @@
+## v1.7.4 — CarData: prázdné hodnoty a stav nabíjení
+- `write_values` ignoruje položky s `value: null` / INVALID / -NA- (REST je vrací a přemazávaly poslední platnou hodnotu).
+- `charging` = `CHARGINGACTIVE` (BMW hlásí `NOCHARGING`, které dřívější test bral jako nabíjení).
+
 ## v1.7.3 — Propoj wallbox ↔ auto
 - Dashboard: zapojení vozu se bere primárně z WALLBOXU (go-e `car_state` ≠ idle) — tlustý zelený propoj wallbox→auto + zástrčka, bez blikání;
   blikat začne až při nabíjení. Vůz se k wallboxu páruje přes přiřazený wallbox, jinak jediný vůz lokality, jinak BMW CONNECTED.

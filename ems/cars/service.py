@@ -389,8 +389,10 @@ def car_view(v: dict, st: dict) -> dict:
         out["kwh_to_target"] = round(max(0.0, (tgt - soc) / 100.0 * cap), 1) if cap else None
     except (TypeError, ValueError):
         out["kwh_to_target"] = None
-    cs = str(out.get("charging_status") or "").upper()
-    out["charging"] = ("CHARG" in cs and "NOT" not in cs) or (isinstance(out.get("charging_power_kw"), (int, float)) and out["charging_power_kw"] > 0.2)
+    # BMW: CHARGINGACTIVE / NOCHARGING / FULLYCHARGED / CHARGINGPAUSED / CHARGINGERROR / WAITINGFORCHARGING …
+    cs = str(out.get("charging_status") or "").upper().replace("_", "").replace(" ", "")
+    out["charging"] = cs.startswith("CHARGINGACTIVE") or cs == "CHARGING" or \
+        (isinstance(out.get("charging_power_kw"), (int, float)) and out["charging_power_kw"] > 0.2 and not cs.startswith("NO"))
     p = out.get("plugged")
     if p is None or str(p).upper() in ("INVALID", "-NA-"):
         for alt in PLUG_FALLBACK_KEYS:            # vůz posílá jen variantu, kterou má — vezmi první živou

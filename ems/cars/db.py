@@ -242,6 +242,8 @@ async def write_values(vin: str, items: dict, source: str, default_ts: datetime 
                     except ValueError:
                         pass
                 v = v.get("value")
+            if v is None or (isinstance(v, str) and v.strip().upper() in ("", "INVALID", "-NA-", "NULL")):
+                continue          # REST vrací i prázdné položky (value null) — nesmí přemazat poslední platnou hodnotu
             num, txt = _split(v)
             await conn.execute(
                 "INSERT INTO car_state (vin, key, value_num, value_txt, unit, ts, source) VALUES ($1,$2,$3,$4,$5,$6,$7) "
