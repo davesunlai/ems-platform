@@ -1,3 +1,7 @@
+## v1.7.11 — Příprava na historii nabíjení z auta
+- JSON hodnoty CarData se ukládají celé (do 60 kB; dřív ořez 500 zn.) — kvůli `charging.history.sessionsList`.
+- Seznam klíčů pro stream: + sessionsList, charging.method, phaseNumber.
+
 ## v1.7.10 — Nabito / kapacita
 - Box auta i karta: „105 / 108 kWh“ (aktuální energie v baterii / využitelná kapacita).
 

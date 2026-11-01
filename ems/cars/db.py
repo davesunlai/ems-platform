@@ -49,6 +49,9 @@ STREAM_KEYS = [
     ("vehicle.vehicle.travelledDistance", "tachometr (spotřeba na km, servis)"),
     ("vehicle.powertrain.electric.battery.charging.acLimit.selected", "AC limit zvolený v autě — vysvětlí, proč auto nebere víc"),
     ("vehicle.powertrain.electric.battery.stateOfHealth.displayed", "zdraví baterie (dlouhodobě)"),
+    ("vehicle.powertrain.electric.battery.charging.history.sessionsList", "historie nabíjení z auta (kdy, kolik kWh, kde, AC/DC) — i Ionity a cizí nabíječky"),
+    ("vehicle.drivetrain.electricEngine.charging.method", "AC/DC a typ zástrčky"),
+    ("vehicle.drivetrain.electricEngine.charging.phaseNumber", "počet fází při AC nabíjení"),
     ("vehicle.cabin.infotainment.navigation.currentLocation.latitude", "poloha (jen při zapojeném kabelu)"),
     ("vehicle.cabin.infotainment.navigation.currentLocation.longitude", "poloha (jen při zapojeném kabelu)"),
 ]
@@ -223,7 +226,7 @@ def _split(value):
             return None, value
     if value is None:
         return None, None
-    return None, json.dumps(value)[:500]
+    return None, json.dumps(value, ensure_ascii=False)[:60000]   # např. charging.history.sessionsList (seznam relací)
 
 
 async def write_values(vin: str, items: dict, source: str, default_ts: datetime | None = None) -> int:
