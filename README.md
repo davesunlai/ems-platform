@@ -1,3 +1,7 @@
+## v1.7.12 — REST kontejner s nestreamovatelnými klíči
+- `REST_EXTRA_KEYS` (historie nabíjení sessionsList, method, phaseNumber, lastChargingReason/Result, timeToFullyCharged, acAmpere/acVoltage)
+  se přidávají do kontejneru telematicData; kontejner se znovu vytvoří, když se změní seznam (`car_accounts.container_keys`).
+
 ## v1.7.11 — Příprava na historii nabíjení z auta
 - JSON hodnoty CarData se ukládají celé (do 60 kB; dřív ořez 500 zn.) — kvůli `charging.history.sessionsList`.
 - Seznam klíčů pro stream: + sessionsList, charging.method, phaseNumber.

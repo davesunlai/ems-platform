@@ -191,15 +191,19 @@ async def sync_vehicles(aid: int) -> list[dict]:
 
 
 async def _ensure_container(acc: dict, keys: list[str]) -> str | None:
-    if acc.get("container_id"):
+    """Kontejner telematicData pro daný seznam deskriptorů. Změní-li se seznam (nová role, REST_EXTRA_KEYS),
+    vytvoří se nový kontejner — starý BMW nechá expirovat."""
+    sig = ",".join(sorted(set(keys)))
+    if acc.get("container_id") and (acc.get("container_keys") or "") == sig:
         return acc["container_id"]
     try:
         res = await asyncio.to_thread(_post_json, f"{API_BASE}/customers/containers", acc["access_token"],
                                       {"name": "TERA EMS", "purpose": "Energy management (home PV / wallbox)",
-                                       "technicalDescriptors": keys})
+                                       "technicalDescriptors": sorted(set(keys))})
         cid = res.get("containerId") or res.get("id")
         if cid:
-            await db.update_account(acc["id"], container_id=cid)
+            await db.update_account(acc["id"], container_id=cid, container_keys=sig)
+            logger.info("CarData container %s: %d deskriptorů", cid, len(set(keys)))
             return cid
         logger.info("CarData container: nečekaná odpověď %s", str(res)[:200])
     except CarDataError as exc:
@@ -215,7 +219,7 @@ async def poll_rest(aid: int) -> int:
     vehicles = [v for v in await db.list_vehicles() if v["account_id"] == aid and v.get("enabled", True)]
     if not vehicles:
         return 0
-    keys = sorted({k for v in vehicles for k in (v.get("key_map") or db.DEFAULT_KEY_MAP).values()})
+    keys = sorted({k for v in vehicles for k in {**db.DEFAULT_KEY_MAP, **(v.get("key_map") or {})}.values()} | set(db.REST_EXTRA_KEYS))
     cid = await _ensure_container(acc, keys)
     n = 0
     for v in vehicles:

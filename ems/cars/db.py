@@ -29,6 +29,17 @@ DEFAULT_KEY_MAP = {
     "lon": "vehicle.cabin.infotainment.navigation.currentLocation.longitude",  # jen při zapojeném kabelu
 }
 ROLES = list(DEFAULT_KEY_MAP)
+# Jen přes REST (nejsou streamovatelné) — přidávají se do kontejneru telematicData
+REST_EXTRA_KEYS = [
+    "vehicle.powertrain.electric.battery.charging.history.sessionsList",   # historie nabíjení z auta
+    "vehicle.drivetrain.electricEngine.charging.method",
+    "vehicle.drivetrain.electricEngine.charging.phaseNumber",
+    "vehicle.drivetrain.electricEngine.charging.lastChargingReason",
+    "vehicle.drivetrain.electricEngine.charging.lastChargingResult",
+    "vehicle.drivetrain.electricEngine.charging.timeToFullyCharged",
+    "vehicle.drivetrain.electricEngine.charging.acAmpere",
+    "vehicle.drivetrain.electricEngine.charging.acVoltage",
+]
 ROLE_LABELS = {
     "soc": "SoC baterie (%)", "capacity_kwh": "kapacita (kWh)", "charging_status": "stav nabíjení",
     "charging_power_kw": "výkon nabíjení", "plugged": "zástrčka zapojena", "target_soc": "cílové SoC (%)",
@@ -49,9 +60,6 @@ STREAM_KEYS = [
     ("vehicle.vehicle.travelledDistance", "tachometr (spotřeba na km, servis)"),
     ("vehicle.powertrain.electric.battery.charging.acLimit.selected", "AC limit zvolený v autě — vysvětlí, proč auto nebere víc"),
     ("vehicle.powertrain.electric.battery.stateOfHealth.displayed", "zdraví baterie (dlouhodobě)"),
-    ("vehicle.powertrain.electric.battery.charging.history.sessionsList", "historie nabíjení z auta (kdy, kolik kWh, kde, AC/DC) — i Ionity a cizí nabíječky"),
-    ("vehicle.drivetrain.electricEngine.charging.method", "AC/DC a typ zástrčky"),
-    ("vehicle.drivetrain.electricEngine.charging.phaseNumber", "počet fází při AC nabíjení"),
     ("vehicle.cabin.infotainment.navigation.currentLocation.latitude", "poloha (jen při zapojeném kabelu)"),
     ("vehicle.cabin.infotainment.navigation.currentLocation.longitude", "poloha (jen při zapojeném kabelu)"),
 ]
@@ -75,9 +83,11 @@ async def ensure_schema() -> None:
                 stream_status TEXT, stream_since TIMESTAMPTZ, stream_msgs BIGINT NOT NULL DEFAULT 0,
                 rest_calls_today INTEGER NOT NULL DEFAULT 0, rest_day DATE,
                 container_id TEXT,
+                container_keys TEXT,                     -- čárkami oddělené deskriptory, pro které kontejner vznikl
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )""")
         await conn.execute("""
+            ALTER TABLE car_accounts ADD COLUMN IF NOT EXISTS container_keys TEXT;
             CREATE TABLE IF NOT EXISTS car_vehicles (
                 vin TEXT PRIMARY KEY,
                 account_id INTEGER REFERENCES car_accounts(id) ON DELETE CASCADE,

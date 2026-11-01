@@ -157,7 +157,7 @@ function StreamKeys({ keys }) {
             </tbody></table>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
             <button className="btn" onClick={copy}>{copied ? "✅ zkopírováno" : "📋 kopírovat seznam"}</button>
-            <span className="muted" style={{ fontSize: 11.5 }}>Stejný seznam si TERA vyžádá i pro REST kontejner (doplňkové čtení à 40 min).</span>
+            <span className="muted" style={{ fontSize: 11.5 }}>Klíče, které portál ve streamu nenabízí (např. historie nabíjení <code>…charging.history.sessionsList</code>), nejsou streamovatelné — TERA si je čte sama přes REST kontejner (à 40 min), nic v portálu nenastavuješ.</span>
           </div>
         </div>)}
     </div>
