@@ -1,3 +1,8 @@
+## v1.7.3 — Propoj wallbox ↔ auto
+- Dashboard: zapojení vozu se bere primárně z WALLBOXU (go-e `car_state` ≠ idle) — tlustý zelený propoj wallbox→auto + zástrčka, bez blikání;
+  blikat začne až při nabíjení. Vůz se k wallboxu páruje přes přiřazený wallbox, jinak jediný vůz lokality, jinak BMW CONNECTED.
+- CarData: zapojení kabelu padá na 6 variant deskriptorů (chargingPort.status/combinedStatus/statusClearText/connectorStatus/anyPosition.isPlugged/dcStatus).
+
 ## v1.7.2 — Zástrčka u auta
 - Dashboard i karty vozů: při `chargingPort.status = CONNECTED` je u ikony auta zasunutá zelená zástrčka s kabelem, bliká (při nabíjení rychleji, s ⚡).
 

@@ -402,11 +402,11 @@ function SunCloud({ cx, cy, base, sun, cloud, frac }) {
 
 // 🔌 Zástrčka zasunutá do auta (kompaktní uzel 🚘): kabel od spodního okraje boxu, konektor s kolíky v boku auta.
 // Bliká zeleně = CarData hlásí CONNECTED; při nabíjení rychleji.
-function PlugBadge({ x, y, h, m = 1, charging }) {
+function PlugBadge({ x, y, h, m = 1, charging, blink }) {
   const cy = y + h / 2;                       // střed ikony auta (ikona začíná na x+16m)
   const g = "#3fb950";
   return (
-    <g className={charging ? "plug-blink fast" : "plug-blink"}>
+    <g className={blink ? (charging ? "plug-blink fast" : "plug-blink") : undefined}>
       <path d={`M${x + 5 * m},${y + h} C${x + 5 * m},${cy + 14 * m} ${x + 11 * m},${cy + 12 * m} ${x + 12.5 * m},${cy + 6 * m}`}
             fill="none" stroke={g} strokeWidth={1.6 * m} strokeLinecap="round" />
       <rect x={x + 9 * m} y={cy + 0.5 * m} width={7 * m} height={6 * m} rx={1.5 * m} fill={g} />
@@ -907,13 +907,30 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const evSub = evS ? (evOn ? `${(evS.session_wh / 1000).toFixed(1)} kWh · ${evS.phases_active || "?"}f` : (evS.car_state === "idle" ? "bez auta" : `${((evS.session_wh || 0) / 1000).toFixed(1)} kWh`)) : null;
   const evMod = ev?.module_ids?.[0] ? { id: ev.module_ids[0], name: "wallbox", locality_id: locId } : null;
   const carShown = ev ? cars.slice(0, 2) : [];
+  // Který vůz visí na wallboxu: wallbox hlásí kabel (car_state ≠ idle) → vůz s přiřazeným wallboxem, jinak jediný vůz lokality,
+  // jinak ten, který sám hlásí CONNECTED. BMW klíč chargingPort.status je jen doplněk (posílá se až při změně).
+  const wbPlugged = !!evS && evS.car_state && evS.car_state !== "idle" && evS.car_state !== "unknown" && evS.car_state !== "error";
+  const wbCharging = wbPlugged && (evS.car_state === "charging" || evKw > 0.05);
+  const carAtWb = (c) => {
+    if (c.plugged_bool === false && !wbPlugged) return false;
+    if (wbPlugged) {
+      const mine = c.wallbox_module_id && ev?.module_ids?.includes(c.wallbox_module_id);
+      const others = carShown.filter((o) => o.vin !== c.vin);
+      if (mine) return true;
+      if (!others.length) return true;
+      if (!others.some((o) => o.wallbox_module_id && ev?.module_ids?.includes(o.wallbox_module_id)) && c.plugged_bool !== false) return c.plugged_bool === true || !others.some((o) => o.plugged_bool === true);
+      return false;
+    }
+    return c.plugged_bool === true;
+  };
+  const carCharging = (c) => !!c.charging || (carAtWb(c) && wbCharging);
   const carVal = (c) => (c.soc != null ? `${Math.round(Number(c.soc))} %` : "—");
   const carSub = (c) => {
     const kwh = c.kwh_now != null ? `${Number(c.kwh_now).toFixed(0)} kWh` : (c.range_km != null ? `${Math.round(Number(c.range_km))} km` : null);
-    const st = c.charging ? "⚡ nabíjí" : null;   // zapojený kabel kreslí PlugBadge
+    const st = carCharging(c) ? "⚡ nabíjí" : null;   // zapojený kabel kreslí PlugBadge + propoj
     return [kwh, st].filter(Boolean).join(" · ") || (c.keys_received ? null : "čeká na data");
   };
-  const carAcc = (c) => (c.charging ? "#58a6ff" : c.soc != null && Number(c.soc) < 20 ? "#f85149" : null);
+  const carAcc = (c) => (carCharging(c) ? "#58a6ff" : carAtWb(c) ? "#3fb950" : c.soc != null && Number(c.soc) < 20 ? "#f85149" : null);
   const carName = (c) => String(c.name || c.model || c.vin.slice(-6)).slice(0, mob || carShown.length < 2 ? 14 : 10);
   const pvKw = d ? kw(d.pv_w) : 0;
   const batW = d?.battery_w || 0;                 // + nabíjení / − vybíjení
@@ -1047,8 +1064,10 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
               </g>)}
             {carShown.map((c, i) => (
               <g key={c.vin} onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
+                {carAtWb(c) && <path d={`M195,${760} C200,${760} 200,${696 + i * 78 + 35} 205,${696 + i * 78 + 35}`} fill="none" stroke="#3fb950" strokeWidth={5} strokeLinecap="round"
+                                     className={carCharging(c) ? "plug-blink fast" : undefined} />}
                 <FlowNode m={1.5} x={205} y={696 + i * 78} w={185} h={70} icon="🚘" title={carName(c)} value={carVal(c)} sub={carSub(c)} accent={carAcc(c)} />
-                {c.plugged_bool && <PlugBadge m={1.5} x={205} y={696 + i * 78} h={70} charging={!!c.charging} />}
+                {carAtWb(c) && <PlugBadge m={1.5} x={205} y={696 + i * 78} h={70} charging={carCharging(c)} blink={carCharging(c)} />}
               </g>))}
           </svg>
         ) : (
@@ -1136,10 +1155,12 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
               </g>)}
             {carShown.map((c, i) => (
               <g key={c.vin} onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
-                <line x1={380} y1={410} x2={carShown.length === 1 ? 380 : 338 + i * 86} y2={422} stroke="var(--border)" strokeWidth="1.2" />
+                <line x1={380} y1={410} x2={carShown.length === 1 ? 380 : 338 + i * 86} y2={422}
+                      stroke={carAtWb(c) ? "#3fb950" : "var(--border)"} strokeWidth={carAtWb(c) ? 5 : 1.2} strokeLinecap="round"
+                      className={carCharging(c) ? "plug-blink fast" : undefined} />
                 <FlowNode x={carShown.length === 1 ? 295 : 295 + i * 86} y={422} w={carShown.length === 1 ? 170 : 84} h={52}
                           icon="🚘" title={carName(c)} value={carVal(c)} sub={carSub(c)} accent={carAcc(c)} />
-                {c.plugged_bool && <PlugBadge x={carShown.length === 1 ? 295 : 295 + i * 86} y={422} h={52} charging={!!c.charging} />}
+                {carAtWb(c) && <PlugBadge x={carShown.length === 1 ? 295 : 295 + i * 86} y={422} h={52} charging={carCharging(c)} blink={carCharging(c)} />}
               </g>))}
             {hp && (
               <FlowNode x={585} y={268} w={150} h={54} icon={ic.hp} title="Tepelné čerpadlo" onClick={() => setNode("hp")}

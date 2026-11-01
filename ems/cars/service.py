@@ -40,6 +40,13 @@ REST_POLL_S = 40 * 60          # REST à 40 min (≈36/den + rezerva)
 STREAM_RECONNECT_S = 45 * 60   # id_token platí 1 h → přepojit po obnově
 
 
+PLUG_FALLBACK_KEYS = (
+    "vehicle.body.chargingPort.status", "vehicle.body.chargingPort.combinedStatus", "vehicle.body.chargingPort.statusClearText",
+    "vehicle.drivetrain.electricEngine.charging.connectorStatus", "vehicle.powertrain.tractionBattery.charging.port.anyPosition.isPlugged",
+    "vehicle.body.chargingPort.dcStatus",
+)
+
+
 class CarDataError(Exception):
     pass
 
@@ -385,6 +392,12 @@ def car_view(v: dict, st: dict) -> dict:
     cs = str(out.get("charging_status") or "").upper()
     out["charging"] = ("CHARG" in cs and "NOT" not in cs) or (isinstance(out.get("charging_power_kw"), (int, float)) and out["charging_power_kw"] > 0.2)
     p = out.get("plugged")
+    if p is None or str(p).upper() in ("INVALID", "-NA-"):
+        for alt in PLUG_FALLBACK_KEYS:            # vůz posílá jen variantu, kterou má — vezmi první živou
+            e = st.get(alt)
+            if e and e.get("value") is not None and str(e["value"]).upper() not in ("INVALID", "-NA-"):
+                p = e["value"]
+                break
     ps = str(p).upper() if p is not None else ""
     out["plugged_bool"] = (p in (1, 1.0, True, "true") or ps.startswith("CONNECTED") or ps == "PLUGGED") if p is not None and ps not in ("INVALID", "-NA-") else None
     return out
