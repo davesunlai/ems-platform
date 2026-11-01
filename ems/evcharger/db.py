@@ -157,7 +157,7 @@ async def charging_runs(module_ids: list[str], start: datetime, end: datetime) -
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """SELECT module_id, ts, car, power_w, phases_active, i_l1, i_l2, i_l3
-               FROM ev_telemetry WHERE module_id = ANY($1::text[]) AND ts >= $2 - interval '2 minutes' AND ts < $3
+               FROM ev_telemetry WHERE module_id = ANY($1::text[]) AND ts >= $2::timestamptz - interval '2 minutes' AND ts < $3::timestamptz
                ORDER BY module_id, ts""", module_ids, start, end)
     runs: list[dict] = []
     cur = None

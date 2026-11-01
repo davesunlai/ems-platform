@@ -46,7 +46,12 @@ export function EvControl({ mod, live, onSent }) {
           </select>
           <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6, flex: "1 1 220px", minWidth: 220 }}>
             <span>6 A</span>
-            <input type="range" min={6} max={live?.amp_max || 32} step={1} value={Number(amp) || 6} style={{ flex: 1 }}
+            <style>{`.ev-range{height:34px;-webkit-appearance:none;appearance:none;background:transparent}
+.ev-range::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:var(--border)}
+.ev-range::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:36px;height:36px;border-radius:50%;background:var(--green);border:3px solid var(--bg);margin-top:-14px;cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.ev-range::-moz-range-track{height:8px;border-radius:4px;background:var(--border)}
+.ev-range::-moz-range-thumb{width:36px;height:36px;border-radius:50%;background:var(--green);border:3px solid var(--bg);cursor:grab}`}</style>
+            <input type="range" className="ev-range" min={6} max={live?.amp_max || 32} step={1} value={Number(amp) || 6} style={{ flex: 1 }}
                    onChange={(e) => setAmp(Number(e.target.value))} title="výkon po 1 A" />
             <span>{live?.amp_max || 32} A</span>
           </label>

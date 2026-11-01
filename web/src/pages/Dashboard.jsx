@@ -400,7 +400,7 @@ function SunCloud({ cx, cy, base, sun, cloud, frac }) {
   </>);
 }
 
-function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1, overlay, auditKey, onAudit, shape }) {
+function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 1, overlay, auditKey, onAudit, shape, onClick }) {
   const hov = auditKey && onAudit ? { onMouseEnter: (e) => onAudit(auditKey, e), onMouseLeave: () => onAudit(null),
                                       style: { cursor: "help", textDecoration: "underline dotted" } } : {};
   if (h < 80 * m) {   // kompaktní box (výstupy, TČ v desktop layoutu): ikona vlevo, texty se vejdou DOVNITŘ
@@ -417,7 +417,7 @@ function FlowNode({ x, y, w = 150, h = 84, icon, title, value, sub, accent, m = 
     );
   }
   return (
-    <g>
+    <g onClick={onClick} style={onClick ? { cursor: "pointer" } : undefined}>
       {shape === "ellipse"
         ? <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2 + 6 * m} ry={h / 2 + 4 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
         : <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />}
@@ -584,7 +584,7 @@ function weatherTitle(cd) {
   return `dnes ${t}${z ? ` · zítra ${z}` : ""}`;
 }
 // ☀️ FVE box ve třech sloupcích: DNES (počasí, plán, vyrobeno) · ZÍTRA (počasí, plán) · TEĎ (výkon). v1.4.1
-function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
+function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit, onClick }) {
   const cd = d.cloud_days || [];
   const fc = d.pv_forecast_days || [];
   const frac = (p) => (p == null ? 0 : Math.max(0, Math.min(1, p / 100)));
@@ -613,7 +613,7 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
     {children}
   </g>);
   return (
-    <g>
+    <g onClick={onClick} style={onClick ? { cursor: "pointer" } : undefined}>
       <rect x={x} y={y} width={w} height={h} rx={12 * m} fill="var(--bg)" stroke={active ? green : "var(--border)"} strokeWidth={1.4 * m} />
       {[1, 2, 3].map((i) => <line key={i} x1={x + col * i} y1={y + fs(6)} x2={x + col * i} y2={y + h - fs(6)} stroke="var(--border)" strokeWidth={0.8 * m} opacity="0.7" />)}
       <Col i={0} head={hdr(0, "DNES")} color="var(--muted)">
@@ -638,6 +638,111 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit }) {
         <text x={cx(3)} y={y + fs(76)} textAnchor="middle" fontSize={14 * ts} fontWeight="700" fill={active ? green : "var(--fg)"} {...hov}>{pvKw.toFixed(1)} kW</text>
       </Col>
     </g>
+  );
+}
+
+// 🔎 Detail uzlu schématu: související hodnoty + nastavení/akce (ruční ovládání baterie je tady, ne pod schématem).
+function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose }) {
+  const { has } = useAuth();
+  const [spot, setSpot] = useState(null);
+  useEffect(() => { if (kind === "grid") api.spot().then(setSpot).catch(() => {}); }, [kind]);
+  const kw = (w) => `${Math.abs((w || 0) / 1000).toFixed(1)} kW`;
+  const cfg = pl?.config || {};
+  const Row = ({ l, v }) => <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "3px 0", borderBottom: "1px dashed var(--border)", fontSize: 13 }}><span className="muted">{l}</span><b>{v}</b></div>;
+  const Links = ({ items }) => <p style={{ fontSize: 12, margin: "10px 0 0" }}>{items.filter(Boolean).map((x, i) => <span key={i}>{i ? " · " : ""}<a href={x.to}>{x.l}</a></span>)}</p>;
+  let title = "", body = null;
+  if (kind === "pv") {
+    const fc = d.pv_forecast_days || [];
+    title = "☀️ FVE";
+    body = <>
+      <Row l="výkon teď" v={kw(d.pv_w)} /><Row l="vyrobeno dnes" v={`${(d.today_kwh ?? 0).toFixed(1)} kWh`} />
+      {fc.map((f) => <Row key={f.day} l={`plán ${new Date(f.day).toLocaleDateString("cs-CZ", { weekday: "short", day: "numeric", month: "numeric" })}`} v={`${f.corrected ? "≈" : ""}${f.kwh.toFixed(0)} kWh`} />)}
+      {(d.cloud_days || []).map((c) => <Row key={c.day} l={`oblačnost ${c.day.slice(8)}.${c.day.slice(5, 7)}.`} v={`${c.cloud_pct} %`} />)}
+      <Links items={[has("admin") && { to: "/localities", l: "⚙ umístění, panely a podlaha predikce (Lokality)" }, { to: "/modules", l: "🧩 moduly" }]} />
+    </>;
+  } else if (kind === "grid") {
+    title = "🗼 Distribuce (síť)";
+    const g = d.grid_w || 0;
+    body = <>
+      <Row l={g >= 0 ? "odběr teď" : "dodávka teď"} v={kw(g)} />
+      <Row l="dnes odebráno" v={`${(d.import_kwh ?? 0).toFixed(1)} kWh${d.import_czk != null ? ` · ${d.import_czk.toFixed(0)} Kč` : ""}`} />
+      <Row l="dnes dodáno" v={`${(d.export_kwh ?? 0).toFixed(1)} kWh${d.export_czk != null ? ` · ${d.export_czk.toFixed(0)} Kč` : ""}`} />
+      {spot?.price != null && <Row l="spot teď" v={`${Math.round(spot.price)} Kč/MWh`} />}
+      {cfg.grid_export_limit_kw != null && <Row l="🛡 strop exportu (TERA)" v={`${cfg.grid_export_limit_kw} kW`} />}
+      {d.audit?.grid_w?.limits && <Row l="limit měniče (43074)" v={`${d.audit.grid_w.limits.inverter_kw ?? "?"} kW`} />}
+      <Row l="režim ceny" v={d.pricing_mode === "tariff" ? "pevný ceník" : "spot (OTE)"} />
+      <Links items={[has("admin") && { to: "/localities", l: "⚙ ceník, distribuce, strop přetoků (Lokality)" }, has("admin") && { to: "/automation", l: "⚡ SPOT pravidla" }]} />
+    </>;
+  } else if (kind === "home") {
+    title = "🏠 Dům";
+    body = <>
+      <Row l="spotřeba teď (dopočet)" v={kw(d.load_w)} />
+      {d.xcheck?.house_load_inv != null && <Row l="zátěž domu dle měniče (33147)" v={kw(d.xcheck.house_load_inv)} />}
+      <Row l="spotřeba dnes" v={`${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} />
+      <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>Spotřeba = FVE + odběr − dodávka − baterie (bilance); není měřená přímo. Wallbox, TČ a spotřebiče jsou v ní zahrnuté.</p>
+      <Links items={[{ to: "/control", l: "🎛 řízení a spotřebiče" }]} />
+    </>;
+  } else if (kind === "bat") {
+    title = "🔋 Baterie";
+    const bw = d.battery_w || 0;
+    body = <>
+      <Row l="nabití celkem" v={`${d.soc != null ? Math.round(d.soc) : "?"} %`} />
+      <Row l={bw >= 0 ? "nabíjení" : "vybíjení"} v={Math.abs(bw) > 50 ? kw(bw) : "klid"} />
+      {d.battery_soc_1 != null && <Row l="baterie 1" v={`${Math.round(d.battery_soc_1)} % · ${kw(d.battery_w_1)}`} />}
+      {d.battery_soc_2 != null && <Row l="baterie 2" v={`${Math.round(d.battery_soc_2)} % · ${kw(d.battery_w_2)}`} />}
+      {d.xcheck?.battery_power_inv != null && <Row l="výkon dle měniče (33149)" v={kw(d.xcheck.battery_power_inv)} />}
+      {cfg.capacity_kwh != null && <Row l="kapacita" v={`${cfg.capacity_kwh} kWh`} />}
+      {cfg.soc_min_pct != null && <Row l="bezpečnostní podlaha SoC" v={`${cfg.soc_min_pct} %`} />}
+      {pl?.current && <Row l="🧠 plánovač teď" v={ACT_CZ[pl.current.action] || pl.current.action} />}
+      {d.control_module && (
+        <div style={{ marginTop: 10, paddingLeft: 8, borderLeft: "3px solid #a371f7" }}>
+          <div className="muted" style={{ fontSize: 11.5, marginBottom: 2 }}>Ruční ovládání baterie</div>
+          <ForceBtn mode="charge" dev={d.control_module} soc={d.soc} maxKw={d.max_charge_kw} />
+          <ForceBtn mode="discharge" dev={d.control_module} soc={d.soc} maxKw={d.max_discharge_kw} />
+        </div>)}
+      <Links items={[{ to: "/control", l: "🎛 plánovač, časový plán, spot pravidla" }, has("admin") && { to: "/localities", l: "⚙ hlídání článků (Lokality)" }]} />
+    </>;
+  } else if (kind === "hp") {
+    title = "🌀 Tepelné čerpadlo";
+    body = hp ? <>
+      <Row l="stav" v={hp.compressor_on ? (HP_MODE_CZ[hp.hp_mode] || hp.hp_mode) : "klid"} />
+      <Row l="odhad příkonu" v={kw(hp.power_est_w)} />
+      {hp.t_outdoor != null && <Row l="venkovní teplota" v={`${Number(hp.t_outdoor).toFixed(1)} °C`} />}
+      {hp.t_tank != null && <Row l="teplota akumulace" v={`${Number(hp.t_tank).toFixed(1)} °C`} />}
+      {hp.t_buffer_set != null && <Row l="žádaná teplota" v={`${Number(hp.t_buffer_set).toFixed(1)} °C`} />}
+      {hp.el_heating_today_kwh != null && <Row l="el. dnes (topení)" v={`${hp.el_heating_today_kwh} kWh`} />}
+      {hp.heat_heating_today_kwh != null && <Row l="teplo dnes (topení)" v={`${hp.heat_heating_today_kwh} kWh`} />}
+      {hp.fault ? <Row l="porucha" v={`ano (${hp.error_code})`} /> : null}
+      <Links items={[{ to: "/heatpump", l: "🌀 stránka tepelného čerpadla (běhy, COP, denní)" }]} />
+    </> : <p className="muted">Bez dat.</p>;
+  } else if (kind === "backup") {
+    title = "🔌 Záloha (backup výstup měniče)";
+    body = <><Row l="zátěž na záloze" v={kw(d.backup_w)} />
+      <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>Okruhy napájené ze zálohovaného výstupu měniče (při výpadku sítě ostrovní režim). Výstraha „Ostrovní režim" chodí do 🔔.</p></>;
+  } else if (kind.startsWith("out:")) {
+    const o = outs.find((x) => String(x.id) === kind.slice(4));
+    title = `🔌 ${o?.name || "Spotřebič"}`;
+    const ew = o ? ewDev[o.target] : null;
+    body = o ? <>
+      <Row l="stav" v={(ew ? ew.on : o.is_on) ? "zapnuto" : "vypnuto"} />
+      {ew?.power_w != null && <Row l="příkon (eWeLink)" v={kw(ew.power_w)} />}
+      {ew && <Row l="online" v={ew.online === false ? "ne" : "ano"} />}
+      {o.last_decision && <Row l="poslední rozhodnutí" v={o.last_decision} />}
+      {o.last_action_at && <Row l="kdy" v={new Date(o.last_action_at).toLocaleString("cs-CZ")} />}
+      {pl?.config?.spiral_output_id === o.id && <Row l="role v plánovači" v="♨️ spirála (odložitelná zátěž)" />}
+      <Links items={[{ to: "/control", l: "🎛 ruční spínání a časový plán (Řízení)" }, has("admin") && { to: "/ewelink", l: "⚙ eWeLink" }]} />
+    </> : <p className="muted">Spotřebič nenalezen.</p>;
+  }
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(560px, 96vw)", maxHeight: "92vh", overflow: "auto", padding: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <b style={{ fontSize: 15 }}>{title}</b>
+          <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={onClose}>✕</button>
+        </div>
+        {body}
+      </div>
+    </div>
   );
 }
 
@@ -743,6 +848,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const [hp, setHp] = useState(null);
   const [ev, setEv] = useState(null);          // 🚗 wallbox (go-e) — stav + module_ids
   const [evOpen, setEvOpen] = useState(false);
+  const [node, setNode] = useState(null);      // rozkliknutý uzel: pv | grid | home | bat | hp | backup | out:<id>
   const [mob, setMob] = useState(() => window.innerWidth <= 640);
   const [ewDev, setEwDev] = useState({});     // deviceid -> {on, online, power_w} z eWeLinku
   useEffect(() => {
@@ -858,15 +964,15 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {/* dům → wallbox (hrany jsou vždy POD boxy — kreslí se dřív než uzly) */}
             {ev && (
               <FlowEdge m={1.5} d="M200,324 C200,500 100,620 100,696" kw={evKw} active={evOn} color="#58a6ff" label={f1(evKw)} lx={168} ly={520} />)}
-            <PvNode m={1.4} x={10} y={10} w={185} h={128} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} />
-            <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit}
+            <PvNode m={1.4} x={10} y={10} w={185} h={128} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} onClick={() => setNode("pv")} />
+            <FlowNode m={1.5} x={205} y={10} w={185} h={128} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit} onClick={() => setNode("grid")}
                       value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode m={1.5} shape="ellipse" x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
+            <FlowNode m={1.5} shape="ellipse" x={105} y={196} w={190} h={128} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} onClick={() => setNode("home")} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.xcheck?.house_load_inv != null ? `měnič (33147): ${(d.xcheck.house_load_inv / 1000).toFixed(2)} kW · dopočet vs měřeno` : "výkon / dnes celkem"} accent="var(--amber, #d29922)" />
             {/* baterie — velký box s pod-boxy (mobil) */}
-            <g>
+            <g onClick={() => setNode("bat")} style={{ cursor: "pointer" }}>
               <rect x={10} y={354} width={230} height={176} rx="14" fill="var(--bg)" stroke="#a371f7" strokeWidth="2" />
               {ic.bat.startsWith("/")
                 ? <image href={ic.bat} x={106} y={362} width={38} height={38} />
@@ -894,15 +1000,15 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 })}
             </g>
             {(d.backup_w ?? 0) > 50 && (
-              <FlowNode m={1.5} x={250} y={474} w={140} h={74} icon="🔌" title="Záloha (backup)"
+              <FlowNode m={1.5} x={250} y={474} w={140} h={74} icon="🔌" title="Záloha (backup)" onClick={() => setNode("backup")}
                         value={`${f1(kw(d.backup_w))}`} sub="zálohovaný výstup" accent="#39c5cf" />)}
             {hp && (
-              <FlowNode m={1.5} x={250} y={354} w={140} h={110} icon={ic.hp} title="Tep. čerpadlo"
+              <FlowNode m={1.5} x={250} y={354} w={140} h={110} icon={ic.hp} title="Tep. čerpadlo" onClick={() => setNode("hp")}
                         value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
                         sub={hp.compressor_on ? (HP_MODE_CZ[hp.hp_mode] || hp.hp_mode) : `aku ${hp.t_tank != null ? Number(hp.t_tank).toFixed(0) : "?"}°`}
                         accent={hp.compressor_on ? "#39c5cf" : null} />)}
             {outs.slice(0, 2).map((o, i) => (
-              <FlowNode key={o.id} m={1.5} x={i === 0 ? 10 : 205} y={556} w={185} h={128} icon={outIcon(o)} title={o.name}
+              <FlowNode key={o.id} m={1.5} x={i === 0 ? 10 : 205} y={556} w={185} h={128} icon={outIcon(o)} title={o.name} onClick={() => setNode(`out:${o.id}`)}
                         value={outOn(o) ? "zapnuto" : "vypnuto"} sub={outSub(o)} accent={outOn(o) ? "#d29922" : null} />
             ))}
             {ev && (
@@ -953,13 +1059,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             {/* dům → wallbox (obchází zálohu zleva; hrany vždy POD boxy) */}
             {ev && (
               <FlowEdge d="M340,268 C290,290 272,330 300,362" kw={evKw} active={evOn} color="#58a6ff" label={f1(evKw)} lx={262} ly={325} />)}
-            <PvNode x={10} y={48} w={280} h={94} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} />
-            <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit} value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
+            <PvNode x={10} y={48} w={280} h={94} ic={ic} d={d} pvKw={pvKw} onAudit={onAudit} onClick={() => setNode("pv")} />
+            <FlowNode x={535} y={55} icon={ic.grid} title="Distribuce" auditKey="grid_w" onAudit={onAudit} onClick={() => setNode("grid")} value={gridW >= 0 ? `odběr ${f1(kw(gridW))}` : `dodávka ${f1(kw(gridW))}`}
                       sub={<><tspan fill="#f85149">▼ dnes {(d.import_kwh ?? 0).toFixed(1)} kWh</tspan> · <tspan fill="#3fb950">▲ {(d.export_kwh ?? 0).toFixed(1)} kWh</tspan></>}
                       accent={kw(gridW) > 0.05 ? (gridW >= 0 ? "#58a6ff" : "#3fb950") : null} />
-            <FlowNode shape="ellipse" x={295} y={188} w={170} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
+            <FlowNode shape="ellipse" x={295} y={188} w={170} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} onClick={() => setNode("home")} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.xcheck?.house_load_inv != null ? `měnič (33147): ${(d.xcheck.house_load_inv / 1000).toFixed(2)} kW · dopočet vs měřeno` : "výkon / dnes celkem"} accent="var(--amber, #d29922)" />
-            <g>
+            <g onClick={() => setNode("bat")} style={{ cursor: "pointer" }}>
               <rect x={45} y={330} width={200} height={124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
               {ic.bat.startsWith("/")
                 ? <image href={ic.bat} x={132} y={334} width={26} height={26} />
@@ -987,7 +1093,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 })}
             </g>
             {(d.backup_w ?? 0) > 50 && (
-              <FlowNode x={295} y={290} w={170} h={54} icon="🔌" title="Záloha (backup)"
+              <FlowNode x={295} y={290} w={170} h={54} icon="🔌" title="Záloha (backup)" onClick={() => setNode("backup")}
                         value={`${f1(kw(d.backup_w))}`} sub="zálohovaný výstup měniče" accent="#39c5cf" />)}
             {ev && (
               <g onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
@@ -995,23 +1101,17 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                           value={evOn ? f1(evKw) : (evS?.car_state === "idle" ? "bez auta" : "0.0 kW")} sub={evSub} accent={evOn ? "#58a6ff" : null} />
               </g>)}
             {hp && (
-              <FlowNode x={585} y={268} w={150} h={54} icon={ic.hp} title="Tepelné čerpadlo"
+              <FlowNode x={585} y={268} w={150} h={54} icon={ic.hp} title="Tepelné čerpadlo" onClick={() => setNode("hp")}
                         value={hp.compressor_on ? `~${((hp.power_est_w || 0) / 1000).toFixed(1)} kW` : "klid"}
                         sub={hp.compressor_on ? (HP_MODE_CZ[hp.hp_mode] || hp.hp_mode) : `aku ${hp.t_tank != null ? Number(hp.t_tank).toFixed(0) : "?"} °C`}
                         accent={hp.compressor_on ? "#39c5cf" : null} />)}
             {outs.slice(0, 2).map((o, i) => (
-              <FlowNode key={o.id} x={585} y={352 + i * 62} w={150} h={54} icon={outIcon(o)} title={o.name}
+              <FlowNode key={o.id} x={585} y={352 + i * 62} w={150} h={54} icon={outIcon(o)} title={o.name} onClick={() => setNode(`out:${o.id}`)}
                         value={outOn(o) ? "zapnuto" : "vypnuto"} sub={outSub(o)} accent={outOn(o) ? "#d29922" : null} />
             ))}
           </svg>
         )}
-        {d && d.control_module && (
-          <div style={{ marginLeft: mob ? "2.5%" : "5.9%", paddingLeft: 6, borderLeft: "3px solid #a371f7", marginTop: -2 }}>
-            <div className="muted" style={{ fontSize: 11.5, marginBottom: 2 }}>🔋 Ruční ovládání baterie</div>
-            <ForceBtn mode="charge" dev={d.control_module} soc={d.soc} maxKw={d.max_charge_kw} />
-            <ForceBtn mode="discharge" dev={d.control_module} soc={d.soc} maxKw={d.max_discharge_kw} />
-          </div>
-        )}
+        {node && d && <NodeDetail kind={node} d={d} pl={pl} hp={hp} outs={outs} ewDev={ewDev} locId={locId} onClose={() => setNode(null)} />}
         {tip && d?.audit?.[tip.key] && (() => { const a = d.audit[tip.key]; return (
           <div style={{ position: "fixed", left: Math.min(tip.x + 12, window.innerWidth - 420), top: Math.min(tip.y + 12, window.innerHeight - 260),
                         zIndex: 90, width: 400, maxHeight: 250, overflow: "auto", background: "var(--panel)", border: "1px solid var(--border)",
