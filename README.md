@@ -1,3 +1,6 @@
+## v1.7.9 — Vlastní uzel auta (bez překryvů)
+- `CarNode`: ikona + zástrčka vlevo, texty zarovnané vlevo ve sloupci; kabel od wallboxu po levém okraji do konektoru. Desktop: dvě auta 140 px široká.
+
 ## v1.7.8 — Popis km u aut
 - Box auta: řádek „ujeto dnes / celkem“ a pod ním „0 / 2 222 km“ (sub3 v kompaktním FlowNode); boxy vyšší (desktop 78, mobil 110).
 

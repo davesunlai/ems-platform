@@ -400,25 +400,36 @@ function SunCloud({ cx, cy, base, sun, cloud, frac }) {
   </>);
 }
 
-// 🔌 Zástrčka zasunutá do auta (kompaktní uzel 🚘): kabel od spodního okraje boxu, konektor s kolíky v boku auta.
-// Bliká zeleně = CarData hlásí CONNECTED; při nabíjení rychleji.
-function PlugBadge({ x, y, h, m = 1, charging, blink, cable }) {
-  const cy = y + h / 2;                       // střed ikony auta (ikona začíná na x+16m)
+// 🚘 Uzel auta: ikona + zástrčka vlevo, texty ve sloupci vpravo (nic se nekříží). Kabel (cable) od wallboxu
+// vede po levém okraji boxu a končí v konektoru — kreslí se až po boxu, protíná jen levý rámeček u ikony.
+function CarNode({ x, y, w, h, m = 1, title, value, sub, sub2, sub3, accent, plugged, charging, cable }) {
+  const cy = y + h / 2;
+  const tx = x + 44 * m;                        // začátek textového sloupce
   const g = "#3fb950";
+  const px = x + 3 * m, py = cy + 2 * m;        // konec kabelu = konektor
   return (
-    <g className={blink ? (charging ? "plug-blink fast" : "plug-blink") : undefined}>
-      {/* kabel: od wallboxu (cable = celá cesta) až do konektoru v autě — nic nevisí ve vzduchu */}
-      {cable && <path d={cable} fill="none" stroke={g} strokeWidth={4 * m} strokeLinecap="round" />}
-      <rect x={x + 9 * m} y={cy + 0.5 * m} width={7 * m} height={6 * m} rx={1.5 * m} fill={g} />
-      <rect x={x + 16 * m} y={cy + 1.6 * m} width={3.2 * m} height={1.3 * m} fill={g} />
-      <rect x={x + 16 * m} y={cy + 4.1 * m} width={3.2 * m} height={1.3 * m} fill={g} />
-      {charging
-        ? <text x={x + 12.5 * m} y={cy - 1.5 * m} textAnchor="middle" fontSize={7 * m} fill={g}>⚡</text>
-        : <g>{/* ⏸ zapojeno, nenabíjí — žlutý kroužek s pauzou nad zástrčkou */}
-            <circle cx={x + 12.5 * m} cy={cy - 5 * m} r={5 * m} fill="var(--amber, #d29922)" stroke="var(--bg)" strokeWidth={1 * m} />
-            <rect x={x + 10.2 * m} y={cy - 7.8 * m} width={1.6 * m} height={5.6 * m} fill="var(--bg)" />
-            <rect x={x + 13.2 * m} y={cy - 7.8 * m} width={1.6 * m} height={5.6 * m} fill="var(--bg)" />
-          </g>}
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={10 * m} fill="var(--bg)" stroke={accent || "var(--border)"} strokeWidth={1.4 * m} />
+      <text x={x + 12 * m} y={cy + 8 * m} fontSize={22 * m}>🚘</text>
+      <text x={tx} y={y + 12 * m} fontSize={9 * m} fill="var(--muted)">{title}</text>
+      <text x={tx} y={y + 27 * m} fontSize={14 * m} fontWeight="700" fill={accent || "var(--fg)"}>{value}</text>
+      {sub && <text x={tx} y={y + 39 * m} fontSize={8.5 * m} fill="var(--muted)">{sub}</text>}
+      {sub2 && <text x={tx} y={y + 52 * m} fontSize={7.5 * m} fill="var(--muted)" opacity="0.8">{sub2}</text>}
+      {sub3 && <text x={tx} y={y + 63 * m} fontSize={9.5 * m} fontWeight="600" fill="var(--fg)">{sub3}</text>}
+      {plugged && (
+        <g className={charging ? "plug-blink fast" : undefined}>
+          {cable && <path d={cable} fill="none" stroke={g} strokeWidth={4 * m} strokeLinecap="round" />}
+          <rect x={px} y={cy - 1 * m} width={7 * m} height={6 * m} rx={1.5 * m} fill={g} />
+          <rect x={px + 7 * m} y={cy + 0.2 * m} width={3.2 * m} height={1.3 * m} fill={g} />
+          <rect x={px + 7 * m} y={cy + 2.7 * m} width={3.2 * m} height={1.3 * m} fill={g} />
+          {charging
+            ? <text x={px + 3.5 * m} y={cy - 3 * m} textAnchor="middle" fontSize={8 * m} fill={g}>⚡</text>
+            : <g>
+                <circle cx={px + 3.5 * m} cy={cy - 6.5 * m} r={5 * m} fill="var(--amber, #d29922)" stroke="var(--bg)" strokeWidth={1 * m} />
+                <rect x={px + 1.2 * m} y={cy - 9.3 * m} width={1.6 * m} height={5.6 * m} fill="var(--bg)" />
+                <rect x={px + 4.2 * m} y={cy - 9.3 * m} width={1.6 * m} height={5.6 * m} fill="var(--bg)" />
+              </g>}
+        </g>)}
     </g>
   );
 }
@@ -942,7 +953,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const carSub2 = (c) => (c.odometer_km == null ? null : "ujeto dnes / celkem");
   const carSub3 = (c) => (c.odometer_km == null ? null : `${c.km_today != null ? nkm(c.km_today) : "–"} / ${nkm(c.odometer_km)} km`);
   const carAcc = (c) => (carCharging(c) ? "#58a6ff" : carAtWb(c) ? "#3fb950" : c.soc != null && Number(c.soc) < 20 ? "#f85149" : null);
-  const carName = (c) => String(c.name || c.model || c.vin.slice(-6)).slice(0, mob || carShown.length < 2 ? 14 : 10);
+  const carName = (c) => String(c.name || c.model || c.vin.slice(-6)).slice(0, 16);
   const pvKw = d ? kw(d.pv_w) : 0;
   const batW = d?.battery_w || 0;                 // + nabíjení / − vybíjení
   const gridW = d?.grid_w || 0;                   // + import / − export
@@ -1075,9 +1086,9 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
               </g>)}
             {carShown.map((c, i) => (
               <g key={c.vin} onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
-                <FlowNode m={1.5} x={205} y={696 + i * 118} w={185} h={110} icon="🚘" title={carName(c)} value={carVal(c)} sub={carSub(c)} sub2={carSub2(c)} sub3={carSub3(c)} accent={carAcc(c)} />
-                {carAtWb(c) && <PlugBadge m={1.5} x={205} y={696 + i * 118} h={110} charging={carCharging(c)} blink={carCharging(c)}
-                                          cable={`M195,760 C202,760 205,${696 + i * 118 + 55 + 4.5} 218,${696 + i * 118 + 55 + 4.5}`} />}
+                <CarNode m={1.5} x={205} y={696 + i * 118} w={185} h={110} title={carName(c)} value={carVal(c)} sub={carSub(c)} sub2={carSub2(c)} sub3={carSub3(c)}
+                         accent={carAcc(c)} plugged={carAtWb(c)} charging={carCharging(c)}
+                         cable={`M195,760 C200,760 198,${696 + i * 118 + 55 + 3} 203,${696 + i * 118 + 55 + 3} L${205 + 4.5},${696 + i * 118 + 55 + 3}`} />
               </g>))}
           </svg>
         ) : (
@@ -1165,12 +1176,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
               </g>)}
             {carShown.map((c, i) => (
               <g key={c.vin} onClick={() => setEvOpen(true)} style={{ cursor: "pointer" }}>
-                {!carAtWb(c) && <line x1={380} y1={410} x2={carShown.length === 1 ? 380 : 338 + i * 86} y2={422} stroke="var(--border)" strokeWidth="1.2" />}
-                <FlowNode x={carShown.length === 1 ? 295 : 295 + i * 86} y={422} w={carShown.length === 1 ? 170 : 84} h={78}
-                          icon="🚘" title={carName(c)} value={carVal(c)} sub={carSub(c)} sub2={carSub2(c)} sub3={carSub3(c)} accent={carAcc(c)} />
-                {carAtWb(c) && (() => { const bx = carShown.length === 1 ? 295 : 295 + i * 86; const px = bx + 9, py = 422 + 39 + 3;
-                  return <PlugBadge x={bx} y={422} h={78} charging={carCharging(c)} blink={carCharging(c)}
-                                    cable={`M380,410 C380,${422 + 4} ${px},${422 - 10} ${px},${py}`} />; })()}
+                {(() => { const bx = carShown.length === 1 ? 295 : 295 + i * 150; const bw = carShown.length === 1 ? 170 : 140; const py = 422 + 39 + 2;
+                  return <>
+                    {!carAtWb(c) && <line x1={380} y1={410} x2={bx + bw / 2} y2={422} stroke="var(--border)" strokeWidth="1.2" />}
+                    <CarNode x={bx} y={422} w={bw} h={78} title={carName(c)} value={carVal(c)} sub={carSub(c)} sub2={carSub2(c)} sub3={carSub3(c)}
+                             accent={carAcc(c)} plugged={carAtWb(c)} charging={carCharging(c)}
+                             cable={`M${bx + 6},410 C${bx + 6},418 ${bx - 8},416 ${bx - 8},${py - 6} L${bx - 8},${py} L${bx + 3},${py}`} />
+                  </>; })()}
               </g>))}
             {hp && (
               <FlowNode x={585} y={268} w={150} h={54} icon={ic.hp} title="Tepelné čerpadlo" onClick={() => setNode("hp")}
