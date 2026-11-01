@@ -241,7 +241,8 @@ class GoeChargerAdapter:
         base.update(self.normalize(t))
         self._target = base
         self._pending_release = False
-        return await self._reconcile_target(self._last or {}, force=force)
+        res = await self._reconcile_target(self._last or {}, force=force)
+        return {**res, "target": dict(base)}
 
     async def release(self, permanent: bool = False) -> dict:
         """Uvolnit řízení: frc=0 (auto jede podle nabíječky/app). permanent=True vrátí i fup=true."""

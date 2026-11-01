@@ -58,6 +58,19 @@ async def ingest_telemetry(body: TelemetryBody, box: dict = Depends(box_auth)) -
             rows.append((ts, r.device_uid, metric, val, _UNITS.get(metric, "")))
     accepted = await db.insert_rows(rows)
     await db.touch_ingest(box["id"], accepted)
+    # 🚗 wallbox za boxem: ze zaslaných ev_* metrik obnovit snapshot → ev_telemetry + relace (jako poll_device na serveru)
+    try:
+        ev_mods = {m["id"]: m for m in mods if m.get("adapter") == "goe_charger"}
+        if ev_mods:
+            from ems.evcharger import db as ev_db
+            from ems.evcharger import service as ev_service
+            for r in body.rows:
+                if r.device_uid in ev_mods and "ev_car_state" in r.metrics:
+                    snap = _ev_snapshot_from_metrics(r.metrics)
+                    await ev_db.insert(r.device_uid, snap)
+                    await ev_service.on_snapshot(r.device_uid, snap, ev_mods[r.device_uid].get("locality_id"))
+    except Exception as exc:
+        logger.debug("ev snapshot z boxu: %s", exc)
     dup = len(rows) - accepted
     try:
         tss = [r[0] for r in rows]
@@ -68,6 +81,19 @@ async def ingest_telemetry(body: TelemetryBody, box: dict = Depends(box_auth)) -
     if skipped:
         logger.warning("EMSBOX %s: %s řádků odmítnuto (cizí device_uid / vadný ts)", box["id"], skipped)
     return {"ack": body.batch_id, "accepted": accepted, "duplicates": dup, "skipped": skipped}
+
+
+def _ev_snapshot_from_metrics(m: dict) -> dict:
+    """ev_* metriky z boxu → plochý snapshot pro ev_telemetry (klíče jako GoeChargerAdapter.parse)."""
+    g = m.get
+    return {"car": g("ev_car_state"), "amp_set": g("ev_amp_set"), "amp_allowed": g("ev_amp_allowed"),
+            "phase_mode": g("ev_phase_mode"), "force": g("ev_force"), "model_status": g("ev_model_status"),
+            "error": g("ev_error"), "u_l1": g("ev_voltage_l1"), "u_l2": g("ev_voltage_l2"), "u_l3": g("ev_voltage_l3"),
+            "i_l1": g("ev_current_l1"), "i_l2": g("ev_current_l2"), "i_l3": g("ev_current_l3"),
+            "power_w": g("ev_power"), "phases_active": g("ev_phases_active"), "temp_c": g("ev_temp"),
+            "energy_total_wh": (g("ev_energy_total") or 0) * 1000 if g("ev_energy_total") is not None else None,
+            "session_wh": (g("ev_session_kwh") or 0) * 1000 if g("ev_session_kwh") is not None else None,
+            "allowed": (g("ev_force") != 1) if g("ev_force") is not None else None}
 
 
 def _client_ip(request: Request) -> str | None:
@@ -138,6 +164,16 @@ async def box_command_result(body: CommandResult, box: dict = Depends(box_auth))
     if body.module_id not in mods:
         raise HTTPException(status_code=403, detail="modul nepatří tomuto boxu")
     await control_db.complete(body.id, body.ok, body.result)
+    if body.ok and body.action in ("ev_set", "ev_release"):      # wallbox za boxem: stav = cíl EMS
+        try:
+            tgt = (body.result or {}).get("target")
+            if body.action == "ev_set" and tgt is None:
+                tgt = {k: body.params.get(k) for k in ("amp", "psm", "frc", "dwo") if k in (body.params or {})}
+            await control_db.set_state(body.module_id, "ev_set" if (body.action == "ev_set" and tgt) else "idle",
+                                       {**(body.params or {}), "target": tgt or {}},
+                                       source=(body.params or {}).get("source", "manual"), username=body.username)
+        except Exception:
+            pass
     if body.ok and body.action in ("force_charge", "force_discharge", "stop", "spiral"):
         # zrcadlí process_queue: stav + notifikace operace
         try:
