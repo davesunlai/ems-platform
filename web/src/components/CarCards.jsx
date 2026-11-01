@@ -32,7 +32,7 @@ export function CarCard({ car }) {
         <span>{car.charging ? "⚡ nabíjí" : car.plugged_bool ? "⏸ zapojeno · nenabíjí" : car.plugged_bool === false ? "odpojeno" : "—"}{car.charging && car.charging_power_kw != null ? ` ${Number(car.charging_power_kw).toFixed(1)} kW` : ""}</span>
         {car.target_soc != null && <span>cíl <b>{Math.round(Number(car.target_soc))} %</b></span>}
         {car.kwh_to_target != null && <span>do cíle <b>{car.kwh_to_target} kWh</b></span>}
-        {car.capacity_kwh != null && <span className="muted">{Number(car.capacity_kwh).toFixed(0)} kWh</span>}
+        {car.kwh_now != null && <span>nabito <b>{Number(car.kwh_now).toFixed(0)}{car.capacity_kwh != null ? ` / ${Number(car.capacity_kwh).toFixed(0)}` : ""} kWh</b></span>}
         {car.odometer_km != null && <span>ujeto dnes / celkem <b>{car.km_today != null ? Math.round(Number(car.km_today)) : "–"} / {Math.round(Number(car.odometer_km)).toLocaleString("cs-CZ")} km</b></span>}
         {car.lat != null && car.lon != null && <a className="muted" href={`https://maps.google.com/?q=${car.lat},${car.lon}`} target="_blank" rel="noreferrer">📍 poloha</a>}
       </div>

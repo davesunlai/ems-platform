@@ -1,3 +1,6 @@
+## v1.7.10 — Nabito / kapacita
+- Box auta i karta: „105 / 108 kWh“ (aktuální energie v baterii / využitelná kapacita).
+
 ## v1.7.9 — Vlastní uzel auta (bez překryvů)
 - `CarNode`: ikona + zástrčka vlevo, texty zarovnané vlevo ve sloupci; kabel od wallboxu po levém okraji do konektoru. Desktop: dvě auta 140 px široká.
 

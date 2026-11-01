@@ -945,7 +945,9 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const carCharging = (c) => carAtWb(c) && (!!c.charging || wbCharging);
   const carVal = (c) => (c.soc != null ? `${Math.round(Number(c.soc))} %` : "—");
   const carSub = (c) => {
-    const kwh = c.kwh_now != null ? `${Number(c.kwh_now).toFixed(0)} kWh` : (c.range_km != null ? `${Math.round(Number(c.range_km))} km` : null);
+    const kwh = c.kwh_now != null
+      ? `${Number(c.kwh_now).toFixed(0)}${c.capacity_kwh != null ? ` / ${Number(c.capacity_kwh).toFixed(0)}` : ""} kWh`
+      : (c.range_km != null ? `${Math.round(Number(c.range_km))} km` : null);
     const st = carCharging(c) ? "⚡ nabíjí" : carAtWb(c) ? "⏸ pauza" : null;   // zapojený kabel kreslí PlugBadge + propoj
     return [kwh, st].filter(Boolean).join(" · ") || (c.keys_received ? null : "čeká na data");
   };
