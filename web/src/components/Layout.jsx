@@ -114,6 +114,7 @@ const NAV_GROUPS = [
   ]},
   { label: "Zařízení", icon: "🧩", items: [
     { to: "/emsboxes", icon: "📦", label: "EMSBOXy (fleet)", vk: "page:emsboxes" },
+    { to: "/cars", icon: "🚘", label: "Auta (BMW CarData)", vk: "page:cars" },
     { to: "/modules", icon: "🧩", label: "Moduly", perm: "admin", vk: "page:modules" },
     { to: "/localities", icon: "📍", label: "Lokality", perm: "admin", vk: "page:localities" },
   ]},

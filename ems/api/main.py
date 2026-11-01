@@ -22,6 +22,7 @@ from ems.planner import db as planner_db
 from ems.planner.routes import router as planner_router
 from ems.heatpump.routes import router as heatpump_router
 from ems.evcharger.routes import router as evcharger_router
+from ems.cars.routes import router as cars_router
 from ems.emsbox.routes import router as emsbox_router
 from ems.emsbox.ingest_routes import router as emsbox_ingest_router
 from ems.market import db as market_db
@@ -68,6 +69,8 @@ async def lifespan(app: FastAPI):
         await _hp_db.ensure_schema()
         from ems.evcharger import db as _ev_db
         await _ev_db.ensure_schema()
+        from ems.cars import db as _cars_db
+        await _cars_db.ensure_schema()
         from ems.emsbox import db as _eb_db
         await _eb_db.ensure_schema()
         from ems.contact import db as contact_db
@@ -88,7 +91,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="1.6.11", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="1.7.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -194,6 +197,7 @@ app.include_router(pricing_router)
 app.include_router(planner_router)
 app.include_router(heatpump_router)
 app.include_router(evcharger_router)
+app.include_router(cars_router)
 app.include_router(emsbox_router)
 app.include_router(emsbox_ingest_router)
 from ems.emsbox.console import router as console_router

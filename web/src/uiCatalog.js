@@ -32,6 +32,7 @@ export const UI_CATALOG = [
     { key: "box:actions", label: "Servisní akce (update / reset / konzole)" },
     { key: "box:psk", label: "Wi-Fi heslo boxu" },
   ]},
+  { page: "page:cars", label: "🚘 Auta (BMW CarData)", path: "/cars", items: [] },
   { page: "page:automation", label: "SPOT (pravidla)", path: "/automation", items: [] },
   { page: "page:ewelink", label: "eWeLink", path: "/ewelink", items: [] },
   { page: "page:localities", label: "Lokality", path: "/localities", items: [] },

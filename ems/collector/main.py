@@ -370,6 +370,8 @@ async def run() -> None:
         await hp_db.ensure_schema()
         from ems.evcharger import db as ev_db
         await ev_db.ensure_schema()
+        from ems.cars import db as cars_db
+        await cars_db.ensure_schema()
         from ems.emsbox import db as eb_db
         await eb_db.ensure_schema()
         from ems.alerts import db as alerts_db
@@ -405,6 +407,11 @@ async def run() -> None:
                                        for e in active.values() if not e.get("control_only")))
                 await process_queue(active)
             await tick_market_and_automation(state)
+            try:
+                from ems.cars import service as cars_service
+                await cars_service.tick(state)          # 🚘 BMW CarData: device flow, tokeny, stream, REST
+            except Exception as exc:
+                logger.debug("cars tick: %s", exc)
             await tick_forecast(state)
             await tick_planner(state)
             await tick_alerts()

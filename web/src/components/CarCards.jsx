@@ -1,0 +1,34 @@
+// 🚘 Karta vozu (sdílená: stránka Auta + záložka v panelu wallboxu)
+const age = (iso) => { if (!iso) return "—"; const s = Math.round((Date.now() - new Date(iso)) / 1000);
+  return s < 90 ? `před ${s} s` : s < 5400 ? `před ${Math.round(s / 60)} min` : s < 172800 ? `před ${Math.round(s / 3600)} h` : `před ${Math.round(s / 86400)} dny`; };
+
+export function CarCard({ car }) {
+  const soc = car.soc != null ? Number(car.soc) : null;
+  const col = soc == null ? "var(--muted)" : soc < 20 ? "#f85149" : soc < 50 ? "var(--amber)" : "var(--green)";
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 22 }}>🚘</span>
+        <div><b>{car.name}</b>{car.model && car.model !== car.name ? <span className="muted" style={{ fontSize: 12 }}> · {car.model}</span> : null}
+          <div className="muted" style={{ fontSize: 11 }}>{car.vin} · {age(car.updated_at)}</div></div>
+        <div style={{ marginLeft: "auto", textAlign: "right" }}>
+          <div style={{ fontSize: 24, fontWeight: 700, color: col }}>{soc != null ? `${Math.round(soc)} %` : "—"}</div>
+          {car.range_km != null && <div className="muted" style={{ fontSize: 12 }}>{Math.round(Number(car.range_km))} km</div>}
+        </div>
+      </div>
+      {soc != null && <div style={{ height: 6, background: "var(--border)", borderRadius: 3, margin: "8px 0" }}>
+        <div style={{ width: `${Math.max(0, Math.min(100, soc))}%`, height: 6, background: col, borderRadius: 3 }} />
+        {car.target_soc != null && <div style={{ position: "relative", top: -8, left: `${Math.min(100, Number(car.target_soc))}%`, width: 2, height: 10, background: "var(--fg)" }} title={`cíl ${car.target_soc} %`} />}
+      </div>}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12.5 }}>
+        <span>{car.charging ? "⚡ nabíjí" : car.plugged_bool ? "🔌 zapojeno" : car.plugged_bool === false ? "odpojeno" : "—"}{car.charging && car.charging_power_kw != null ? ` ${Number(car.charging_power_kw).toFixed(1)} kW` : ""}</span>
+        {car.target_soc != null && <span>cíl <b>{Math.round(Number(car.target_soc))} %</b></span>}
+        {car.kwh_to_target != null && <span>do cíle <b>{car.kwh_to_target} kWh</b></span>}
+        {car.capacity_kwh != null && <span className="muted">{Number(car.capacity_kwh).toFixed(0)} kWh</span>}
+        {car.odometer_km != null && <span className="muted">{Math.round(Number(car.odometer_km)).toLocaleString("cs-CZ")} km</span>}
+        {car.lat != null && car.lon != null && <a className="muted" href={`https://maps.google.com/?q=${car.lat},${car.lon}`} target="_blank" rel="noreferrer">📍 poloha</a>}
+      </div>
+      {!car.keys_received && <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>Zatím žádná data — čeká se na stream / REST.</div>}
+    </div>
+  );
+}

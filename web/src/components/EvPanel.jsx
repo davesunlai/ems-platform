@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { CarCard } from "./CarCards";
 
 // go-e car: 1 = bez auta, 2 = nabíjí, 3 = připojeno a čeká na auto, 4 = připojeno, nenabíjí (auto nežádá / plné / pauza) — „Complete" u go-e NEZNAMENÁ plnou baterii
 export const EV_CAR = { idle: "bez auta", charging: "⚡ nabíjí", wait_car: "🔌 připojeno · čeká na auto", complete: "🔌 připojeno · nenabíjí", error: "⛔ chyba", unknown: "?" };
@@ -182,9 +183,11 @@ export function EvPanel({ locId, mod, onClose }) {
   const [daily, setDaily] = useState([]);
   const [runs, setRuns] = useState([]);
   const [day, setDay] = useState(null);           // rozkliknutý den (YYYY-MM-DD)
+  const [cars, setCars] = useState([]);
   const [month, setMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; });
   const load = () => {
     api.evState(locId).then((r) => setLive(r.state)).catch(() => {});
+    api.carsVehicles(locId).then(setCars).catch(() => {});
     api.evSessionsMonth(locId, month).then(setSessions).catch(() => {});
     api.evMonth(locId, month).then((r) => { setDaily(r.daily || []); setRuns(r.runs || []); }).catch(() => {});
   };
@@ -214,6 +217,10 @@ export function EvPanel({ locId, mod, onClose }) {
           </div>
         ) : <p className="muted">Načítám…</p>}
         {mod?.id && <div style={{ padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 10 }}><EvControl mod={mod} live={live} onSent={load} /></div>}
+        {cars.length > 0 && (<>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><b style={{ fontSize: 13 }}>🚘 Auta</b>{has("admin") && <Link to="/cars" className="muted" style={{ fontSize: 12 }}>⚙ účet a mapování</Link>}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 10, margin: "6px 0 12px" }}>{cars.map((c) => <CarCard key={c.vin} car={c} />)}</div>
+        </>)}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
           <b style={{ fontSize: 13 }}>Nabito po dnech</b>
