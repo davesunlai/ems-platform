@@ -165,6 +165,20 @@ function DayDetail({ locId, date, onClose }) {
   const carAny = (r) => (r.car_name ? { name: r.car_name } : carS.find((c) => overlaps(c, r.start, r.end)));   // auto z relace wallboxu, jinak překryv s CarData
   const carFor = (r) => carS.find((c) => c.lat != null && overlaps(c, r.start, r.end));    // totéž, ale s GPS
   const showTip = (e, body) => { const b = e.currentTarget.ownerSVGElement.getBoundingClientRect(); setTip({ x: e.clientX - b.left, y: e.clientY - b.top, body }); };
+  // křížový kurzor: svislá čára + tečka na křivce + box s hodnotami v daném čase (jako u ostatních grafů)
+  const [cur, setCur] = useState(null);
+  const onMove = (e) => {
+    const ser = d?.series || []; if (!ser.length) return;
+    const b = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - b.left) * (W / b.width);
+    const t = new Date(t0.getTime() + Math.max(0, Math.min(1, (px - L) / (W - L - R))) * dayMs);
+    let best = 0, bd = Infinity;
+    ser.forEach((p, i) => { const dd = Math.abs(new Date(p.ts) - t); if (dd < bd) { bd = dd; best = i; } });
+    const p = ser[best];
+    const run = (d.runs || []).find((r) => new Date(r.start) <= t && new Date(r.end) >= t);
+    const car = run ? carAny(run) : carS.find((c) => overlaps(c, t.toISOString(), t.toISOString()));
+    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, p, t, run, car, far: bd > 15 * 60000 });
+  };
   const W = 1400, H = 220, L = 44, B = 26, T = 12, R = 8;
   const ser = d?.series || [];
   const maxKw = Math.max(4, ...ser.map((p) => (p.power_w || 0) / 1000));
@@ -182,7 +196,7 @@ function DayDetail({ locId, date, onClose }) {
         <button className="btn" style={{ marginLeft: "auto", padding: "1px 8px" }} onClick={onClose}>✕</button>
       </div>
       {!d ? <p className="muted">Načítám…</p> : (<>
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", marginTop: 6 }}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", marginTop: 6 }} onMouseMove={onMove} onMouseLeave={() => setCur(null)}>
           {Array.from({ length: top / 2 + 1 }, (_, i) => i * 2).map((v) => (
             <g key={v}><line x1={L} x2={W - R} y1={yv(v)} y2={yv(v)} stroke="var(--border)" strokeWidth="0.6" />
               <text x={L - 4} y={yv(v) + 3} textAnchor="end" fontSize="9" fill="var(--muted)">{v}</text></g>))}
@@ -200,7 +214,19 @@ function DayDetail({ locId, date, onClose }) {
                   onMouseEnter={(e) => showTip(e, { kind: "run", r, c: carFor(r) })} onMouseLeave={() => setTip(null)}
                   onClick={() => { const c = carFor(r); if (c) setMap({ lat: c.lat, lon: c.lon, title: `wallbox · ${tm(r.start)}–${tm(r.end)}` }); }} />))}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
+          {cur && !cur.far && (<g pointerEvents="none">
+            <line x1={xs(cur.p.ts)} x2={xs(cur.p.ts)} y1={T} y2={H - B} stroke="var(--fg)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.6" />
+            <circle cx={xs(cur.p.ts)} cy={yv((cur.p.power_w || 0) / 1000)} r="4" fill="var(--green)" stroke="var(--bg)" strokeWidth="1.5" />
+          </g>)}
         </svg>
+        {cur && !cur.far && !tip && (
+          <div style={{ position: "absolute", left: cur.x > 600 ? cur.x - 230 : cur.x + 14, top: cur.y + 30, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
+                        padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 190 }}>
+            <div><b>{tm(cur.p.ts)}</b> · <b style={{ color: "var(--green)" }}>{((cur.p.power_w || 0) / 1000).toFixed(2)} kW</b>{cur.p.amp_set != null ? ` · ${cur.p.amp_set} A` : ""}{cur.run?.phases ? ` · ${cur.run.phases}f` : ""}</div>
+            {cur.car && <div>🚘 <b>{cur.car.name}</b>{cur.car.soc_from != null ? ` · ${Math.round(cur.car.soc_from)} → ${Math.round(cur.car.soc_to)} %` : ""}</div>}
+            {cur.run && <div className="muted">úsek {tm(cur.run.start)}–{tm(cur.run.end)} · {cur.run.kwh.toFixed(2)} kWh · max {cur.run.max_kw} kW</div>}
+            {!cur.run && <div className="muted">mimo nabíjení</div>}
+          </div>)}
         {tip && (
           <div style={{ position: "absolute", left: Math.min(tip.x + 12, 900), top: tip.y + 36, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
                         padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>

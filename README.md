@@ -1,3 +1,6 @@
+## v1.7.16 — Křížový kurzor v detailu dne wallboxu
+- Svislá čára + tečka na křivce, box u kurzoru: čas, kW, fáze/A, auto (🚘), úsek nabíjení (kWh, max kW).
+
 ## v1.7.15 — Auto se k relaci wallboxu ukládá v reálném čase
 - `ev_sessions.car_vin/car_name`: kolektor při každém tiku přiřadí otevřené relaci auto podle CarData (nabíjí 4 · zapojeno 3 · přiřazený wallbox 1 · odpojeno −10),
   stejná logika jako dashboard; přepisuje se, dokud relace běží. `/ev/day` vrací `car_name` u úseků; UI bere auto z relace, fallback překryv s CarData.
