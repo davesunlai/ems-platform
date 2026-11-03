@@ -162,7 +162,7 @@ function DayDetail({ locId, date, onClose }) {
   }, [locId, date]);
   // poloha k úseku wallboxu = relace auta, která se s ním časově překrývá (auto posílá GPS při zapojení)
   const overlaps = (c, s, e) => new Date(c.start) <= new Date(e || Date.now()) && new Date(c.end || Date.now()) >= new Date(s);
-  const carAny = (r) => carS.find((c) => overlaps(c, r.start, r.end));                     // které auto (podle CarData) v tu dobu nabíjelo
+  const carAny = (r) => (r.car_name ? { name: r.car_name } : carS.find((c) => overlaps(c, r.start, r.end)));   // auto z relace wallboxu, jinak překryv s CarData
   const carFor = (r) => carS.find((c) => c.lat != null && overlaps(c, r.start, r.end));    // totéž, ale s GPS
   const showTip = (e, body) => { const b = e.currentTarget.ownerSVGElement.getBoundingClientRect(); setTip({ x: e.clientX - b.left, y: e.clientY - b.top, body }); };
   const W = 1400, H = 220, L = 44, B = 26, T = 12, R = 8;
@@ -206,7 +206,7 @@ function DayDetail({ locId, date, onClose }) {
                         padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
             {tip.body.kind === "run" ? (<>
               <b>🚗 wallbox{carAny(tip.body.r) ? ` · 🚘 ${carAny(tip.body.r).name}` : ""}</b> {tm(tip.body.r.start)}–{tm(tip.body.r.end)} · <b>{tip.body.r.kwh.toFixed(2)} kWh</b> · max {tip.body.r.max_kw} kW
-              <div className="muted">{tip.body.c ? "📍 klikni pro mapu" : carAny(tip.body.r) ? "📍 poloha: doma (auto GPS neposlalo)" : "🚘 auto neurčeno (CarData v tu dobu nehlásilo nabíjení)"}</div>
+              <div className="muted">{tip.body.c ? "📍 klikni pro mapu" : carAny(tip.body.r) ? "📍 poloha: doma (wallbox)" : "🚘 auto neurčeno (relace před připojením CarData)"}</div>
             </>) : (<>
               <b>🚘 {tip.body.c.name}</b> {tm(tip.body.c.start)}–{tip.body.c.end ? tm(tip.body.c.end) : "probíhá"}
               {tip.body.c.soc_from != null && <> · {Math.round(tip.body.c.soc_from)} → {Math.round(tip.body.c.soc_to)} %</>}
@@ -247,7 +247,7 @@ export function EvPanel({ locId, mod, onClose }) {
   const [day, setDay] = useState(null);           // rozkliknutý den (YYYY-MM-DD)
   const [cars, setCars] = useState([]);
   const [carM, setCarM] = useState([]);           // relace aut (CarData) za měsíc → které auto nabíjelo na wallboxu
-  const carOfSession = (s) => carM.find((c) => new Date(c.start) <= new Date(s.ended_at || Date.now()) && new Date(c.end || Date.now()) >= new Date(s.started_at));
+  const carOfSession = (s) => (s.car_name ? { name: s.car_name } : carM.find((c) => new Date(c.start) <= new Date(s.ended_at || Date.now()) && new Date(c.end || Date.now()) >= new Date(s.started_at)));
   const [month, setMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; });
   const load = () => {
     api.evState(locId).then((r) => setLive(r.state)).catch(() => {});

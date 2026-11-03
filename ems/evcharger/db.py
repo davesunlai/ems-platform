@@ -51,6 +51,9 @@ async def ensure_schema() -> None:
                 ended_reason TEXT                            -- unplugged | complete | error
             )""")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_ev_sess_mod_start ON ev_sessions (module_id, started_at DESC)")
+        # v1.7.15: které auto na wallboxu visí — přiřazuje kolektor v době relace (CarData: nabíjí / zapojeno / přiřazený wallbox)
+        await conn.execute("ALTER TABLE ev_sessions ADD COLUMN IF NOT EXISTS car_vin TEXT")
+        await conn.execute("ALTER TABLE ev_sessions ADD COLUMN IF NOT EXISTS car_name TEXT")
         # denní agregát z eto (monotónní čítač; reset ošetřen v dotazu daily())
         try:
             await conn.execute("""
@@ -246,3 +249,19 @@ async def series(module_ids: list[str], hours: int = 24) -> list[dict]:
                GROUP BY 1 ORDER BY 1""", module_ids, hours)
     return [{"ts": r["t"].isoformat(), "power_w": r["power_w"], "car": r["car"], "amp_set": r["amp_set"],
              "amp_allowed": r["amp_allowed"], "pnp": r["pnp"]} for r in rows]
+
+
+async def open_sessions() -> list[dict]:
+    """Otevřené relace (kabel zapojen) všech wallboxů + lokalita modulu — pro přiřazení auta."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT s.id, s.module_id, s.started_at, s.car_vin, m.locality_id FROM ev_sessions s "
+            "LEFT JOIN modules m ON m.id = s.module_id WHERE s.ended_at IS NULL")
+    return [dict(r) for r in rows]
+
+
+async def set_session_car(sid: int, vin: str | None, name: str | None) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE ev_sessions SET car_vin=$2, car_name=$3 WHERE id=$1", sid, vin, name)

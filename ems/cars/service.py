@@ -319,12 +319,47 @@ async def _consume(aid: int, st: Stream) -> None:
                     logger.debug("stream write %s: %s", vin, exc)
 
 
+async def assign_cars_to_sessions() -> None:
+    """Ke každé OTEVŘENÉ relaci wallboxu přiřadí auto podle CarData (stejné skóre jako dashboard):
+    nabíjí 4 · zapojeno 3 · přiřazený wallbox 1 · odpojeno −10. Přepisuje se, dokud relace běží (CarData dobíhá)."""
+    from ems.evcharger import db as ev_db
+    try:
+        sessions = await ev_db.open_sessions()
+    except Exception:
+        return
+    if not sessions:
+        return
+    vehicles = [v for v in await db.list_vehicles() if v.get("enabled", True)]
+    views = {}
+    for s in sessions:
+        cands = [v for v in vehicles if v.get("locality_id") == s.get("locality_id") or v.get("wallbox_module_id") == s["module_id"]]
+        ranked = []
+        for v in cands:
+            if v["vin"] not in views:
+                views[v["vin"]] = car_view(v, await db.state(v["vin"]))
+            cv = views[v["vin"]]
+            sc = (4 if cv.get("charging") else 0) + (3 if cv.get("plugged_bool") is True else 0) \
+                + (-10 if cv.get("plugged_bool") is False else 0) + (1 if v.get("wallbox_module_id") == s["module_id"] else 0)
+            ranked.append((sc, v, cv))
+        ranked.sort(key=lambda r: -r[0])
+        pick = None
+        if ranked and ranked[0][0] >= 0 and (len(ranked) == 1 or ranked[0][0] > ranked[1][0]):
+            pick = ranked[0]
+        if pick and pick[1]["vin"] != s.get("car_vin"):
+            await ev_db.set_session_car(s["id"], pick[1]["vin"], pick[2]["name"])
+            logger.info("ev_session #%s ← %s (skóre %s)", s["id"], pick[2]["name"], pick[0])
+
+
 async def tick(state: dict) -> None:
     """Volá collector každý cyklus: pending účty dotáhne, tokeny obnoví, stream drží, REST à 40 min."""
     try:
         accounts = await db.list_accounts()
     except Exception:
         return
+    try:
+        await assign_cars_to_sessions()
+    except Exception as exc:
+        logger.debug("assign cars: %s", exc)
     loop = asyncio.get_running_loop()
     now = time.monotonic()
     for acc in accounts:

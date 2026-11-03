@@ -114,6 +114,9 @@ async def ev_day(locality_id: int, date: str, _: dict = Depends(read)) -> dict:
             if dd.get(k):
                 dd[k] = dd[k].isoformat()
         sessions.append(dd)
+    for r in runs:   # auto k úseku = relace (kabel), do které úsek spadá
+        sess = next((x for x in srows if x["started_at"].isoformat() <= r["end"] and (x["ended_at"] is None or x["ended_at"].isoformat() >= r["start"])), None)
+        r["car_vin"], r["car_name"] = (sess["car_vin"], sess["car_name"]) if sess else (None, None)
     tot = round(sum(r["kwh"] for r in runs), 2)
     return {"date": date, "series": series, "runs": runs, "sessions": sessions, "kwh_runs": tot}
 

@@ -1,3 +1,7 @@
+## v1.7.15 — Auto se k relaci wallboxu ukládá v reálném čase
+- `ev_sessions.car_vin/car_name`: kolektor při každém tiku přiřadí otevřené relaci auto podle CarData (nabíjí 4 · zapojeno 3 · přiřazený wallbox 1 · odpojeno −10),
+  stejná logika jako dashboard; přepisuje se, dokud relace běží. `/ev/day` vrací `car_name` u úseků; UI bere auto z relace, fallback překryv s CarData.
+
 ## v1.7.14 — Které auto nabíjelo
 - Panel wallboxu: sloupec „Auto“ v úsecích dne i v měsíční historii relací + v hoveru; určeno překryvem s relací auta z CarData.
 
