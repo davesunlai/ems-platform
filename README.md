@@ -1,3 +1,8 @@
+## v1.7.20 — Správné auto na wallboxu
+- `car_view.charging` = jen CHARGINGACTIVE (CHARGINGENDED se starým výkonem 11 kW už není „nabíjí“); výkon jen bez stavu a < 15 min starý.
+- Přiřazení k relaci: důkazy jen novější než start relace − 15 min; rostoucí SoC od startu +5; pouhé „přiřazený wallbox“ nepřepisuje dřívější volbu.
+- `/ev/state` nese `car_vin/car_name` z otevřené relace → dashboard ho bere jako zdroj pravdy.
+
 ## v1.7.19 — Oprava /api/cars/sessions a /month (500)
 - `car_sessions`: `$3::timestamptz - interval` (asyncpg jinak odvodil interval) — padal i detail dne (relace aut) a měsíční bilance.
 

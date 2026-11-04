@@ -5,7 +5,7 @@ podle modelu, takže se mapuje až podle toho, co auto reálně posílá."""
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from ems.api.db import get_pool
 
@@ -369,6 +369,17 @@ async def month_stats(v: dict, start: datetime, end: datetime) -> dict:
     total = round(float(wb or 0) + away, 1)
     return {"vin": v["vin"], "kwh_wallbox": round(float(wb or 0), 1), "kwh_away": round(away, 1), "kwh": total, "km": km,
             "kwh_per_100km": round(total / km * 100, 1) if km and km > 0 and total > 0 else None}
+
+
+async def soc_rise_since(vin: str, soc_key: str, since: datetime) -> float | None:
+    """O kolik % vzrostlo SoC od `since` (poslední − první hodnota v okně); None = málo dat."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT value_num FROM car_history WHERE vin=$1 AND key=$2 AND value_num IS NOT NULL AND ts >= $3::timestamptz ORDER BY ts",
+                                vin, soc_key, since - timedelta(minutes=10))
+    if len(rows) < 2:
+        return None
+    return float(rows[-1]["value_num"]) - float(rows[0]["value_num"])
 
 
 async def history(vin: str, key: str, hours: int = 48) -> list[dict]:

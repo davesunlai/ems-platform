@@ -43,7 +43,11 @@ async def ev_state(locality_id: int, _: dict = Depends(read)) -> dict:
         row["model_status_cz"] = MODEL_STATUS_CZ.get(row.get("model_status"), str(row.get("model_status")))
         row["car_state"] = CAR_STATE.get(row.get("car"), "unknown")
     sess = await ev_db.sessions(mods, 1)
-    return {"module_ids": mods, "state": row, "session": (sess[0] if sess and not sess[0].get("ended_at") else None)}
+    open_s = sess[0] if sess and not sess[0].get("ended_at") else None
+    if row is not None:
+        row["car_vin"] = open_s.get("car_vin") if open_s else None       # auto přiřazené kolektorem k běžící relaci
+        row["car_name"] = open_s.get("car_name") if open_s else None
+    return {"module_ids": mods, "state": row, "session": open_s}
 
 
 @router.get("/localities/{locality_id}/ev/sessions")

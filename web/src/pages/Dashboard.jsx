@@ -935,6 +935,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
   const wbScore = (c) => (c.charging ? 4 : 0) + (c.plugged_bool === true ? 3 : 0) + (c.plugged_bool === false ? -10 : 0)
     + (c.wallbox_module_id && ev?.module_ids?.includes(c.wallbox_module_id) ? 1 : 0);
   const atWbVin = (() => {
+    if (wbPlugged && evS?.car_vin && carShown.some((c) => c.vin === evS.car_vin)) return evS.car_vin;   // z běžící relace (kolektor)
     if (!wbPlugged) { const p = carShown.filter((c) => c.plugged_bool === true); return p.length === 1 ? p[0].vin : null; }
     const ranked = carShown.map((c) => [wbScore(c), c]).sort((a, b) => b[0] - a[0]);
     if (!ranked.length || ranked[0][0] < 0) return null;

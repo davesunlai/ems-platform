@@ -334,17 +334,29 @@ async def assign_cars_to_sessions() -> None:
     for s in sessions:
         cands = [v for v in vehicles if v.get("locality_id") == s.get("locality_id") or v.get("wallbox_module_id") == s["module_id"]]
         ranked = []
+        since = s["started_at"] - timedelta(minutes=15)
+        def newer(ts):
+            try:
+                return ts is not None and datetime.fromisoformat(ts) >= since
+            except ValueError:
+                return False
         for v in cands:
             if v["vin"] not in views:
                 views[v["vin"]] = car_view(v, await db.state(v["vin"]))
             cv = views[v["vin"]]
-            sc = (4 if cv.get("charging") else 0) + (3 if cv.get("plugged_bool") is True else 0) \
-                + (-10 if cv.get("plugged_bool") is False else 0) + (1 if v.get("wallbox_module_id") == s["module_id"] else 0)
+            soc_rise = await db.soc_rise_since(v["vin"], {**db.DEFAULT_KEY_MAP, **(v.get("key_map") or {})}["soc"], s["started_at"])
+            sc = (4 if cv.get("charging") and newer(cv.get("charging_ts")) else 0) \
+                + (3 if cv.get("plugged_bool") is True and newer(cv.get("plugged_ts")) else 0) \
+                + (-10 if cv.get("plugged_bool") is False and newer(cv.get("plugged_ts")) else 0) \
+                + (5 if soc_rise is not None and soc_rise >= 1 else 0) \
+                + (1 if v.get("wallbox_module_id") == s["module_id"] else 0)
             ranked.append((sc, v, cv))
         ranked.sort(key=lambda r: -r[0])
         pick = None
         if ranked and ranked[0][0] >= 0 and (len(ranked) == 1 or ranked[0][0] > ranked[1][0]):
             pick = ranked[0]
+        if pick and len(ranked) > 1 and pick[0] <= 1 and s.get("car_vin"):
+            continue      # jen „přiřazený wallbox“ bez důkazu nepřepisuje dřívější volbu
         if pick and pick[1]["vin"] != s.get("car_vin"):
             await ev_db.set_session_car(s["id"], pick[1]["vin"], pick[2]["name"])
             logger.info("ev_session #%s ← %s (skóre %s)", s["id"], pick[2]["name"], pick[0])
@@ -431,8 +443,24 @@ def car_view(v: dict, st: dict) -> dict:
         out["kwh_to_target"] = None
     # BMW: CHARGINGACTIVE / NOCHARGING / FULLYCHARGED / CHARGINGPAUSED / CHARGINGERROR / WAITINGFORCHARGING …
     cs = str(out.get("charging_status") or "").upper().replace("_", "").replace(" ", "")
-    out["charging"] = cs.startswith("CHARGINGACTIVE") or cs == "CHARGING" or \
-        (isinstance(out.get("charging_power_kw"), (int, float)) and out["charging_power_kw"] > 0.2 and not cs.startswith("NO"))
+    def _ts(role):
+        e = st.get(km.get(role) or "")
+        return e.get("ts") if e else None
+    def _fresh(role, minutes):
+        t = _ts(role)
+        if not t:
+            return False
+        try:
+            return (datetime.now(timezone.utc) - datetime.fromisoformat(t)).total_seconds() < minutes * 60
+        except ValueError:
+            return False
+    out["charging_ts"] = _ts("charging_status") or _ts("charging_power_kw")
+    out["plugged_ts"] = _ts("plugged")
+    # CHARGINGENDED/NOCHARGING/FULLYCHARGED = nenabíjí, i když visí starý výkon (lekce 4. 11.: X3 11 kW z 13:00 „nabíjelo“ v 19:14)
+    if cs:
+        out["charging"] = cs.startswith("CHARGINGACTIVE") or cs == "CHARGING"
+    else:
+        out["charging"] = isinstance(out.get("charging_power_kw"), (int, float)) and out["charging_power_kw"] > 0.2 and _fresh("charging_power_kw", 15)
     p = out.get("plugged")
     if p is None or str(p).upper() in ("INVALID", "-NA-"):
         for alt in PLUG_FALLBACK_KEYS:            # vůz posílá jen variantu, kterou má — vezmi první živou
