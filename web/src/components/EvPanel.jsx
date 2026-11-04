@@ -153,7 +153,6 @@ export function MapModal({ lat, lon, title, onClose }) {
 function DayDetail({ locId, date, onClose }) {
   const [d, setD] = useState(null);
   const [carS, setCarS] = useState([]);           // relace aut (CarData) v tento den — s GPS
-  const [tip, setTip] = useState(null);            // {x, y, run|car}
   const [map, setMap] = useState(null);            // {lat, lon, title}
   useEffect(() => {
     setD(null); setCarS([]);
@@ -164,7 +163,6 @@ function DayDetail({ locId, date, onClose }) {
   const overlaps = (c, s, e) => new Date(c.start) <= new Date(e || Date.now()) && new Date(c.end || Date.now()) >= new Date(s);
   const carAny = (r) => (r.car_name ? { name: r.car_name } : carS.find((c) => overlaps(c, r.start, r.end)));   // auto z relace wallboxu, jinak překryv s CarData
   const carFor = (r) => carS.find((c) => c.lat != null && overlaps(c, r.start, r.end));    // totéž, ale s GPS
-  const showTip = (e, body) => { const b = e.currentTarget.ownerSVGElement.getBoundingClientRect(); setTip({ x: e.clientX - b.left, y: e.clientY - b.top, body }); };
   // křížový kurzor: svislá čára + tečka na křivce + box s hodnotami v daném čase (jako u ostatních grafů)
   const [cur, setCur] = useState(null);
   const onMove = (e) => {
@@ -206,12 +204,10 @@ function DayDetail({ locId, date, onClose }) {
               {h % 2 === 0 && <text x={L + (W - L - R) * h / 24} y={H - B + 14} textAnchor="middle" fontSize="9" fill="var(--muted)">{h}:00</text>}</g>))}
           {carS.map((c, i) => (
             <rect key={`c${i}`} x={xs(c.start)} y={T} width={Math.max(2, xs(c.end || new Date().toISOString()) - xs(c.start))} height={H - T - B}
-                  fill="#58a6ff" opacity="0.14" style={{ cursor: "pointer" }}
-                  onMouseEnter={(e) => showTip(e, { kind: "car", c })} onMouseLeave={() => setTip(null)}
+                  fill="#58a6ff" opacity="0.14" style={{ cursor: c.lat != null ? "pointer" : "default" }}
                   onClick={() => c.lat != null && setMap({ lat: c.lat, lon: c.lon, title: `${c.name} · ${tm(c.start)}–${c.end ? tm(c.end) : "…"}` })} />))}
           {d.runs.map((r, i) => (
-            <rect key={i} x={xs(r.start)} y={T} width={Math.max(1, xs(r.end) - xs(r.start))} height={H - T - B} fill="var(--green)" opacity="0.12" style={{ cursor: "pointer" }}
-                  onMouseEnter={(e) => showTip(e, { kind: "run", r, c: carFor(r) })} onMouseLeave={() => setTip(null)}
+            <rect key={i} x={xs(r.start)} y={T} width={Math.max(1, xs(r.end) - xs(r.start))} height={H - T - B} fill="var(--green)" opacity="0.12" style={{ cursor: carFor(r) ? "pointer" : "default" }}
                   onClick={() => { const c = carFor(r); if (c) setMap({ lat: c.lat, lon: c.lon, title: `wallbox · ${tm(r.start)}–${tm(r.end)}` }); }} />))}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
           {cur && !cur.far && (<g pointerEvents="none">
@@ -219,27 +215,19 @@ function DayDetail({ locId, date, onClose }) {
             <circle cx={xs(cur.p.ts)} cy={yv((cur.p.power_w || 0) / 1000)} r="4" fill="var(--green)" stroke="var(--bg)" strokeWidth="1.5" />
           </g>)}
         </svg>
-        {cur && !cur.far && !tip && (
-          <div style={{ position: "absolute", left: cur.x > 600 ? cur.x - 230 : cur.x + 14, top: cur.y + 30, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
-                        padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 190 }}>
+        {cur && !cur.far && (() => {
+          const cs = carS.find((c) => overlaps(c, cur.t.toISOString(), cur.t.toISOString()));   // relace auta (CarData) v tom čase
+          const loc = cur.run ? carFor(cur.run) : cs;
+          return (
+          <div style={{ position: "absolute", left: cur.x > 620 ? cur.x - 270 : cur.x + 22, top: Math.max(40, cur.y - 30), background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
+                        padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 230 }}>
             <div><b>{tm(cur.p.ts)}</b> · <b style={{ color: "var(--green)" }}>{((cur.p.power_w || 0) / 1000).toFixed(2)} kW</b>{cur.p.amp_set != null ? ` · ${cur.p.amp_set} A` : ""}{cur.run?.phases ? ` · ${cur.run.phases}f` : ""}</div>
-            {cur.car && <div>🚘 <b>{cur.car.name}</b>{cur.car.soc_from != null ? ` · ${Math.round(cur.car.soc_from)} → ${Math.round(cur.car.soc_to)} %` : ""}</div>}
-            {cur.run && <div className="muted">úsek {tm(cur.run.start)}–{tm(cur.run.end)} · {cur.run.kwh.toFixed(2)} kWh · max {cur.run.max_kw} kW</div>}
-            {!cur.run && <div className="muted">mimo nabíjení</div>}
-          </div>)}
-        {tip && (
-          <div style={{ position: "absolute", left: Math.min(tip.x + 12, 900), top: tip.y + 36, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
-                        padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
-            {tip.body.kind === "run" ? (<>
-              <b>🚗 wallbox{carAny(tip.body.r) ? ` · 🚘 ${carAny(tip.body.r).name}` : ""}</b> {tm(tip.body.r.start)}–{tm(tip.body.r.end)} · <b>{tip.body.r.kwh.toFixed(2)} kWh</b> · max {tip.body.r.max_kw} kW
-              <div className="muted">{tip.body.c ? "📍 klikni pro mapu" : carAny(tip.body.r) ? "📍 poloha: doma (wallbox)" : "🚘 auto neurčeno (relace před připojením CarData)"}</div>
-            </>) : (<>
-              <b>🚘 {tip.body.c.name}</b> {tm(tip.body.c.start)}–{tip.body.c.end ? tm(tip.body.c.end) : "probíhá"}
-              {tip.body.c.soc_from != null && <> · {Math.round(tip.body.c.soc_from)} → {Math.round(tip.body.c.soc_to)} %</>}
-              {tip.body.c.kwh != null && <> · <b>≈ {tip.body.c.kwh} kWh</b></>}{tip.body.c.max_kw != null && <> · max {tip.body.c.max_kw} kW</>}
-              <div className="muted">{tip.body.c.lat != null ? "📍 klikni pro mapu polohy nabíječky" : "📍 poloha nepřišla"}</div>
-            </>)}
-          </div>)}
+            {cur.car && <div>🚘 <b>{cur.car.name}</b>{cs?.soc_from != null ? ` · ${Math.round(cs.soc_from)} → ${cs.soc_to != null ? Math.round(cs.soc_to) : "?"} %` : ""}{cs?.kwh != null ? ` · ≈ ${cs.kwh} kWh` : ""}</div>}
+            {cur.run && <div className="muted">🚗 wallbox {tm(cur.run.start)}–{tm(cur.run.end)} · {cur.run.kwh.toFixed(2)} kWh · max {cur.run.max_kw} kW</div>}
+            {!cur.run && cs && <div className="muted">🚘 nabíjení mimo wallbox {tm(cs.start)}–{cs.end ? tm(cs.end) : "probíhá"}{cs.max_kw != null ? ` · max ${cs.max_kw} kW` : ""}</div>}
+            {!cur.run && !cs && <div className="muted">mimo nabíjení</div>}
+            {(cur.run || cs) && <div className="muted">{loc?.lat != null ? "📍 klikni pro mapu" : cur.run ? "📍 doma (wallbox)" : "📍 poloha nepřišla"}{!cur.car && cur.run ? " · auto neurčeno" : ""}</div>}
+          </div>); })()}
         {map && <MapModal {...map} onClose={() => setMap(null)} />}
         <table style={{ fontSize: 12, width: "100%" }}>
           <thead><tr><th>#</th><th>Auto</th><th>Od</th><th>Do</th><th>Trvání</th><th>kWh</th><th>Ø kW</th><th>max kW</th><th>fáze</th></tr></thead>

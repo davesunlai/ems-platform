@@ -1,3 +1,6 @@
+## v1.7.17 — Jeden box u kurzoru v detailu dne
+- Sloučen hover úseku a křížový kurzor: vždy čas + kW z křivky, auto, úsek wallboxu / nabíjení mimo wallbox, poloha; box vedle kurzoru, ne pod ním.
+
 ## v1.7.16 — Křížový kurzor v detailu dne wallboxu
 - Svislá čára + tečka na křivce, box u kurzoru: čas, kW, fáze/A, auto (🚘), úsek nabíjení (kWh, max kW).
 
