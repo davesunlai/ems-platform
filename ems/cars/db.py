@@ -299,7 +299,7 @@ async def car_sessions(v: dict, start: datetime, end: datetime) -> list[dict]:
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT ts, key, value_num, value_txt FROM car_history WHERE vin=$1 AND key = ANY($2::text[]) "
-            "AND ts BETWEEN $3 - interval '2 days' AND $4 ORDER BY ts", v["vin"], keys, start, end)
+            "AND ts BETWEEN $3::timestamptz - interval '2 days' AND $4::timestamptz ORDER BY ts", v["vin"], keys, start, end)
     cap = v.get("capacity_kwh")
     by = {k: [] for k in keys}
     for r in rows:
