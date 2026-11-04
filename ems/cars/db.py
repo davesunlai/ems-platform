@@ -258,6 +258,9 @@ async def write_values(vin: str, items: dict, source: str, default_ts: datetime 
             if v is None or (isinstance(v, str) and v.strip().upper() in ("", "INVALID", "-NA-", "NULL")):
                 continue          # REST vrací i prázdné položky (value null) — nesmí přemazat poslední platnou hodnotu
             num, txt = _split(v)
+            prev = await conn.fetchrow("SELECT value_num, value_txt, ts FROM car_state WHERE vin=$1 AND key=$2", vin, key)
+            if prev and prev["ts"] == ts and prev["value_num"] == num and prev["value_txt"] == txt:
+                continue      # stream posílá tutéž zprávu 2× (lekce 4. 11.) — historie bez duplicit
             await conn.execute(
                 "INSERT INTO car_state (vin, key, value_num, value_txt, unit, ts, source) VALUES ($1,$2,$3,$4,$5,$6,$7) "
                 "ON CONFLICT (vin, key) DO UPDATE SET value_num=EXCLUDED.value_num, value_txt=EXCLUDED.value_txt, "
@@ -327,6 +330,29 @@ async def car_sessions(v: dict, start: datetime, end: datetime) -> list[dict]:
             out.append((cur, t)); cur = None
     if cur is not None:
         out.append((cur, None))
+    # Auto při DC nabíjení (ČEZ, Ionity) často nestreamuje vůbec — stav CHARGINGACTIVE nepřijde (lekce 4. 11.: 16:24 22 % → 16:59 45 %).
+    # Proto relace i z RŮSTU SoC: souvislý úsek neklesajících vzorků (mezera ≤ 3 h) s celkovým růstem ≥ 2 %;
+    # začátek = poslední vzorek před růstem, konec = poslední rostoucí vzorek. Překryv se stavovou relací → sloučit.
+    soc_rows = [(t, n) for t, n, _ in by[km["soc"]] if n is not None]
+    i = 0
+    while i < len(soc_rows) - 1:
+        if soc_rows[i + 1][1] > soc_rows[i][1] and (soc_rows[i + 1][0] - soc_rows[i][0]) <= timedelta(hours=3):
+            j = i + 1
+            while j < len(soc_rows) - 1 and soc_rows[j + 1][1] >= soc_rows[j][1] and (soc_rows[j + 1][0] - soc_rows[j][0]) <= timedelta(hours=3):
+                j += 1
+            if soc_rows[j][1] - soc_rows[i][1] >= 2:
+                s0, e0 = soc_rows[i][0], soc_rows[j][0]
+                merged = False
+                for k, (s, e) in enumerate(out):
+                    ee = e or end
+                    if s <= e0 and ee >= s0:
+                        out[k] = (min(s, s0), None if e is None else max(ee, e0)); merged = True; break
+                if not merged:
+                    out.append((s0, e0))
+            i = j
+        else:
+            i += 1
+    out.sort()
     res = []
     for s, e in out:
         e_eff = e or end
@@ -336,6 +362,8 @@ async def car_sessions(v: dict, start: datetime, end: datetime) -> list[dict]:
         kwh = round((soc1 - soc0) / 100.0 * float(cap), 1) if (soc0 is not None and soc1 is not None and cap) else None
         pw = [n for t, n, _ in by[km["charging_power_kw"]] if s <= t <= e_eff and n is not None]
         maxkw = round(max(pw) / (1000.0 if max(pw) > 100 else 1.0), 1) if pw else None
+        if maxkw is None and kwh and e is not None and (e - s).total_seconds() > 60:
+            maxkw = round(kwh / ((e - s).total_seconds() / 3600.0), 1)      # bez měření výkonu: průměr z ΔkWh / čas (odhad)
         res.append({"vin": v["vin"], "name": v.get("name") or v.get("model") or v["vin"][-6:],
                     "start": s.isoformat(), "end": e.isoformat() if e else None,
                     "soc_from": soc0, "soc_to": soc1, "kwh": kwh, "max_kw": maxkw,

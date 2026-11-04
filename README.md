@@ -1,3 +1,8 @@
+## v1.7.21 — Nabíjení mimo dům z růstu SoC
+- `car_sessions`: relace i ze souvislého růstu SoC (≥ 2 %, mezera ≤ 3 h) — auto při DC nabíjení (ČEZ, Ionity) nestreamuje stav; poloha = GPS v době konce.
+  Bez měřeného výkonu se uvádí průměr ΔkWh/čas. Překryv se stavovou relací → sloučení.
+- `write_values`: duplicitní zprávy streamu (stejná hodnota i čas) se do historie nezapisují.
+
 ## v1.7.20 — Správné auto na wallboxu
 - `car_view.charging` = jen CHARGINGACTIVE (CHARGINGENDED se starým výkonem 11 kW už není „nabíjí“); výkon jen bez stavu a < 15 min starý.
 - Přiřazení k relaci: důkazy jen novější než start relace − 15 min; rostoucí SoC od startu +5; pouhé „přiřazený wallbox“ nepřepisuje dřívější volbu.
