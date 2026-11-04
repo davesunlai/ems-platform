@@ -130,6 +130,19 @@ async def sessions(locality_id: int | None = None, date: str | None = None, mont
     return out
 
 
+@router.get("/month")
+async def month_stats(month: str, locality_id: int | None = None, _: dict = Depends(read)):
+    """Za měsíc (YYYY-MM) pro každé auto: nabito kWh (wallbox / jinde), ujeto km, kWh/100 km."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Europe/Prague")
+    try:
+        y, m = (int(x) for x in month.split("-")[:2]); s = datetime(y, m, 1, tzinfo=tz); e = datetime(y + (m == 12), m % 12 + 1, 1, tzinfo=tz)
+    except Exception:
+        raise HTTPException(status_code=400, detail="month=YYYY-MM")
+    return [await db.month_stats(v, s, e) for v in await db.list_vehicles(locality_id) if v.get("enabled", True)]
+
+
 @router.get("/roles")
 async def roles(_: dict = Depends(read)):
     return {"roles": db.ROLES, "role_labels": db.ROLE_LABELS, "default_key_map": db.DEFAULT_KEY_MAP,

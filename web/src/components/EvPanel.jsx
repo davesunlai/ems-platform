@@ -260,7 +260,8 @@ export function EvPanel({ locId, mod, onClose }) {
   const [runs, setRuns] = useState([]);
   const [day, setDay] = useState(null);           // rozkliknutý den (YYYY-MM-DD)
   const [cars, setCars] = useState([]);
-  const [carM, setCarM] = useState([]);           // relace aut (CarData) za měsíc → které auto nabíjelo na wallboxu
+  const [carM, setCarM] = useState([]);
+  const [carStats, setCarStats] = useState({});   // vin → {kwh, kwh_wallbox, kwh_away, km, kwh_per_100km} za zvolený měsíc           // relace aut (CarData) za měsíc → které auto nabíjelo na wallboxu
   const carOfSession = (s) => (s.car_name ? { name: s.car_name } : carM.find((c) => new Date(c.start) <= new Date(s.ended_at || Date.now()) && new Date(c.end || Date.now()) >= new Date(s.started_at)));
   const [month, setMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; });
   const load = () => {
@@ -268,6 +269,7 @@ export function EvPanel({ locId, mod, onClose }) {
     api.carsVehicles(locId).then(setCars).catch(() => {});
     api.evSessionsMonth(locId, month).then(setSessions).catch(() => {});
     api.carsSessions(locId, `month=${month}`).then((r) => setCarM(r || [])).catch(() => {});
+    api.carsMonth(locId, month).then((r) => setCarStats(Object.fromEntries((r || []).map((x) => [x.vin, x])))).catch(() => {});
     api.evMonth(locId, month).then((r) => { setDaily(r.daily || []); setRuns(r.runs || []); }).catch(() => {});
   };
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [locId, month]);
@@ -298,7 +300,7 @@ export function EvPanel({ locId, mod, onClose }) {
         {mod?.id && <div style={{ padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 10 }}><EvControl mod={mod} live={live} onSent={load} /></div>}
         {cars.length > 0 && (<>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}><b style={{ fontSize: 13 }}>🚘 Auta</b>{has("admin") && <Link to="/cars" className="muted" style={{ fontSize: 12 }}>⚙ účet a mapování</Link>}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 10, margin: "6px 0 12px" }}>{cars.map((c) => <CarCard key={c.vin} car={c} />)}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 10, margin: "6px 0 12px" }}>{cars.map((c) => <CarCard key={c.vin} car={c} stats={carStats[c.vin]} monthLabel={monthLabel} />)}</div>
         </>)}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>

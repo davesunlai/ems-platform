@@ -85,6 +85,7 @@ export const api = {
   carsVehicles: (loc) => request(`/api/cars/vehicles${loc ? `?locality_id=${loc}` : ""}`),
   carsVehiclePatch: (vin, body) => request(`/api/cars/vehicles/${vin}`, { method: "PATCH", body }),
   carsVehicleState: (vin) => request(`/api/cars/vehicles/${vin}/state`),
+  carsMonth: (loc, month) => request(`/api/cars/month?month=${month}${loc ? `&locality_id=${loc}` : ""}`),
   carsSessions: (loc, q) => request(`/api/cars/sessions?${loc ? `locality_id=${loc}&` : ""}${q}`),
   carsRoles: () => request("/api/cars/roles"),
   evMonth: (loc, month) => request(`/api/localities/${loc}/ev/month?month=${month}`),

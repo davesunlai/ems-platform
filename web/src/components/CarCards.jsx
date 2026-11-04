@@ -2,7 +2,7 @@
 const age = (iso) => { if (!iso) return "—"; const s = Math.round((Date.now() - new Date(iso)) / 1000);
   return s < 90 ? `před ${s} s` : s < 5400 ? `před ${Math.round(s / 60)} min` : s < 172800 ? `před ${Math.round(s / 3600)} h` : `před ${Math.round(s / 86400)} dny`; };
 
-export function CarCard({ car }) {
+export function CarCard({ car, stats, monthLabel }) {
   const soc = car.soc != null ? Number(car.soc) : null;
   const col = soc == null ? "var(--muted)" : soc < 20 ? "#f85149" : soc < 50 ? "var(--amber)" : "var(--green)";
   return (
@@ -18,7 +18,14 @@ export function CarCard({ car }) {
             </svg>)}
         </span>
         <div><b>{car.name}</b>{car.model && car.model !== car.name ? <span className="muted" style={{ fontSize: 12 }}> · {car.model}</span> : null}
-          <div className="muted" style={{ fontSize: 11 }}>{car.vin} · {age(car.updated_at)}</div></div>
+          <div className="muted" style={{ fontSize: 11 }}>{car.vin} · {age(car.updated_at)}</div>
+          {stats && (
+            <div style={{ fontSize: 12, marginTop: 3 }} title={`nabito na wallboxu ${stats.kwh_wallbox} kWh, jinde ≈ ${stats.kwh_away} kWh`}>
+              📆 {monthLabel}: nabito <b>{stats.kwh} kWh</b>{stats.kwh_away > 0 ? <span className="muted"> (doma {stats.kwh_wallbox} · jinde ≈ {stats.kwh_away})</span> : null}
+              {" · "}ujeto <b>{stats.km != null ? `${Math.round(stats.km).toLocaleString("cs-CZ")} km` : "—"}</b>
+              {stats.kwh_per_100km != null && <> · <b>{stats.kwh_per_100km} kWh/100 km</b></>}
+            </div>)}
+        </div>
         <div style={{ marginLeft: "auto", textAlign: "right" }}>
           <div style={{ fontSize: 24, fontWeight: 700, color: col }}>{soc != null ? `${Math.round(soc)} %` : "—"}</div>
           {car.range_km != null && <div className="muted" style={{ fontSize: 12 }}>{Math.round(Number(car.range_km))} km</div>}

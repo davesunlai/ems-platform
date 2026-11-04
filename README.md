@@ -1,3 +1,7 @@
+## v1.7.18 — Měsíční bilance aut
+- `/api/cars/month?month=YYYY-MM`: per auto nabito kWh (wallbox z měřiče + jinde ≈ ΔSoC×kap.), ujeto km (tachometr), kWh/100 km.
+- Karta vozu v panelu wallboxu: „📆 listopad 2026: nabito 123 kWh (doma 110 · jinde ≈ 13) · ujeto 456 km · 27,0 kWh/100 km“ za zvolený měsíc.
+
 ## v1.7.17 — Jeden box u kurzoru v detailu dne
 - Sloučen hover úseku a křížový kurzor: vždy čas + kW z křivky, auto, úsek wallboxu / nabíjení mimo wallbox, poloha; box vedle kurzoru, ne pod ním.
 

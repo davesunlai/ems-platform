@@ -344,6 +344,33 @@ async def car_sessions(v: dict, start: datetime, end: datetime) -> list[dict]:
     return res
 
 
+async def month_stats(v: dict, start: datetime, end: datetime) -> dict:
+    """Měsíc: nabito na wallboxu (ev_sessions s car_vin), nabito jinde (relace auta mimo wallbox, ≈ΔSoC×kap.),
+    ujeto km (tachometr: poslední hodnota v měsíci − poslední před začátkem), spotřeba kWh/100 km."""
+    km_key = {**DEFAULT_KEY_MAP, **(v.get("key_map") or {})}["odometer_km"]
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        wb = await conn.fetchval(
+            "SELECT COALESCE(SUM(COALESCE(wh, wh_max)),0)/1000.0 FROM ev_sessions WHERE car_vin=$1 AND started_at >= $2 AND started_at < $3",
+            v["vin"], start, end)
+        wb_rows = await conn.fetch("SELECT started_at, COALESCE(ended_at, now()) AS ended_at FROM ev_sessions WHERE car_vin=$1 AND started_at < $3 AND COALESCE(ended_at, now()) >= $2",
+                                   v["vin"], start, end)
+        o0 = await conn.fetchval("SELECT value_num FROM car_history WHERE vin=$1 AND key=$2 AND value_num IS NOT NULL AND ts < $3 ORDER BY ts DESC LIMIT 1", v["vin"], km_key, start)
+        if o0 is None:
+            o0 = await conn.fetchval("SELECT value_num FROM car_history WHERE vin=$1 AND key=$2 AND value_num IS NOT NULL AND ts >= $3 ORDER BY ts ASC LIMIT 1", v["vin"], km_key, start)
+        o1 = await conn.fetchval("SELECT value_num FROM car_history WHERE vin=$1 AND key=$2 AND value_num IS NOT NULL AND ts < $3 ORDER BY ts DESC LIMIT 1", v["vin"], km_key, end)
+    away = 0.0
+    for cs in await car_sessions(v, start, end):
+        s0 = datetime.fromisoformat(cs["start"]); e0 = datetime.fromisoformat(cs["end"]) if cs["end"] else end
+        if any(r["started_at"] <= e0 and r["ended_at"] >= s0 for r in wb_rows):
+            continue          # překryv s relací wallboxu = doma, už započteno přesně z měřiče
+        away += cs["kwh"] or 0.0
+    km = round(float(o1) - float(o0), 0) if (o0 is not None and o1 is not None and float(o1) >= float(o0)) else None
+    total = round(float(wb or 0) + away, 1)
+    return {"vin": v["vin"], "kwh_wallbox": round(float(wb or 0), 1), "kwh_away": round(away, 1), "kwh": total, "km": km,
+            "kwh_per_100km": round(total / km * 100, 1) if km and km > 0 and total > 0 else None}
+
+
 async def history(vin: str, key: str, hours: int = 48) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
