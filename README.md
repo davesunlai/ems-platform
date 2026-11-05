@@ -1,3 +1,7 @@
+## v1.8.34 — Graf testu: karty kroků s rekapitulací
+- API `steps`: za každý krok t_from/t_to, minuty, SoC od → do, příjem/výdej celkem a B1/B2 (kWh, z battery_power/_1/_2).
+- Graf: popisky kroků místo textů v ploše jako karty nad grafem (kaskádově při kolizi, vodicí čárka k začátku kroku): název · čas · délka · SoC, příjem/výdej celkem, B1 · B2.
+
 ## v1.8.33 — Oprava: strop 100 % nedosažitelný (průměr SoC packů)
 - `battery_soc` = průměr packů (99 + 100 = 99,5 %) → engine porovnával 99,5 ≥ 100 → test stál na nabíjení. Prahy (dno, strop, snímky po 10 %) teď používají SoC zaokrouhlené na celé %.
 - Pojistka: pokud kterýkoli pack hlásí ≥ strop a BMS nenabíjí (|P| < 300 W) déle než 10 min od začátku kroku, strop se bere jako dosažený (zapíše se do protokolu).

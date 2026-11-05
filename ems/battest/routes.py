@@ -106,6 +106,29 @@ async def _with_live(t: dict) -> dict:
     marks = {m["phase"]: datetime.fromisoformat(m["ts"]) for m in await db.phase_marks(t["id"])}
     t["series"] = await db.series(t["module_id"], t0, t1)
     t["phase_marks"] = await db.phase_marks(t["id"])
+    # rekapitulace kroků: příjem/výdej celkem a po packách, SoC od → do, délka
+    pm = t["phase_marks"]; ser = t["series"]
+    def soc_at(ts):
+        best = None
+        for p in ser:
+            if p.get("soc") is None:
+                continue
+            d = abs((datetime.fromisoformat(p["ts"]) - ts).total_seconds())
+            if best is None or d < best[0]:
+                best = (d, p["soc"])
+        return round(best[1]) if best and best[0] <= 180 else None
+    steps = []
+    for i, mk in enumerate(pm):
+        a = datetime.fromisoformat(mk["ts"]); b = datetime.fromisoformat(pm[i + 1]["ts"]) if i + 1 < len(pm) else t1
+        running = i + 1 == len(pm) and not t.get("ended_at")
+        chg, dis = await db.energy_kwh(t["module_id"], a, b)
+        c1, d1 = await db.energy_kwh(t["module_id"], a, b, "battery_power_1")
+        c2, d2 = await db.energy_kwh(t["module_id"], a, b, "battery_power_2")
+        steps.append({"phase": mk["phase"], "t_from": a.isoformat(), "t_to": b.isoformat(), "running": running,
+                      "minutes": round((b - a).total_seconds() / 60), "soc_from": soc_at(a), "soc_to": soc_at(b),
+                      "e_chg_kwh": round(chg, 2), "e_dis_kwh": round(dis, 2), "e1_chg_kwh": round(c1, 2), "e1_dis_kwh": round(d1, 2),
+                      "e2_chg_kwh": round(c2, 2), "e2_dis_kwh": round(d2, 2)})
+    t["steps"] = steps
     # energie po packách mezi snímky (pack 1 / pack 2) — dopočet při čtení z battery_power_1/2
     prev = {}
     for s in t.get("snapshots") or []:

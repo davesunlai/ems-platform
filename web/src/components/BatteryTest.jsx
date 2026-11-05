@@ -245,8 +245,20 @@ function TestChart({ t }) {
     { k: "pv", label: "FVE", color: "#e3b341", unit: "kW", get: (p) => (p.pv_w == null ? null : p.pv_w / 1000), axis: "kw", off: true },
   ];
   const vis = (sr) => (hide[sr.k] == null ? !sr.off : !hide[sr.k]);
-  const W = 1400, H = 320, L = 54, R = 52, T = 18, B = 32, F = 13;
+  const steps = t.steps || [];
+  const hasPackE = steps.some((s) => s.e1_chg_kwh != null);
+  const CARD_W = 300, CARD_H = hasPackE ? 62 : 48, ROW_H = CARD_H + 6;
+  const W = 1400, L = 54, R = 52, B = 32, F = 13;
   const t0 = new Date(t.started_at).getTime(); const t1 = new Date(ser[ser.length - 1].ts).getTime() + 60000;
+  // kaskáda řádků: karta začíná na x začátku kroku; při kolizi s kartou v řádku jde o řádek níž
+  const rowsEnd = [];
+  const cards = steps.map((s) => {
+    const x = Math.min(L + (W - L - R) * ((new Date(s.t_from).getTime() - t0) / Math.max(1, t1 - t0)), W - R - CARD_W);
+    let row = 0; while (rowsEnd[row] != null && rowsEnd[row] > x - 6) row++;
+    rowsEnd[row] = x + CARD_W; return { ...s, x, row };
+  });
+  const LBL = cards.length ? rowsEnd.length * ROW_H + 8 : 0;
+  const T = 18 + LBL, H = 320 + LBL;
   const span = Math.max(1, t1 - t0);
   const maxKw = Math.max(2, ...SERIES.filter((sr) => sr.axis === "kw" && vis(sr)).flatMap((sr) => ser.map((p) => Math.abs(sr.get(p) || 0))));
   const top = Math.ceil(maxKw / 2) * 2;
@@ -258,6 +270,7 @@ function TestChart({ t }) {
   const pathOf = (sr) => ser.filter((p) => sr.get(p) != null).map((p, i) => `${i ? "L" : "M"}${xs(p.ts).toFixed(1)},${yOf(sr, sr.get(p)).toFixed(1)}`).join(" ");
   const batPath = pathOf(SERIES[0]);
   const marks = t.phase_marks || [];
+  const fmtE = (v) => Number(v).toFixed(2);
   const PH = { discharge0: ["#f8514922", "⬇ 1 · Předvybití"], charge: ["#3fb95022", "⬆ 2 · Nabíjení"], hold: ["#d2992222", "⏸ 3 · Výdrž"], discharge: ["#f8514922", "⬇ 4 · Vybíjení"] };
   const tm = (ts) => new Date(ts).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
   const stepMs = span < 2 * 3600000 ? 600000 : span < 6 * 3600000 ? 1800000 : span < 30 * 3600000 ? 3600000 : 7200000;
@@ -282,8 +295,23 @@ function TestChart({ t }) {
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }} onMouseMove={onMove} onMouseLeave={() => setCur(null)}>
         {marks.map((m, i) => { const a = xs(m.ts), bb = i + 1 < marks.length ? xs(marks[i + 1].ts) : W - R; return (
-          <g key={i}><rect x={a} y={T} width={Math.max(0, bb - a)} height={H - T - B} fill={PH[m.phase]?.[0] || "transparent"} />
-            <text x={a + 5} y={T + 13} fontSize={F} fill="var(--muted)">{PH[m.phase]?.[1]}</text></g>); })}
+          <rect key={i} x={a} y={T} width={Math.max(0, bb - a)} height={H - T - B} fill={PH[m.phase]?.[0] || "transparent"} />); })}
+        {cards.map((s, i) => {
+          const y = 4 + s.row * ROW_H, xa = xs(s.t_from);
+          const up = s.phase === "charge" || s.phase === "hold";
+          const main = up ? s.e_chg_kwh : s.e_dis_kwh, other = up ? s.e_dis_kwh : s.e_chg_kwh;
+          const m1 = up ? s.e1_chg_kwh : s.e1_dis_kwh, m2 = up ? s.e2_chg_kwh : s.e2_dis_kwh;
+          return (
+            <g key={i}>
+              <line x1={xa} x2={xa} y1={y + CARD_H} y2={T} stroke="var(--muted)" strokeWidth="0.8" strokeDasharray="2 2" opacity="0.7" />
+              <rect x={s.x} y={y} width={CARD_W} height={CARD_H} rx="6" fill="var(--bg)" stroke="var(--border)" />
+              <text x={s.x + 8} y={y + 16} fontSize={F} fontWeight="600" fill="var(--fg)">{PH[s.phase]?.[1]}
+                <tspan fontWeight="400" fill="var(--muted)"> · {tm(s.t_from)}–{s.running ? "běží" : tm(s.t_to)} · {s.minutes} min{s.soc_from != null && s.soc_to != null ? ` · ${s.soc_from} → ${s.soc_to} %` : ""}</tspan></text>
+              <text x={s.x + 8} y={y + 32} fontSize={F} fill={up ? "var(--green)" : "#f85149"}>{up ? "příjem" : "výdej"} <tspan fontWeight="700">{fmtE(main)} kWh</tspan>
+                {other > 0.05 && <tspan fill="var(--muted)"> · {up ? "výdej" : "příjem"} {fmtE(other)} kWh</tspan>}</text>
+              {hasPackE && <text x={s.x + 8} y={y + 48} fontSize={F} fill="var(--muted)">B1 <tspan fill="#a371f7" fontWeight="600">{fmtE(m1)}</tspan> · B2 <tspan fill="#39c5cf" fontWeight="600">{fmtE(m2)}</tspan> kWh</text>}
+            </g>);
+        })}
         {[-top, -top / 2, 0, top / 2, top].map((v) => (
           <g key={v}><line x1={L} x2={W - R} y1={yk(v)} y2={yk(v)} stroke="var(--border)" strokeWidth={v === 0 ? 1.2 : 0.6} />
             <text x={L - 5} y={yk(v) + 4} textAnchor="end" fontSize={F} fill="var(--muted)">{v > 0 ? "+" : ""}{v}</text></g>))}
