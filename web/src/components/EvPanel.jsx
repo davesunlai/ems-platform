@@ -236,7 +236,8 @@ function DayDetail({ locId, date, wbName, onClose }) {
               const name = u.c ? `🚘 ${u.c.name}` : "🚘 auto neurčeno"; const txt = `${name}${u.open ? " · nabíjí se" : ""}`; const small = w < 90;
               const col = u.kind === "wb" ? "var(--green)" : "#58a6ff";
               const kwh = u.kwh != null ? `${u.approx ? "≈ " : ""}${Number(u.kwh).toFixed(u.approx ? 0 : 1)} kWh` : "";
-              const where = u.kind === "wb" ? `🏠 ${wbName}` : `🔌 ${u.c?.place_label || "mimo dům"}`;
+              const homePlace = (carS.find((c) => c.lat != null && d.runs.some((r) => overlaps(c, r.start, r.end))) || {}).place;
+              const where = u.kind === "wb" ? `🏠 ${wbName}${homePlace ? ` · ${homePlace}` : ""}` : `🔌 ${u.c?.place_label || "mimo dům"}`;
               const title = u.loc ? `${u.c?.name || "wallbox"} · ${tm(u.s)}–${tm(u.e)}` : null;
               return (
                 <g key={`lbl${i}`}>
@@ -244,12 +245,13 @@ function DayDetail({ locId, date, wbName, onClose }) {
                         fill={col} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">
                     {small && w < 40 ? "🚘" : small ? (u.c ? u.c.name : "?") : txt}
                   </text>
-                  {!small && (
-                    <text x={x0 + w / 2} y={T + 26} textAnchor="middle" fontSize="10" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
+                  {!small && (<>
+                    <text x={x0 + w / 2} y={T + 27} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>
+                    <text x={x0 + w / 2} y={T + 41} textAnchor="middle" fontSize="10.5" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
                           style={{ cursor: u.loc ? "pointer" : "default" }}
                           onClick={(e) => { e.stopPropagation(); if (u.loc) setMap({ lat: u.loc.lat, lon: u.loc.lon, title }); }}>
-                      {kwh}{kwh ? " · " : ""}{where}{u.loc ? " 📍" : ""}
-                    </text>)}
+                      {where}{u.loc ? " 📍" : ""}
+                    </text></>)}
                   {small && w >= 40 && kwh && (
                     <text x={x0 + w / 2} y={T + 22} textAnchor="middle" fontSize="8.5" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>)}
                 </g>); })}

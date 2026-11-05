@@ -16,7 +16,7 @@ logger = logging.getLogger("ems.cars.geo")
 UA = "TERA-EMS/1.0 (energy management; contact via teraems.com)"
 NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
 OVERPASS = "https://overpass-api.de/api/interpreter"
-RADIUS_M = 300
+RADIUS_M = 1500      # BMW posílá polohu zaokrouhlenou (při zapojení na 2 des. místa ≈ ±0,7 km) → hledat široko, vzít nejbližší
 _last_nominatim = 0.0
 
 
@@ -85,7 +85,7 @@ async def _lookup(lat: float, lon: float) -> dict:
         res = await asyncio.to_thread(_post, OVERPASS, "data=" + urllib.parse.quote(q))
         op, name, d = operator_from_overpass(res, lat, lon)
         out.update(operator=op, station_name=name, distance_m=round(d) if d is not None else None)
-        out["raw"]["stations"] = len(res.get("elements") or [])
+        out["raw"]["stations"] = len(res.get("elements") or []); out["raw"]["radius_m"] = RADIUS_M
     except Exception as exc:
         logger.info("overpass %.4f,%.4f: %s", lat, lon, exc)
     return out
@@ -99,12 +99,18 @@ async def resolve_many(points: list[tuple[float, float]], max_new: int = 3) -> d
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT lat4, lon4, place, operator, station_name, distance_m FROM geo_cache WHERE lat4 = ANY($1::real[]) AND lon4 = ANY($2::real[])",
+            "SELECT lat4, lon4, place, operator, station_name, distance_m, resolved_at, "
+            "COALESCE((raw->>'radius_m')::int, 0) AS radius_m FROM geo_cache WHERE lat4 = ANY($1::real[]) AND lon4 = ANY($2::real[])",
             [k[0] for k in keys], [k[1] for k in keys])
     out = {}
+    from datetime import datetime, timezone, timedelta
     for r in rows:
         k = (round(float(r["lat4"]), 4), round(float(r["lon4"]), 4))
-        if k in keys:
+        if k not in keys:
+            continue
+        # bez provozovatele a hledáno užším poloměrem (nebo před > 1 dnem) → zkusit znovu
+        stale = r["operator"] is None and (int(r["radius_m"] or 0) < RADIUS_M or r["resolved_at"] < datetime.now(timezone.utc) - timedelta(days=1))
+        if not stale:
             out[k] = {"place": r["place"], "operator": r["operator"], "station_name": r["station_name"], "distance_m": r["distance_m"]}
     new = 0
     for k in keys:

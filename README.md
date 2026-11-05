@@ -1,3 +1,7 @@
+## v1.8.13 — Místo nabíjení: širší hledání, třetí řádek popisku
+- Overpass poloměr 300 → 1 500 m (BMW zaokrouhluje polohu); záznamy bez provozovatele se dohledají znovu (širší poloměr / 1× denně).
+- Detail dne: popisek nad úsekem má tři řádky — auto / kWh / „🔌 ČEZ · Unčovice 📍“ (doma „🏠 wb-dave · Kopřivnice“).
+
 ## v1.8.12 — Místo nabíjení: obec + provozovatel (OSM)
 - `ems/cars/geo.py`: Nominatim reverse (obec) + Overpass `amenity=charging_station` do 300 m (operator/brand/network); cache `geo_cache` (4 des. místa);
   max 3 nové dotazy na požadavek, Nominatim 1/s. `/api/cars/sessions` nese `place`, `operator`, `station_name`, `place_label` („Ionity · Mohelnice“).
