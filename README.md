@@ -1,3 +1,6 @@
+## v1.8.28 — Sloupce testu: karty nad vrcholky, kaskádově
+- Hodnoty (celkem kWh, baterie 1 / 2, min · kW) v kartách nad vrcholky sloupců; při kolizi řádek výš (jako u wallboxu); nad osou jen „⬆ 40 %“.
+
 ## v1.8.27 — Sloupce testu: popisky pod osou X
 - Nad osou jen „⬆ 40 %“; pod osou tři řádky: celkem kWh (barva směru), baterie 1 / 2 kWh, minuty · ⌀ kW.
 

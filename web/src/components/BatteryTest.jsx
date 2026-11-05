@@ -314,19 +314,32 @@ function TestChart({ t }) {
 }
 
 // Sloupce kWh po 10 % na STEJNÉ časové ose jako graf nad nimi: sloupec = od předchozího snímku do tohoto;
-// uvnitř dva podsloupce = kolik kWh teklo do/z baterie 1 a 2 (když měnič hlásí packy)
+// uvnitř dva podsloupce = kolik kWh teklo do/z baterie 1 a 2. Popisky = karty nad vrcholky, kaskádově bez překryvu.
 function StepBars({ t }) {
   const ser = t.series || [];
   const snaps = (t.snapshots || []).filter((s) => (s.phase === "charge" || s.phase === "discharge") && s.e_step_kwh != null && s.minutes_step > 0.5 && s.t_from);
   if (!snaps.length || ser.length < 2) return null;
   const nominal = Number(t.params?.capacity_kwh || 0) / 10;
-  const W = 1400, H = 250, L = 54, R = 52, T = 18, B = 74, F = 13;      // B: osa času + 3 řádky popisků pod ní
+  const hasPacks = snaps.some((s) => s.e1_kwh != null && s.e2_kwh != null);
+  const CARD_H = hasPacks ? 46 : 32, ROW_H = CARD_H + 6, CARD_W = 118;
+  const W = 1400, L = 54, R = 52, B = 34, F = 13;
   const t0 = new Date(t.started_at).getTime(); const t1 = new Date(ser[ser.length - 1].ts).getTime() + 60000;
   const span = Math.max(1, t1 - t0);
   const xs = (ts) => L + (W - L - R) * ((new Date(ts).getTime() - t0) / span);
-  const maxV = Math.max(nominal || 0, ...snaps.map((s) => Number(s.e_step_kwh))) * 1.15;
+  // karty: kaskáda podle kolize v X (řádky zdola nahoru nad vrcholky)
+  const cards = []; const rowsRight = [];
+  for (const s of [...snaps].sort((a, b) => new Date(a.t_from) - new Date(b.t_from))) {
+    const x0 = xs(s.t_from), x1 = xs(s.ts); const cx = (x0 + x1) / 2;
+    let x = Math.max(L, Math.min(W - R - CARD_W, cx - CARD_W / 2));
+    let row = 0; while (row < rowsRight.length && rowsRight[row] > x - 4) row++;
+    rowsRight[row] = x + CARD_W;
+    cards.push({ s, x0, x1, cx, x, row });
+  }
+  const rows = Math.max(1, ...cards.map((c) => c.row + 1));
+  const T = 10 + rows * ROW_H;                                   // prostor pro karty nad sloupci
+  const H = T + 150 + B;
+  const maxV = Math.max(nominal || 0, ...snaps.map((s) => Number(s.e_step_kwh))) * 1.08;
   const y = (v) => T + (H - T - B) * (1 - v / maxV);
-  const hasPacks = snaps.some((s) => s.e1_kwh != null && s.e2_kwh != null);
   const stepMs = span < 2 * 3600000 ? 600000 : span < 6 * 3600000 ? 1800000 : span < 30 * 3600000 ? 3600000 : 7200000;
   const ticks = []; for (let x = Math.ceil(t0 / stepMs) * stepMs; x < t1; x += stepMs) ticks.push(x);
   const tm = (ts) => new Date(ts).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
@@ -347,26 +360,27 @@ function StepBars({ t }) {
         {ticks.map((x) => <g key={x}><line x1={xs(x)} x2={xs(x)} y1={T} y2={H - B + 5} stroke="var(--border)" strokeWidth="0.6" />
           <text x={xs(x)} y={H - B + 19} textAnchor="middle" fontSize={F} fill="var(--muted)">{tm(x)}</text></g>)}
         {nominal > 0 && <line x1={L} x2={W - R} y1={y(nominal)} y2={y(nominal)} stroke="var(--amber)" strokeDasharray="5 4" />}
-        {snaps.map((s) => {
-          const x0 = xs(s.t_from), x1 = xs(s.ts); const w = Math.max(3, x1 - x0); const v = Number(s.e_step_kwh); const up = s.phase === "charge";
-          const col = up ? "var(--green)" : "#f85149"; const narrow = w < 46;
-          const pw = Math.max(2, (w - 8) / 2);
+        {cards.map(({ s, x0, x1, cx, x, row }) => {
+          const w = Math.max(3, x1 - x0); const v = Number(s.e_step_kwh); const up = s.phase === "charge";
+          const col = up ? "var(--green)" : "#f85149"; const pw = Math.max(2, (w - 8) / 2);
+          const cy = 6 + (rows - 1 - row) * ROW_H;             // řádek 0 nejblíž sloupcům
           return (
             <g key={s.id}>
               <rect x={x0 + 1} y={y(v)} width={w - 2} height={H - B - y(v)} fill={col} opacity="0.35" rx="3" />
               {hasPacks && s.e1_kwh != null && (<>
                 <rect x={x0 + 3} y={y(Number(s.e1_kwh))} width={pw} height={H - B - y(Number(s.e1_kwh))} fill="#a371f7" opacity="0.9" rx="2" />
                 <rect x={x0 + 3 + pw + 2} y={y(Number(s.e2_kwh))} width={pw} height={H - B - y(Number(s.e2_kwh))} fill="#39c5cf" opacity="0.9" rx="2" />
-
               </>)}
-              {/* nad osou jen procenta úseku; hodnoty (celkem kWh, packy, čas, výkon) POD osou X */}
-              <text x={x0 + w / 2} y={H - B - 5} textAnchor="middle" fontSize={narrow ? 10.5 : 13} fontWeight="700" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{up ? "⬆" : "⬇"} {s.soc_step} %</text>
-              <text x={x0 + w / 2} y={H - B + 34} textAnchor="middle" fontSize={narrow ? 10.5 : 12.5} fontWeight="700" fill={col} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{v.toFixed(2)} kWh</text>
-              {hasPacks && s.e1_kwh != null && !narrow && (
-                <text x={x0 + w / 2} y={H - B + 48} textAnchor="middle" fontSize="10.5" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">
+              <text x={cx} y={H - B - 5} textAnchor="middle" fontSize={w < 46 ? 10.5 : 13} fontWeight="700" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{up ? "⬆" : "⬇"} {s.soc_step} %</text>
+              {/* karta nad vrcholkem; vodicí čárka k vrcholu sloupce */}
+              <line x1={cx} x2={cx} y1={cy + CARD_H} y2={y(v)} stroke={col} strokeWidth="1" strokeDasharray="2 2" opacity="0.8" />
+              <rect x={x} y={cy} width={CARD_W} height={CARD_H} rx="6" fill="var(--bg)" stroke={col} strokeWidth="1" opacity="0.97" />
+              <text x={x + CARD_W / 2} y={cy + 14} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={col}>{v.toFixed(2)} kWh</text>
+              {hasPacks && s.e1_kwh != null && (
+                <text x={x + CARD_W / 2} y={cy + 28} textAnchor="middle" fontSize="10.5">
                   <tspan fill="#a371f7">{Number(s.e1_kwh).toFixed(2)}</tspan><tspan fill="var(--muted)"> / </tspan><tspan fill="#39c5cf">{Number(s.e2_kwh).toFixed(2)}</tspan>
                 </text>)}
-              {!narrow && <text x={x0 + w / 2} y={H - B + 62} textAnchor="middle" fontSize="10.5" fill="var(--muted)" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">{Math.round(s.minutes_step)} min · {(v / (s.minutes_step / 60)).toFixed(1)} kW</text>}
+              <text x={x + CARD_W / 2} y={cy + CARD_H - 5} textAnchor="middle" fontSize="10.5" fill="var(--muted)">{Math.round(s.minutes_step)} min · {(v / (s.minutes_step / 60)).toFixed(1)} kW</text>
             </g>); })}
       </svg>
     </div>
