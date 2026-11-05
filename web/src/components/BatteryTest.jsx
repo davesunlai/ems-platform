@@ -66,7 +66,7 @@ export function BatteryTestDialog({ locId, onClose }) {
   };
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 96, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(960px, 96vw)", maxHeight: "94vh", overflow: "auto", padding: 14 }}>
+      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "98vw", maxWidth: "none", maxHeight: "96vh", overflow: "auto", padding: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <b style={{ fontSize: 15 }}>🧪 Test kapacity a kondice baterie</b>
           <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={onClose}>✕</button>
@@ -135,9 +135,9 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
   const snaps = (t.snapshots || []).filter((s) => s.phase === "charge" || s.phase === "discharge");
   const r = t.result || {};
   return (
-    <div style={{ marginTop: 8, fontSize: 13 }}>
+    <div style={{ marginTop: 8, fontSize: 14 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <b>Test #{t.id}</b> <span>{PHASE[t.status] || t.status}</span>
+        <b style={{ fontSize: 16 }}>Test #{t.id}</b> <span>{PHASE[t.status] || t.status}</span>
         <span className="muted">start {dt(t.started_at)}{t.ended_at ? ` · konec ${dt(t.ended_at)}` : ""}</span>
         {t.abort_reason && <span style={{ color: "#f85149" }}>{t.abort_reason}</span>}
         {running && onAbort && <button className="btn" style={{ marginLeft: "auto", borderColor: "#f85149" }} disabled={busy} onClick={onAbort}>⛔ Přerušit test</button>}
@@ -164,7 +164,7 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
           {r.pack_drift_pct_max != null && <Stat l="max rozdíl packů" v={`${r.pack_drift_pct_max} %`} />}
         </div>)}
       {snaps.length > 0 && (
-        <table style={{ fontSize: 12, width: "100%", marginTop: 6 }}>
+        <table style={{ fontSize: 13, width: "100%", marginTop: 6 }}>
           <thead><tr><th>fáze</th><th>SoC</th><th>čas</th><th>kWh od začátku fáze</th><th>+kWh / 10 %</th><th>min</th><th>⌀ kW</th><th>pack 1 / 2</th><th>článek min/max V</th><th>síť kW</th></tr></thead>
           <tbody>{snaps.map((s) => (
             <tr key={s.id}><td>{s.phase === "charge" ? "⬆" : "⬇"}</td><td><b>{s.soc_step} %</b></td><td>{dt(s.ts)}</td><td>{Number(s.e_phase_kwh).toFixed(2)}</td>
@@ -187,7 +187,7 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
 function TestChart({ t }) {
   const ser = t.series || [];
   if (ser.length < 2) return <p className="muted" style={{ fontSize: 12 }}>Graf se vykreslí po prvních minutách dat.</p>;
-  const W = 1400, H = 260, L = 46, R = 40, T = 14, B = 26;
+  const W = 1400, H = 300, L = 54, R = 52, T = 18, B = 32, F = 13;
   const t0 = new Date(t.started_at).getTime(); const t1 = new Date(ser[ser.length - 1].ts).getTime() + 60000;
   const span = Math.max(1, t1 - t0);
   const maxKw = Math.max(2, ...ser.map((p) => Math.abs((p.bat_w || 0) / 1000)));
@@ -201,25 +201,26 @@ function TestChart({ t }) {
   const marks = t.phase_marks || [];
   const PH = { discharge0: ["#f8514922", "fáze 0 ⬇"], charge: ["#3fb95022", "fáze 1 ⬆"], hold: ["#d2992222", "fáze 2 ⏸"], discharge: ["#f8514922", "fáze 3 ⬇"] };
   const tm = (ts) => new Date(ts).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
-  const ticks = []; for (let x = Math.ceil(t0 / 3600000) * 3600000; x < t1; x += 3600000) ticks.push(x);
+  const stepMs = span < 2 * 3600000 ? 600000 : span < 6 * 3600000 ? 1800000 : span < 30 * 3600000 ? 3600000 : 7200000;
+  const ticks = []; for (let x = Math.ceil(t0 / stepMs) * stepMs; x < t1; x += stepMs) ticks.push(x);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", marginTop: 6 }}>
       {marks.map((m, i) => { const a = xs(m.ts), b = i + 1 < marks.length ? xs(marks[i + 1].ts) : W - R; return (
         <g key={i}><rect x={a} y={T} width={Math.max(0, b - a)} height={H - T - B} fill={PH[m.phase]?.[0] || "transparent"} />
-          <text x={a + 4} y={T + 10} fontSize="9" fill="var(--muted)">{PH[m.phase]?.[1]}</text></g>); })}
+          <text x={a + 5} y={T + 13} fontSize={F} fill="var(--muted)">{PH[m.phase]?.[1]}</text></g>); })}
       {[-top, -top / 2, 0, top / 2, top].map((v) => (
         <g key={v}><line x1={L} x2={W - R} y1={yk(v)} y2={yk(v)} stroke="var(--border)" strokeWidth={v === 0 ? 1.2 : 0.6} />
-          <text x={L - 4} y={yk(v) + 3} textAnchor="end" fontSize="9" fill="var(--muted)">{v > 0 ? "+" : ""}{v}</text></g>))}
-      <text x={6} y={T + 4} fontSize="9" fill="var(--muted)">kW</text>
-      {[0, 25, 50, 75, 100].map((v) => <text key={v} x={W - R + 4} y={ys(v) + 3} fontSize="9" fill="#58a6ff">{v} %</text>)}
-      {ticks.map((x) => <g key={x}><line x1={xs(x)} x2={xs(x)} y1={H - B} y2={H - B + 4} stroke="var(--muted)" />
-        <text x={xs(x)} y={H - B + 14} textAnchor="middle" fontSize="9" fill="var(--muted)">{tm(x)}</text></g>)}
+          <text x={L - 5} y={yk(v) + 4} textAnchor="end" fontSize={F} fill="var(--muted)">{v > 0 ? "+" : ""}{v}</text></g>))}
+      <text x={4} y={T + 2} fontSize={F} fill="var(--muted)">kW</text>
+      {[0, 25, 50, 75, 100].map((v) => <text key={v} x={W - R + 5} y={ys(v) + 4} fontSize={F} fill="#58a6ff">{v} %</text>)}
+      {ticks.map((x) => <g key={x}><line x1={xs(x)} x2={xs(x)} y1={T} y2={H - B + 5} stroke="var(--border)" strokeWidth="0.6" />
+        <text x={xs(x)} y={H - B + 19} textAnchor="middle" fontSize={F} fill="var(--muted)">{tm(x)}</text></g>)}
       <path d={`${area} L${xs(ser[ser.length - 1].ts).toFixed(1)},${y0} L${xs(ser[0].ts).toFixed(1)},${y0} Z`} fill="var(--green)" opacity="0.15" />
       <path d={area} fill="none" stroke="var(--green)" strokeWidth="1.4" />
       {socPath && <path d={socPath} fill="none" stroke="#58a6ff" strokeWidth="1.6" strokeDasharray="4 3" />}
       {(t.snapshots || []).filter((s) => s.phase !== "hold").map((s) => (
         <g key={s.id}><line x1={xs(s.ts)} x2={xs(s.ts)} y1={T} y2={H - B} stroke="var(--fg)" strokeWidth="0.6" strokeDasharray="2 3" opacity="0.6" />
-          <text x={xs(s.ts)} y={H - B - 4} textAnchor="middle" fontSize="9" fill="var(--fg)">{s.soc_step} %</text></g>))}
+          <text x={xs(s.ts)} y={H - B - 5} textAnchor="middle" fontSize={F} fontWeight="600" fill="var(--fg)">{s.soc_step} %</text></g>))}
     </svg>
   );
 }
@@ -229,25 +230,25 @@ function StepBars({ t }) {
   const snaps = (t.snapshots || []).filter((s) => (s.phase === "charge" || s.phase === "discharge") && s.e_step_kwh != null && s.minutes_step > 0.5);
   if (!snaps.length) return null;
   const nominal = Number(t.params?.capacity_kwh || 0) / 10;
-  const W = 1400, H = 150, L = 40, T = 14, B = 30; const n = snaps.length; const bw = Math.min(70, (W - L - 10) / n - 6);
+  const W = 1400, H = 190, L = 46, T = 18, B = 40; const n = snaps.length; const bw = Math.min(80, (W - L - 10) / n - 8);
   const maxV = Math.max(nominal || 0, ...snaps.map((s) => Number(s.e_step_kwh)));
   const y = (v) => T + (H - T - B) * (1 - v / maxV);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", marginTop: 4 }}>
       {nominal > 0 && <g><line x1={L} x2={W - 10} y1={y(nominal)} y2={y(nominal)} stroke="var(--amber)" strokeDasharray="4 3" />
-        <text x={W - 12} y={y(nominal) - 3} textAnchor="end" fontSize="9" fill="var(--amber)">jmenovitě {nominal.toFixed(2)} kWh / 10 %</text></g>}
-      <text x={6} y={T + 4} fontSize="9" fill="var(--muted)">kWh</text>
+        <text x={W - 12} y={y(nominal) - 4} textAnchor="end" fontSize="13" fill="var(--amber)">jmenovitě {nominal.toFixed(2)} kWh / 10 %</text></g>}
+      <text x={4} y={T + 2} fontSize="13" fill="var(--muted)">kWh</text>
       {snaps.map((s, i) => { const x = L + 6 + i * ((W - L - 10) / n); const v = Number(s.e_step_kwh); const up = s.phase === "charge"; return (
         <g key={s.id}>
           <rect x={x} y={y(v)} width={bw} height={H - B - y(v)} fill={up ? "var(--green)" : "#f85149"} opacity="0.8" rx="3" />
-          <text x={x + bw / 2} y={y(v) - 3} textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--fg)">{v.toFixed(2)}</text>
-          <text x={x + bw / 2} y={H - B + 11} textAnchor="middle" fontSize="9.5" fill="var(--fg)">{up ? "⬆" : "⬇"} {s.soc_step} %</text>
-          <text x={x + bw / 2} y={H - B + 22} textAnchor="middle" fontSize="8.5" fill="var(--muted)">{Math.round(s.minutes_step)} min · {(v / (s.minutes_step / 60)).toFixed(1)} kW</text>
+          <text x={x + bw / 2} y={y(v) - 4} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--fg)">{v.toFixed(2)}</text>
+          <text x={x + bw / 2} y={H - B + 15} textAnchor="middle" fontSize="13" fill="var(--fg)">{up ? "⬆" : "⬇"} {s.soc_step} %</text>
+          <text x={x + bw / 2} y={H - B + 30} textAnchor="middle" fontSize="12" fill="var(--muted)">{Math.round(s.minutes_step)} min · {(v / (s.minutes_step / 60)).toFixed(1)} kW</text>
         </g>); })}
     </svg>
   );
 }
 
 function Stat({ l, v, big }) {
-  return <div><div className="muted" style={{ fontSize: 11 }}>{l}</div><div style={{ fontSize: big ? 20 : 15, fontWeight: 700 }}>{v}</div></div>;
+  return <div><div className="muted" style={{ fontSize: 12 }}>{l}</div><div style={{ fontSize: big ? 24 : 18, fontWeight: 700 }}>{v}</div></div>;
 }

@@ -1,3 +1,6 @@
+## v1.8.6 — Test baterie: dialog na šířku, větší popisky, osa času
+- Dialog 98vw; písma grafů 13 px; osa X adaptivní (10 min / 30 min / 1 h / 2 h podle délky) — dřív jen celé hodiny, krátce po startu bez popisků.
+
 ## v1.8.5 — Test baterie: živý graf
 - `/current` a `/test/{id}` nesou `series` (po minutě: výkon baterie, SoC, síť, FVE), `phase_marks`, `live` (SoC, výkon, energie ve fázi, čas ve fázi).
 - Dialog: živé hodnoty, graf výkonu ±kW + SoC (pravá osa) se stínováním fází a značkami snímků, sloupce kWh po 10 % s jmenovitou linkou.
