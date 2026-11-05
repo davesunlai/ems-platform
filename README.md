@@ -1,3 +1,7 @@
+## v1.8.16 — Dohledání místa na pozadí (oprava zmizelých úseků)
+- `/api/cars/sessions` odpovídá hned z cache; chybějící místa se dohledávají v úloze na pozadí (`place_pending`), detail dne se obnoví po 20 s (max 3×).
+  Dřív zrcadla Overpass (timeouty) držela odpověď > 1 min → prohlížeč ji zahodil a modré úseky zmizely.
+
 ## v1.8.15 — Provozovatel nabíječky: zrcadla Overpass + OpenChargeMap
 - overpass-api.de/lz4 odmítá IP franty (blocklist), kumi timeoutuje, osm.ch jen CH → seznam zrcadel (private.coffee, osm.jp, kumi, api.de), první s `elements` vyhrává.
 - Druhý zdroj OpenChargeMap (`app_settings.ocm_api_key` / `EMS_OCM_API_KEY`): nejbližší POI do 1,5 km, `OperatorInfo.Title`. Auta → „📍 Místa nabíjení“: klíč + „↻ Dohledat znovu“.

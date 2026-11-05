@@ -177,7 +177,12 @@ function DayDetail({ locId, date, wbName, onClose }) {
   useEffect(() => {
     setD(null); setCarS([]);
     api.evDay(locId, date).then(setD).catch(() => setD({ series: [], runs: [], sessions: [] }));
-    api.carsSessions(locId, `date=${date}`).then((r) => setCarS(r || [])).catch(() => {});
+    let tries = 0;
+    const loadCars = () => api.carsSessions(locId, `date=${date}`).then((r) => {
+      setCarS(r || []);
+      if (tries++ < 3 && (r || []).some((c) => c.lat != null && (c.place_pending || !c.operator))) setTimeout(loadCars, 20000);   // místo se dohledává na pozadí
+    }).catch(() => {});
+    loadCars();
   }, [locId, date]);
   // poloha k úseku wallboxu = relace auta, která se s ním časově překrývá (auto posílá GPS při zapojení)
   const overlaps = (c, s, e) => new Date(c.start) <= new Date(e || Date.now()) && new Date(c.end || Date.now()) >= new Date(s);

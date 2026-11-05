@@ -87,7 +87,7 @@ async def _lookup(lat: float, lon: float) -> dict:
     q = f'[out:json][timeout:8];(node["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon});way["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon}););out center tags;'
     for url in OVERPASS_MIRRORS:
         try:
-            res = await asyncio.to_thread(_post, url, "data=" + urllib.parse.quote(q), 12)
+            res = await asyncio.to_thread(_post, url, "data=" + urllib.parse.quote(q), 8)
             if not isinstance(res, dict) or "elements" not in res:
                 continue
             op, name, d = operator_from_overpass(res, lat, lon)
@@ -136,8 +136,31 @@ async def _ocm(lat: float, lon: float, out: dict) -> None:
         out["raw"]["ocm"] = f"chyba: {exc}"
 
 
-async def resolve_many(points: list[tuple[float, float]], max_new: int = 3) -> dict[tuple[float, float], dict]:
-    """Vrátí {(lat4, lon4): {place, operator, station_name, distance_m}} — z cache, chybějící dohledá (max_new)."""
+_bg_tasks: set = set()
+_inflight: set = set()
+
+
+def _schedule(keys: list[tuple[float, float]]) -> None:
+    """Dohledání na pozadí (zrcadla mohou timeoutovat desítky sekund — nesmí blokovat API)."""
+    todo = [k for k in keys if k not in _inflight]
+    if not todo:
+        return
+    for k in todo:
+        _inflight.add(k)
+
+    async def run():
+        try:
+            await resolve_many(todo, max_new=len(todo), background=False)
+        finally:
+            for k in todo:
+                _inflight.discard(k)
+    t = asyncio.get_running_loop().create_task(run())
+    _bg_tasks.add(t); t.add_done_callback(_bg_tasks.discard)
+
+
+async def resolve_many(points: list[tuple[float, float]], max_new: int = 3, background: bool = True) -> dict[tuple[float, float], dict]:
+    """Vrátí {(lat4, lon4): {place, operator, station_name, distance_m}} z cache; chybějící/neúplné
+    s background=True naplánuje na pozadí a vrátí hned (volající dostane místo při příštím dotazu)."""
     keys = sorted({(round(float(la), 4), round(float(lo), 4)) for la, lo in points if la is not None and lo is not None})
     if not keys:
         return {}
@@ -157,6 +180,16 @@ async def resolve_many(points: list[tuple[float, float]], max_new: int = 3) -> d
         stale = r["operator"] is None and (int(r["radius_m"] or 0) < RADIUS_M or r["resolved_at"] < datetime.now(timezone.utc) - timedelta(days=1))
         if not stale:
             out[k] = {"place": r["place"], "operator": r["operator"], "station_name": r["station_name"], "distance_m": r["distance_m"]}
+    missing = [k for k in keys if k not in out]
+    if background:
+        if missing:
+            _schedule(missing[:max_new])
+        # částečná data (obec bez provozovatele) vrať hned
+        for r in rows:
+            k = (round(float(r["lat4"]), 4), round(float(r["lon4"]), 4))
+            if k in keys and k not in out:
+                out[k] = {"place": r["place"], "operator": r["operator"], "station_name": r["station_name"], "distance_m": r["distance_m"], "pending": True}
+        return out
     new = 0
     for k in keys:
         if k in out or new >= max_new:

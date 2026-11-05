@@ -135,7 +135,7 @@ async def sessions(locality_id: int | None = None, date: str | None = None, mont
             if r.get("lat") is not None:
                 g = info.get((round(float(r["lat"]), 4), round(float(r["lon"]), 4)))
                 r["place"] = (g or {}).get("place"); r["operator"] = (g or {}).get("operator")
-                r["station_name"] = (g or {}).get("station_name"); r["place_label"] = geo.label(g)
+                r["station_name"] = (g or {}).get("station_name"); r["place_label"] = geo.label(g); r["place_pending"] = bool((g or {}).get("pending")) or g is None
     except Exception as exc:
         import logging; logging.getLogger("ems.cars").info("geo: %s", exc)
     return out
