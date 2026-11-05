@@ -1,3 +1,6 @@
+## v1.8.26 — Kurzorový box testu vedle kurzoru
+- Graf testu: box jede s kurzorem ~48 px vpravo (u pravého okraje vlevo), svisle u kurzoru, nikdy pod ním.
+
 ## v1.8.25 — Test baterie: výkon do baterie 1 / 2
 - Graf: řady „výkon baterie 1“ (fialová) a „výkon baterie 2“ (tyrkys) v kW na levé ose; v kurzorovém boxu; živé hodnoty „baterie 1 / 2 kW“. `series` nese `bat1_w/bat2_w`.
 

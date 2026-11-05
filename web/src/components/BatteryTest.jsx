@@ -264,7 +264,7 @@ function TestChart({ t }) {
     let best = 0, bd = Infinity;
     ser.forEach((p, i) => { const d = Math.abs(new Date(p.ts).getTime() - tt); if (d < bd) { bd = d; best = i; } });
     const mark = [...marks].reverse().find((m) => new Date(m.ts).getTime() <= new Date(ser[best].ts).getTime());
-    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, w: b.width, p: ser[best], step: mark ? PH[mark.phase]?.[1] : "⚙ 0 · Příprava" });
+    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, w: b.width, h: b.height, p: ser[best], step: mark ? PH[mark.phase]?.[1] : "⚙ 0 · Příprava" });
   };
   return (
     <div style={{ position: "relative" }}>
@@ -298,7 +298,8 @@ function TestChart({ t }) {
         </g>)}
       </svg>
       {cur && (
-        <div style={{ position: "absolute", ...(cur.x > (cur.w || 1200) / 2 ? { left: 60 } : { right: 60 }), top: 36, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
+        <div style={{ position: "absolute", left: (cur.x + 48 + 290 < (cur.w || 1200)) ? cur.x + 48 : Math.max(0, cur.x - 48 - 290),
+                      top: Math.max(0, Math.min(cur.y - 40, (cur.h || 300) - 170)), background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
                       padding: "6px 10px", fontSize: 12.5, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 250 }}>
           <div><b>{tm(cur.p.ts)}</b> <span className="muted">· {cur.step}</span></div>
           {SERIES.filter((sr) => vis(sr) && sr.get(cur.p) != null).map((sr) => (
