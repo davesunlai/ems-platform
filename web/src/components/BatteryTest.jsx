@@ -203,15 +203,15 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
         </div>)}
       {snaps.length > 0 && (
         <table style={{ fontSize: 13, width: "100%", marginTop: 6 }}>
-          <thead><tr><th>krok</th><th>SoC</th><th>čas</th><th>kWh od začátku kroku</th><th>+kWh / 10 %</th><th>min</th><th>⌀ kW</th><th>SoC bat. 1 / 2</th><th>kWh bat. 1 / 2</th><th>článek bat. 1 min / max V</th><th>článek bat. 2 min / max V</th><th>síť kW</th></tr></thead>
+          <thead><tr><th>krok</th><th>SoC</th><th>čas</th><th>kWh od začátku kroku</th><th>+kWh / 10 %</th><th>min</th><th>⌀ kW</th><th>SoC bat. 1 / 2</th><th>kWh bat. 1 / 2</th><th>článek bat. 1</th><th>článek bat. 2</th><th>síť kW</th></tr></thead>
           <tbody>{snaps.map((s) => (
             <tr key={s.id}><td>{s.phase === "charge" ? "⬆ 2 · Nabíjení" : "⬇ 4 · Vybíjení"}</td><td><b>{s.soc_step} %</b></td><td>{dt(s.ts)}</td><td>{Number(s.e_phase_kwh).toFixed(2)}</td>
               <td>{s.e_step_kwh != null ? Number(s.e_step_kwh).toFixed(2) : "—"}</td><td>{s.minutes_step != null ? Math.round(s.minutes_step) : "—"}</td>
               <td>{s.e_step_kwh && s.minutes_step ? (Number(s.e_step_kwh) / (Number(s.minutes_step) / 60)).toFixed(2) : "—"}</td>
               <td>{s.soc1 != null ? `${Math.round(s.soc1)} / ${Math.round(s.soc2)} %` : "—"}</td>
               <td>{s.e1_kwh != null ? `${Number(s.e1_kwh).toFixed(2)} / ${Number(s.e2_kwh).toFixed(2)}` : "—"}</td>
-              <td>{s.cell_vmin_1 != null ? <><span style={{ color: "#f85149" }}>{Number(s.cell_vmin_1).toFixed(3)}</span> / <span style={{ color: "var(--green)" }}>{Number(s.cell_vmax_1).toFixed(3)}</span></> : "—"}</td>
-              <td>{s.cell_vmin_2 != null ? <><span style={{ color: "#f85149" }}>{Number(s.cell_vmin_2).toFixed(3)}</span> / <span style={{ color: "var(--green)" }}>{Number(s.cell_vmax_2).toFixed(3)}</span></> : "—"}</td>
+              <td style={{ whiteSpace: "nowrap" }}>{cellCol(s, 1)}</td>
+              <td style={{ whiteSpace: "nowrap" }}>{cellCol(s, 2)}</td>
               <td>{s.grid_w != null ? (Number(s.grid_w) / 1000).toFixed(1) : "—"}</td></tr>))}
           </tbody></table>)}
       {t.log?.length > 0 && (
@@ -387,6 +387,23 @@ function StepBars({ t }) {
       </svg>
     </div>
   );
+}
+
+/** „3.126 V · čl. 162 (modul 11, poz. 12)“ — jako u nejslabších článků na dashboardu. */
+function cellNo(n, cpm) {
+  if (n == null) return null;
+  const c = Math.round(n), m = cpm ? Math.round(cpm) : 0;
+  return m > 0 ? `čl. ${c} (modul ${Math.floor((c - 1) / m) + 1}, poz. ${((c - 1) % m) + 1})` : `čl. ${c}`;
+}
+function cellCol(s, p) {
+  const vmin = s[`cell_vmin_${p}`], vmax = s[`cell_vmax_${p}`];
+  if (vmin == null) return "—";
+  const nmin = cellNo(s[`cell_nmin_${p}`], s[`cpm_${p}`]), nmax = cellNo(s[`cell_nmax_${p}`], s[`cpm_${p}`]);
+  return (
+    <div style={{ lineHeight: 1.3 }}>
+      <div><span style={{ color: "#f85149" }}>min {Number(vmin).toFixed(3)} V</span>{nmin && <span className="muted"> · {nmin}</span>}</div>
+      <div><span style={{ color: "var(--green)" }}>max {Number(vmax).toFixed(3)} V</span>{nmax && <span className="muted"> · {nmax}</span>}</div>
+    </div>);
 }
 
 function Stat({ l, v, big }) {

@@ -31,7 +31,8 @@ CHARGE_TAPER = 1.2         # BMS u 100 % zpomaluje → odhad délky nabíjení �
 
 METRICS = ["battery_soc", "battery_soc_1", "battery_soc_2", "battery_power", "battery_voltage_1", "battery_voltage_2",
            "battery_current_1", "battery_current_2", "battery_cell_vmin_1", "battery_cell_vmax_1", "battery_cell_vmin_2",
-           "battery_cell_vmax_2", "battery_cell_tmin_1", "battery_cell_tmax_1", "battery_cell_tmin_2", "battery_cell_tmax_2",
+           "battery_cell_vmax_2", "battery_cell_nmin_1", "battery_cell_nmax_1", "battery_cell_nmin_2", "battery_cell_nmax_2",
+           "battery_bms_cells_per_module_1", "battery_bms_cells_per_module_2", "battery_cell_tmin_1", "battery_cell_tmax_1", "battery_cell_tmin_2", "battery_cell_tmax_2",
            "energy_bat_charge_total", "energy_bat_discharge_total", "pv_power", "grid_power", "load_power"]
 
 
@@ -398,5 +399,8 @@ async def _snapshot(t: dict, phase: str, step: int, phase_start: datetime, now: 
         t_max=max([v for k, v in m.items() if k.startswith("battery_cell_tmax")] or [None]) if any(k.startswith("battery_cell_tmax") for k in m) else None,
         inv_chg_total=m.get("energy_bat_charge_total"), inv_dis_total=m.get("energy_bat_discharge_total"),
         cell_vmin_1=m.get("battery_cell_vmin_1"), cell_vmax_1=m.get("battery_cell_vmax_1"),
-        cell_vmin_2=m.get("battery_cell_vmin_2"), cell_vmax_2=m.get("battery_cell_vmax_2"))
+        cell_vmin_2=m.get("battery_cell_vmin_2"), cell_vmax_2=m.get("battery_cell_vmax_2"),
+        cell_nmin_1=m.get("battery_cell_nmin_1"), cell_nmax_1=m.get("battery_cell_nmax_1"),
+        cell_nmin_2=m.get("battery_cell_nmin_2"), cell_nmax_2=m.get("battery_cell_nmax_2"),
+        cpm_1=m.get("battery_bms_cells_per_module_1"), cpm_2=m.get("battery_bms_cells_per_module_2"))
     await db.log(t["id"], f"{STEP_NAMES.get(phase, phase)} {step} %: {e:.2f} kWh od začátku kroku (+{e_step:.2f} kWh / {mins:.0f} min)")

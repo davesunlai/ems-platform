@@ -1,3 +1,7 @@
+## v1.8.30 — Tabulka snímků: čísla článků
+- Snímky ukládají i `cell_nmin/nmax_1/2` a `cpm_1/2` (články na modul); starší snímky dopočet z telemetrie.
+- Sloupce „článek bat. 1/2“: dva řádky „min 3.126 V · čl. 162 (modul 11, poz. 12)“ / „max …“ — stejný zápis jako u nejslabších článků.
+
 ## v1.8.29 — Tabulka snímků: články per pack
 - `battery_test_snapshots` += `cell_vmin_1/vmax_1/vmin_2/vmax_2` (nové snímky), starší dopočet z telemetrie k času snímku (`metrics_at`).
 - Tabulka: sloupce „SoC bat. 1 / 2“, „kWh bat. 1 / 2“, „článek bat. 1 min / max V“, „článek bat. 2 min / max V“.

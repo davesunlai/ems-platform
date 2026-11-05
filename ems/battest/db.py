@@ -56,7 +56,7 @@ async def ensure_schema() -> None:
                 msg TEXT NOT NULL
             )""")
         await conn.execute("ALTER TABLE localities ADD COLUMN IF NOT EXISTS main_breaker_a REAL")
-        for c in ("cell_vmin_1", "cell_vmax_1", "cell_vmin_2", "cell_vmax_2"):
+        for c in ("cell_vmin_1", "cell_vmax_1", "cell_vmin_2", "cell_vmax_2", "cell_nmin_1", "cell_nmax_1", "cell_nmin_2", "cell_nmax_2", "cpm_1", "cpm_2"):
             await conn.execute(f"ALTER TABLE battery_test_snapshots ADD COLUMN IF NOT EXISTS {c} REAL")
 
 

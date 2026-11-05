@@ -118,10 +118,16 @@ async def _with_live(t: dict) -> dict:
             up = ph in ("charge", "hold")
             s["e1_kwh"] = round(c1 if up else d1, 3); s["e2_kwh"] = round(c2 if up else d2, 3)
         prev[ph] = ts
-        if s.get("cell_vmin_1") is None:      # starší snímky: dopočet z telemetrie k času snímku
-            cm = await db.metrics_at(t["module_id"], ["battery_cell_vmin_1", "battery_cell_vmax_1", "battery_cell_vmin_2", "battery_cell_vmax_2"], ts)
-            s["cell_vmin_1"], s["cell_vmax_1"] = cm.get("battery_cell_vmin_1"), cm.get("battery_cell_vmax_1")
-            s["cell_vmin_2"], s["cell_vmax_2"] = cm.get("battery_cell_vmin_2"), cm.get("battery_cell_vmax_2")
+        if s.get("cell_vmin_1") is None or s.get("cell_nmin_1") is None:      # starší snímky: dopočet z telemetrie k času snímku
+            cm = await db.metrics_at(t["module_id"], ["battery_cell_vmin_1", "battery_cell_vmax_1", "battery_cell_vmin_2", "battery_cell_vmax_2",
+                                                      "battery_cell_nmin_1", "battery_cell_nmax_1", "battery_cell_nmin_2", "battery_cell_nmax_2",
+                                                      "battery_bms_cells_per_module_1", "battery_bms_cells_per_module_2"], ts, 900)
+            for p in (1, 2):
+                for k in ("vmin", "vmax", "nmin", "nmax"):
+                    if s.get(f"cell_{k}_{p}") is None:
+                        s[f"cell_{k}_{p}"] = cm.get(f"battery_cell_{k}_{p}")
+                if s.get(f"cpm_{p}") is None:
+                    s[f"cpm_{p}"] = cm.get(f"battery_bms_cells_per_module_{p}")
     if t["status"] in db.RUNNING and t.get("phase_started_at"):
         m = await db.latest_metrics(t["module_id"], ["battery_soc", "battery_power", "battery_power_1", "battery_power_2", "grid_power"], 300)
         ps = datetime.fromisoformat(t["phase_started_at"])
