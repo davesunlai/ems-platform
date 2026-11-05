@@ -191,12 +191,15 @@ async def series(device_id: str, t0: datetime, t1: datetime) -> list[dict]:
                    avg(value) FILTER (WHERE metric='battery_soc') AS soc,
                    avg(value) FILTER (WHERE metric='battery_soc_1') AS soc1,
                    avg(value) FILTER (WHERE metric='battery_soc_2') AS soc2,
+                   avg(value) FILTER (WHERE metric='battery_power_1') AS bat1_w,
+                   avg(value) FILTER (WHERE metric='battery_power_2') AS bat2_w,
                    avg(value) FILTER (WHERE metric='grid_power') AS grid_w,
                    avg(value) FILTER (WHERE metric='pv_power') AS pv_w
-            FROM samples WHERE device_id=$1 AND metric IN ('battery_power','battery_soc','battery_soc_1','battery_soc_2','grid_power','pv_power')
+            FROM samples WHERE device_id=$1 AND metric IN ('battery_power','battery_soc','battery_soc_1','battery_soc_2','battery_power_1','battery_power_2','grid_power','pv_power')
               AND time >= $2::timestamptz AND time <= $3::timestamptz
             GROUP BY t ORDER BY t""", device_id, t0, t1)
-    return [{"ts": r["t"].isoformat(), "bat_w": r["bat_w"], "soc": r["soc"], "soc1": r["soc1"], "soc2": r["soc2"], "grid_w": r["grid_w"], "pv_w": r["pv_w"]} for r in rows]
+    return [{"ts": r["t"].isoformat(), "bat_w": r["bat_w"], "soc": r["soc"], "soc1": r["soc1"], "soc2": r["soc2"],
+             "bat1_w": r["bat1_w"], "bat2_w": r["bat2_w"], "grid_w": r["grid_w"], "pv_w": r["pv_w"]} for r in rows]
 
 
 async def phase_marks(test_id: int) -> list[dict]:

@@ -1,3 +1,6 @@
+## v1.8.25 — Test baterie: výkon do baterie 1 / 2
+- Graf: řady „výkon baterie 1“ (fialová) a „výkon baterie 2“ (tyrkys) v kW na levé ose; v kurzorovém boxu; živé hodnoty „baterie 1 / 2 kW“. `series` nese `bat1_w/bat2_w`.
+
 ## v1.8.24 — Popisky úseků jako karty bez překryvu
 - Detail dne: každý úsek má kartu (pozadí, barevný rámeček, 3 řádky + ✏) nad křivkou; při kolizi se karta posune do dalšího řádku, pásmo se zvětší; vodicí čárka k úseku.
 

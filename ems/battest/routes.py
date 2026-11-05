@@ -119,10 +119,10 @@ async def _with_live(t: dict) -> dict:
             s["e1_kwh"] = round(c1 if up else d1, 3); s["e2_kwh"] = round(c2 if up else d2, 3)
         prev[ph] = ts
     if t["status"] in db.RUNNING and t.get("phase_started_at"):
-        m = await db.latest_metrics(t["module_id"], ["battery_soc", "battery_power", "grid_power"], 300)
+        m = await db.latest_metrics(t["module_id"], ["battery_soc", "battery_power", "battery_power_1", "battery_power_2", "grid_power"], 300)
         ps = datetime.fromisoformat(t["phase_started_at"])
         chg, dis = await db.energy_kwh(t["module_id"], ps, t1)
-        t["live"] = {"soc": m.get("battery_soc"), "bat_w": m.get("battery_power"), "grid_w": m.get("grid_power"),
+        t["live"] = {"soc": m.get("battery_soc"), "bat_w": m.get("battery_power"), "bat1_w": m.get("battery_power_1"), "bat2_w": m.get("battery_power_2"), "grid_w": m.get("grid_power"),
                      "e_phase_chg_kwh": round(chg, 2), "e_phase_dis_kwh": round(dis, 2),
                      "phase_elapsed_min": round((t1 - ps).total_seconds() / 60)}
     return t

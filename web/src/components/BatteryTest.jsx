@@ -186,6 +186,8 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
         <div style={{ margin: "6px 0", display: "flex", gap: 16, flexWrap: "wrap" }}>
           <Stat l="SoC teď" v={`${t.live.soc != null ? Math.round(t.live.soc) : "?"} %`} big />
           <Stat l="výkon baterie" v={`${t.live.bat_w != null ? (t.live.bat_w / 1000).toFixed(1) : "?"} kW`} />
+          {t.live.bat1_w != null && <Stat l="baterie 1" v={`${(t.live.bat1_w / 1000).toFixed(2)} kW`} />}
+          {t.live.bat2_w != null && <Stat l="baterie 2" v={`${(t.live.bat2_w / 1000).toFixed(2)} kW`} />}
           <Stat l="v kroku" v={`${t.live.phase_elapsed_min} min`} />
           <Stat l="nabito v kroku" v={`${t.live.e_phase_chg_kwh} kWh`} /><Stat l="vybito v kroku" v={`${t.live.e_phase_dis_kwh} kWh`} />
           <Stat l="síť" v={`${t.live.grid_w != null ? (t.live.grid_w / 1000).toFixed(1) : "?"} kW`} />
@@ -225,11 +227,13 @@ function TestChart({ t }) {
   const [hide, setHide] = useState({});           // legenda: skryté řady
   const [cur, setCur] = useState(null);           // křížový kurzor
   if (ser.length < 2) return <p className="muted" style={{ fontSize: 12 }}>Graf se vykreslí po prvních minutách dat.</p>;
-  const hasPacks = ser.some((p) => p.soc1 != null && p.soc2 != null);
+  const hasPacks = ser.some((p) => (p.soc1 != null && p.soc2 != null) || (p.bat1_w != null && p.bat2_w != null));
   const SERIES = [
     { k: "bat", label: "výkon baterie (+ nabíjení / − vybíjení)", color: "var(--green)", unit: "kW", get: (p) => (p.bat_w == null ? null : p.bat_w / 1000), axis: "kw" },
     { k: "soc", label: "SoC celkem", color: "#58a6ff", unit: "%", get: (p) => p.soc, axis: "pct", dash: "4 3" },
     ...(hasPacks ? [
+      { k: "bat1", label: "výkon baterie 1", color: "#a371f7", unit: "kW", get: (p) => (p.bat1_w == null ? null : p.bat1_w / 1000), axis: "kw" },
+      { k: "bat2", label: "výkon baterie 2", color: "#39c5cf", unit: "kW", get: (p) => (p.bat2_w == null ? null : p.bat2_w / 1000), axis: "kw" },
       { k: "soc1", label: "SoC baterie 1", color: "#a371f7", unit: "%", get: (p) => p.soc1, axis: "pct", dash: "2 3" },
       { k: "soc2", label: "SoC baterie 2", color: "#39c5cf", unit: "%", get: (p) => p.soc2, axis: "pct", dash: "2 3" }] : []),
     { k: "grid", label: "síť (+ odběr / − dodávka)", color: "#d29922", unit: "kW", get: (p) => (p.grid_w == null ? null : p.grid_w / 1000), axis: "kw", off: true },
