@@ -189,7 +189,10 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
           {t.live.bat1_w != null && <Stat l="baterie 1" v={`${(t.live.bat1_w / 1000).toFixed(2)} kW`} />}
           {t.live.bat2_w != null && <Stat l="baterie 2" v={`${(t.live.bat2_w / 1000).toFixed(2)} kW`} />}
           <Stat l="v kroku" v={`${t.live.phase_elapsed_min} min`} />
-          <Stat l="nabito v kroku" v={`${t.live.e_phase_chg_kwh} kWh`} /><Stat l="vybito v kroku" v={`${t.live.e_phase_dis_kwh} kWh`} />
+          <Stat l="nabito v kroku" v={`${t.live.e_phase_chg_kwh} kWh`} />
+          {t.live.e1_chg_kwh != null && <Stat l="nabito bat. 1 / 2" v={`${t.live.e1_chg_kwh} / ${t.live.e2_chg_kwh} kWh`} />}
+          <Stat l="vybito v kroku" v={`${t.live.e_phase_dis_kwh} kWh`} />
+          {t.live.e1_dis_kwh != null && <Stat l="vybito bat. 1 / 2" v={`${t.live.e1_dis_kwh} / ${t.live.e2_dis_kwh} kWh`} />}
           <Stat l="síť" v={`${t.live.grid_w != null ? (t.live.grid_w / 1000).toFixed(1) : "?"} kW`} />
         </div>)}
       <TestChart t={t} />

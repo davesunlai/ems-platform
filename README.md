@@ -1,3 +1,7 @@
+## v1.8.32 — Live blok testu: nabito/vybito per pack
+- `/battest/current|test` live += `e1/e2_chg_kwh`, `e1/e2_dis_kwh` (z `battery_power_1/2` od začátku kroku).
+- UI: „nabito bat. 1 / 2“ a „vybito bat. 1 / 2“ vedle celkových hodnot.
+
 ## v1.8.31 — Tabulka snímků: Δ článků
 - Sloupce „článek bat. 1/2“: třetí řádek „Δ NNN mV“ (max − min).
 

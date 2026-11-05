@@ -132,7 +132,9 @@ async def _with_live(t: dict) -> dict:
         m = await db.latest_metrics(t["module_id"], ["battery_soc", "battery_power", "battery_power_1", "battery_power_2", "grid_power"], 300)
         ps = datetime.fromisoformat(t["phase_started_at"])
         chg, dis = await db.energy_kwh(t["module_id"], ps, t1)
-        t["live"] = {"soc": m.get("battery_soc"), "bat_w": m.get("battery_power"), "bat1_w": m.get("battery_power_1"), "bat2_w": m.get("battery_power_2"), "grid_w": m.get("grid_power"),
+        c1, d1 = await db.energy_kwh(t["module_id"], ps, t1, "battery_power_1")
+        c2, d2 = await db.energy_kwh(t["module_id"], ps, t1, "battery_power_2")
+        t["live"] = {"e1_chg_kwh": round(c1, 2), "e1_dis_kwh": round(d1, 2), "e2_chg_kwh": round(c2, 2), "e2_dis_kwh": round(d2, 2),"soc": m.get("battery_soc"), "bat_w": m.get("battery_power"), "bat1_w": m.get("battery_power_1"), "bat2_w": m.get("battery_power_2"), "grid_w": m.get("grid_power"),
                      "e_phase_chg_kwh": round(chg, 2), "e_phase_dis_kwh": round(dis, 2),
                      "phase_elapsed_min": round((t1 - ps).total_seconds() / 60)}
     return t
