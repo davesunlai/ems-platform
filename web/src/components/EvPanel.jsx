@@ -210,9 +210,37 @@ function DayDetail({ locId, date, wbName, onClose }) {
     const car = run ? carAny(run) : carS.find((c) => overlaps(c, t.toISOString(), t.toISOString()));
     setCur({ x: e.clientX - b.left, y: e.clientY - b.top, w: b.width, p, t, run, car, far: bd > 15 * 60000 });
   };
-  const LBL = 60;                                   // pásmo pro popisky aut NAD křivkou
-  const W = 1400, H = 220 + LBL, L = 44, B = 26, T = 12 + LBL, R = 8;
+  const W = 1400, L = 44, B = 26, R = 8;
   const ser = d?.series || [];
+  // --- popisky úseků (karty NAD křivkou; při kolizi další řádek) — spočítat před vykreslením
+  const CARD_H = 50, ROW_H = CARD_H + 6;
+  const labels = (() => {
+    if (!d) return [];
+    const t0_ = new Date(`${date}T00:00:00`); const dayMs_ = 86400000;
+    const xs_ = (iso) => L + (W - L - R) * Math.max(0, Math.min(1, (new Date(iso) - t0_) / dayMs_));
+    const homePlace = (carS.find((c) => c.lat != null && d.runs.some((r) => overlaps(c, r.start, r.end))) || {}).place;
+    const items = [...d.runs.map((r) => ({ s: r.start, e: r.end, c: carAny(r), loc: carFor(r), kwh: r.kwh, approx: false, kind: "wb",
+                                           open: !!(d.sessions || []).find((x) => !x.ended_at && new Date(x.started_at) <= new Date(r.end)) && new Date(r.end) > Date.now() - 180000 })),
+      ...carS.filter((c) => !d.runs.some((r) => overlaps(c, r.start, r.end))).map((c) => ({ s: c.start, e: c.end || new Date().toISOString(), c, loc: c.lat != null ? c : null, kwh: c.kwh, approx: true, kind: "car", open: !c.end }))]
+      .filter((u) => xs_(u.e) - xs_(u.s) >= 2).sort((a1, b1) => new Date(a1.s) - new Date(b1.s));
+    const out = []; const rowsRight = [];           // pravý okraj poslední karty v řádku
+    for (const u of items) {
+      const durS = (new Date(u.e) - new Date(u.s)) / 1000;
+      const l1 = `${u.c ? `🚘 ${u.c.name}` : "🚘 auto neurčeno"}${u.open ? " · nabíjí se" : ""}`;
+      const l2 = (u.kwh != null ? `${u.approx ? "≈ " : ""}${Number(u.kwh).toFixed(u.approx ? 0 : 1)} kWh` : "") + (durS >= 60 ? ` · ${dur(durS)}` : "");
+      const l3 = (u.kind === "wb" ? `🏠 ${wbName}${homePlace ? ` · ${homePlace}` : ""}` : `🔌 ${u.c?.place_label || "mimo dům"}`) + (u.loc ? " 📍" : "");
+      const l4 = u.kind === "car" && u.loc && !u.c?.operator && has("admin") ? "✏ pojmenovat nabíječku" : null;
+      const wTxt = Math.max(l1.length, l2.length, l3.length, (l4 || "").length) * 6.6 + 14;
+      const cx = (xs_(u.s) + xs_(u.e)) / 2; let x = Math.max(L, Math.min(W - R - wTxt, cx - wTxt / 2));
+      let row = 0; while (row < rowsRight.length && rowsRight[row] > x - 4) row++;
+      rowsRight[row] = x + wTxt;
+      out.push({ u, x, cx, w: wTxt, row, l1, l2, l3, l4, col: u.kind === "wb" ? "var(--green)" : "#58a6ff" });
+    }
+    return out;
+  })();
+  const rows = Math.max(1, ...labels.map((l) => l.row + 1));
+  const LBL = rows * ROW_H + 4;                       // pásmo pro karty NAD křivkou
+  const H = 220 + LBL, T = 12 + LBL;
   const maxKw = Math.max(4, ...ser.map((p) => (p.power_w || 0) / 1000));
   const top = Math.ceil(maxKw / 2) * 2;
   const t0 = new Date(`${date}T00:00:00`); const dayMs = 86400000;
@@ -243,35 +271,18 @@ function DayDetail({ locId, date, wbName, onClose }) {
           {d.runs.map((r, i) => (
             <rect key={i} x={xs(r.start)} y={T} width={Math.max(1, xs(r.end) - xs(r.start))} height={H - T - B} fill="var(--green)" opacity="0.12" style={{ cursor: carFor(r) ? "pointer" : "default" }}
                   onClick={() => { const c = carFor(r); if (c) setMap({ lat: c.lat, lon: c.lon, title: `wallbox · ${tm(r.start)}–${tm(r.end)}` }); }} />))}
-          {/* popisek auta nad každým úsekem (wallbox zeleně, nabíjení mimo dům modře); „probíhá“ u otevřené relace */}
-          {[...d.runs.map((r) => ({ s: r.start, e: r.end, c: carAny(r), loc: carFor(r), kwh: r.kwh, approx: false, kind: "wb", open: !!(d.sessions || []).find((x) => !x.ended_at && new Date(x.started_at) <= new Date(r.end)) && new Date(r.end) > Date.now() - 180000 })),
-            ...carS.filter((c) => !d.runs.some((r) => overlaps(c, r.start, r.end))).map((c) => ({ s: c.start, e: c.end || new Date().toISOString(), c, loc: c.lat != null ? c : null, kwh: c.kwh, approx: true, kind: "car", open: !c.end }))]
-            .map((u, i) => { const x0 = xs(u.s), x1 = xs(u.e); const w = x1 - x0; if (w < 2) return null;
-              const name = u.c ? `🚘 ${u.c.name}` : "🚘 auto neurčeno"; const txt = `${name}${u.open ? " · nabíjí se" : ""}`; const small = w < 90;
-              const col = u.kind === "wb" ? "var(--green)" : "#58a6ff";
-              const durS = (new Date(u.e) - new Date(u.s)) / 1000;
-              const kwh = (u.kwh != null ? `${u.approx ? "≈ " : ""}${Number(u.kwh).toFixed(u.approx ? 0 : 1)} kWh` : "") + (durS >= 60 ? ` · ${dur(durS)}` : "");
-              const homePlace = (carS.find((c) => c.lat != null && d.runs.some((r) => overlaps(c, r.start, r.end))) || {}).place;
-              const where = u.kind === "wb" ? `🏠 ${wbName}${homePlace ? ` · ${homePlace}` : ""}` : `🔌 ${u.c?.place_label || "mimo dům"}`;
-              const title = u.loc ? `${u.c?.name || "wallbox"} · ${tm(u.s)}–${tm(u.e)}` : null;
-              return (
-                <g key={`lbl${i}`}>
-                  <line x1={x0 + w / 2} x2={x0 + w / 2} y1={T - 4} y2={T} stroke={col} strokeWidth="1.2" />
-                  <text x={x0 + w / 2} y={T - LBL + 14} textAnchor="middle" fontSize={small ? 10 : 12} fontWeight="700"
-                        fill={col} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">
-                    {small && w < 40 ? "🚘" : small ? (u.c ? u.c.name : "?") : txt}
-                  </text>
-                  {/* kWh + místo vždy (i u úzkých úseků, menším písmem — smí přesahovat šířku úseku) */}
-                  <text x={x0 + w / 2} y={T - LBL + 29} textAnchor="middle" fontSize={small ? 10 : 11.5} fontWeight="600" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>
-                  <text x={x0 + w / 2} y={T - LBL + 43} textAnchor="middle" fontSize={small ? 9.5 : 11} fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
-                        style={{ cursor: u.loc ? "pointer" : "default" }}
-                        onClick={(e) => { e.stopPropagation(); if (u.loc) setMap({ lat: u.loc.lat, lon: u.loc.lon, title }); }}>
-                    {where}{u.loc ? " 📍" : ""}
-                  </text>
-                  {u.kind === "car" && u.loc && !u.c?.operator && has("admin") && (
-                    <text x={x0 + w / 2} y={T - LBL + 56} textAnchor="middle" fontSize={small ? 9.5 : 10.5} fill="var(--amber)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
-                          style={{ cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); namePlace(u.c); }}>✏ pojmenovat nabíječku</text>)}
-                </g>); })}
+          {/* karty popisků NAD křivkou — pozadí, schodovité řádky bez překryvu; vodicí čárka k úseku */}
+          {labels.map((lb, i) => { const y0 = 6 + lb.row * ROW_H; const u = lb.u; const title = u.loc ? `${u.c?.name || "wallbox"} · ${tm(u.s)}–${tm(u.e)}` : null; return (
+            <g key={`lbl${i}`}>
+              <line x1={lb.cx} x2={lb.cx} y1={y0 + CARD_H} y2={T} stroke={lb.col} strokeWidth="1" strokeDasharray="2 2" opacity="0.8" />
+              <rect x={lb.x} y={y0} width={lb.w} height={CARD_H} rx="6" fill="var(--bg)" stroke={lb.col} strokeWidth="1" opacity="0.97" />
+              <text x={lb.x + 7} y={y0 + 14} fontSize="11.5" fontWeight="700" fill={lb.col}>{lb.l1}</text>
+              <text x={lb.x + 7} y={y0 + 28} fontSize="11" fontWeight="600" fill="var(--fg)">{lb.l2}</text>
+              <text x={lb.x + 7} y={y0 + 42} fontSize="10.5" fill="var(--fg)" style={{ cursor: u.loc ? "pointer" : "default" }}
+                    onClick={(e) => { e.stopPropagation(); if (u.loc) setMap({ lat: u.loc.lat, lon: u.loc.lon, title }); }}>{lb.l3}</text>
+              {lb.l4 && <text x={lb.x + lb.w - 7} y={y0 + 14} textAnchor="end" fontSize="10" fill="var(--amber)" style={{ cursor: "pointer" }}
+                              onClick={(e) => { e.stopPropagation(); namePlace(u.c); }}>{lb.l4}</text>}
+            </g>); })}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
           {cur && !cur.far && (<g pointerEvents="none">
             <line x1={xs(cur.p.ts)} x2={xs(cur.p.ts)} y1={T} y2={H - B} stroke="var(--fg)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.6" />

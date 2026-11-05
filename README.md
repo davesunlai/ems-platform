@@ -1,3 +1,6 @@
+## v1.8.24 — Popisky úseků jako karty bez překryvu
+- Detail dne: každý úsek má kartu (pozadí, barevný rámeček, 3 řádky + ✏) nad křivkou; při kolizi se karta posune do dalšího řádku, pásmo se zvětší; vodicí čárka k úseku.
+
 ## v1.8.23 — Záporný důkaz od startu relace + ruční volba auta
 - NOCHARGING od auta ≥ start relace − 60 s (dřív +45 s → ve stejné minutě se nepoužil), relace ≥ 2 min, wallbox > 0,5 kW → −3.
 - Panel wallboxu: výběr „🚘 auto u wallboxu“ u živého stavu (právo control) → `PUT /api/ev/sessions/{id}/car`; automat ruční volbu přepíše jen silným důkazem (skóre ≥ 3).
