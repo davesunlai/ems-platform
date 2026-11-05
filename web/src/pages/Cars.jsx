@@ -137,7 +137,8 @@ export default function Cars() {
 // 📍 Místa nabíjení: OSM (Nominatim + Overpass zrcadla) + OpenChargeMap (klíč)
 function GeoSettings() {
   const [st, setSt] = useState(null); const [key, setKey] = useState(""); const [msg, setMsg] = useState("");
-  const load = () => api.carsGeoSettings().then(setSt).catch(() => {});
+  const [places, setPlaces] = useState([]);
+  const load = () => { api.carsGeoSettings().then(setSt).catch(() => {}); api.carsGeoPlaces().then((r) => setPlaces(r || [])).catch(() => {}); };
   useEffect(() => { load(); }, []);
   const save = async () => { try { await api.carsGeoSettingsPut({ ocm_api_key: key }); setKey(""); setMsg("Uloženo."); load(); } catch (e) { setMsg(e.message); } };
   const retry = async () => { try { const r = await api.carsGeoRetry(); setMsg(`Smazáno ${r.deleted} míst bez provozovatele — dohledají se při příštím otevření detailu dne.`); } catch (e) { setMsg(e.message); } };
@@ -155,6 +156,14 @@ function GeoSettings() {
         <button className="btn" onClick={retry} title="smaže z cache místa bez provozovatele">↻ Dohledat provozovatele znovu</button>
       </div>
       {msg && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{msg}</div>}
+      {places.length > 0 && (
+        <table style={{ fontSize: 12, marginTop: 8 }}>
+          <thead><tr><th>✏ Ručně pojmenovaná místa</th><th>provozovatel</th><th>název</th><th>obec</th><th>okruh</th><th></th></tr></thead>
+          <tbody>{places.map((p) => (
+            <tr key={p.id}><td><a href={`https://maps.google.com/?q=${p.lat},${p.lon}`} target="_blank" rel="noreferrer">{Number(p.lat).toFixed(4)}, {Number(p.lon).toFixed(4)}</a></td>
+              <td><b>{p.operator || "—"}</b></td><td>{p.name || "—"}</td><td>{p.place || "—"}</td><td>{Math.round(p.radius_m)} m</td>
+              <td><button className="btn" style={{ padding: "1px 7px" }} onClick={async () => { if (window.confirm("Smazat ruční místo?")) { await api.carsGeoPlaceDel(p.id); load(); } }}>✕</button></td></tr>))}
+          </tbody></table>)}
     </div>
   );
 }

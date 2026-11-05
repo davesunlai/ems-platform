@@ -1,3 +1,8 @@
+## v1.8.18 — Ručně pojmenované nabíječky
+- `geo_places` (lat, lon, okruh 150 m, provozovatel, název): mají přednost před OSM/OCM (ČEZ Unčovice v žádné databázi není).
+  Detail dne: u úseku bez provozovatele „✏ pojmenovat nabíječku“ (admin) → dialog → hned se propíše; Auta → 📍 Místa: seznam + mazání.
+- OCM dotaz `compact=false` (jinak chybí OperatorInfo). API `/api/cars/geo-places` GET/POST/DELETE.
+
 ## v1.8.17 — Geo: IPv4-only HTTPS, delší timeouty
 - Kontejner api má IPv6 bez cesty ven → overpass-api.de „Network is unreachable“; `_IPv4HTTPSConnection` vynucuje IPv4 (Nominatim, Overpass, OCM).
 - Overpass timeout 8 → 40 s (dotaz `[timeout:30]`, běží na pozadí); osm.jp vyřazen (neplatný certifikát); pořadí api.de → private.coffee → kumi.

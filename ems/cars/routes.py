@@ -172,6 +172,37 @@ async def geo_settings_put(body: GeoSettingsIn, _: dict = Depends(admin)):
     return {"ok": True}
 
 
+class PlaceIn(BaseModel):
+    lat: float
+    lon: float
+    operator: str | None = None
+    name: str | None = None
+    place: str | None = None
+    radius_m: float = 150
+
+
+@router.get("/geo-places")
+async def geo_places(_: dict = Depends(read)):
+    from . import geo
+    return await geo.user_places()
+
+
+@router.post("/geo-places")
+async def geo_place_add(body: PlaceIn, user: dict = Depends(admin)):
+    """Ručně pojmenovat nabíječku (operátor, název) — platí pro body do radius_m; OSM/OCM ji neznají."""
+    from . import geo
+    if not (body.operator or body.name):
+        raise HTTPException(status_code=400, detail="Zadej provozovatele nebo název")
+    return await geo.add_user_place(body.lat, body.lon, body.operator, body.name, body.place, max(30, min(2000, body.radius_m)), user.get("username"))
+
+
+@router.delete("/geo-places/{pid}")
+async def geo_place_del(pid: int, _: dict = Depends(admin)):
+    from . import geo
+    await geo.delete_user_place(pid)
+    return {"ok": True}
+
+
 @router.post("/geo-retry")
 async def geo_retry(_: dict = Depends(admin)):
     """Smaže z cache místa bez provozovatele → při příštím otevření detailu se dohledají znovu (zrcadla + OCM)."""

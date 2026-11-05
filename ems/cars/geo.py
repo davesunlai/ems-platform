@@ -56,6 +56,12 @@ async def ensure_schema() -> None:
                 place TEXT, operator TEXT, station_name TEXT, distance_m REAL,
                 raw JSONB, resolved_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (lat4, lon4))""")
+        # ručně pojmenovaná místa (nabíječky, které OSM/OCM neznají) — mají přednost
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS geo_places (
+                id SERIAL PRIMARY KEY, lat DOUBLE PRECISION NOT NULL, lon DOUBLE PRECISION NOT NULL,
+                radius_m REAL NOT NULL DEFAULT 150, operator TEXT, name TEXT, place TEXT,
+                created_by TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
 
 
 def _get(url: str, timeout: float = 6) -> dict:
@@ -134,7 +140,7 @@ async def _ocm(lat: float, lon: float, out: dict) -> None:
         return
     try:
         import math
-        url = f"{OCM}?{urllib.parse.urlencode({'output': 'json', 'latitude': lat, 'longitude': lon, 'distance': RADIUS_M / 1000, 'distanceunit': 'km', 'maxresults': 10, 'compact': 'true', 'verbose': 'false'})}"
+        url = f"{OCM}?{urllib.parse.urlencode({'output': 'json', 'latitude': lat, 'longitude': lon, 'distance': RADIUS_M / 1000, 'distanceunit': 'km', 'maxresults': 10, 'compact': 'false', 'verbose': 'false'})}"   # compact=true vynechává OperatorInfo
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json", "X-API-Key": key})
         def _run():
             with _opener.open(req, timeout=20) as r:
@@ -181,6 +187,40 @@ def _schedule(keys: list[tuple[float, float]]) -> None:
     _bg_tasks.add(t); t.add_done_callback(_bg_tasks.discard)
 
 
+async def user_places() -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, lat, lon, radius_m, operator, name, place FROM geo_places ORDER BY id")
+    return [dict(r) for r in rows]
+
+
+async def add_user_place(lat: float, lon: float, operator: str | None, name: str | None, place: str | None, radius_m: float, user: str | None) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        r = await conn.fetchrow("INSERT INTO geo_places (lat, lon, radius_m, operator, name, place, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+                                lat, lon, radius_m, operator, name, place, user)
+        # cache pro okolní body přepsat (ať se nemusí čekat na pozadí)
+        await conn.execute("UPDATE geo_cache SET operator=$3, station_name=$4, place=COALESCE($5, place), resolved_at=now() "
+                           "WHERE abs(lat4-$1) < 0.01 AND abs(lon4-$2) < 0.015", lat, lon, operator, name, place)
+    return dict(r)
+
+
+async def delete_user_place(pid: int) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM geo_places WHERE id=$1", pid)
+
+
+def _match_user_place(places: list[dict], lat: float, lon: float) -> dict | None:
+    import math
+    best = None
+    for p in places:
+        d = math.hypot((p["lat"] - lat) * 111320, (p["lon"] - lon) * 111320 * math.cos(math.radians(lat)))
+        if d <= float(p["radius_m"]) and (best is None or d < best[1]):
+            best = (p, d)
+    return best[0] if best else None
+
+
 async def resolve_many(points: list[tuple[float, float]], max_new: int = 3, background: bool = True) -> dict[tuple[float, float], dict]:
     """Vrátí {(lat4, lon4): {place, operator, station_name, distance_m}} z cache; chybějící/neúplné
     s background=True naplánuje na pozadí a vrátí hned (volající dostane místo při příštím dotazu)."""
@@ -195,6 +235,11 @@ async def resolve_many(points: list[tuple[float, float]], max_new: int = 3, back
             [k[0] for k in keys], [k[1] for k in keys])
     out = {}
     from datetime import datetime, timezone, timedelta
+    places = await user_places()
+    for k in keys:                       # ručně pojmenovaná místa mají přednost (OSM/OCM je neznají)
+        up = _match_user_place(places, *k)
+        if up:
+            out[k] = {"place": up.get("place"), "operator": up.get("operator"), "station_name": up.get("name"), "distance_m": 0, "user_place_id": up["id"]}
     for r in rows:
         k = (round(float(r["lat4"]), 4), round(float(r["lon4"]), 4))
         if k not in keys:

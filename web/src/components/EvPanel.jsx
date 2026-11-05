@@ -171,7 +171,15 @@ export function MiniMap({ lat, lon, w = 230, h = 130, zoom = 15 }) {
 }
 
 function DayDetail({ locId, date, wbName, onClose }) {
+  const { has } = useAuth();
   const [d, setD] = useState(null);
+  const namePlace = async (c) => {        // ✏ ruční pojmenování nabíječky (OSM/OCM ji neznají)
+    const op = window.prompt(`Provozovatel nabíječky u ${c.place || "tohoto místa"} (např. ČEZ, PRE, Ionity):`, c.operator || "");
+    if (op == null) return;
+    const nm = window.prompt("Název stanice (nepovinné):", c.station_name || "") || null;
+    try { await api.carsGeoPlaceAdd({ lat: c.lat, lon: c.lon, operator: op.trim() || null, name: nm, place: c.place || null, radius_m: 150 }); setCarS(await api.carsSessions(locId, `date=${date}`)); }
+    catch (e) { window.alert(e.message); }
+  };
   const [carS, setCarS] = useState([]);           // relace aut (CarData) v tento den — s GPS
   const [map, setMap] = useState(null);            // {lat, lon, title}
   useEffect(() => {
@@ -258,6 +266,9 @@ function DayDetail({ locId, date, wbName, onClose }) {
                         onClick={(e) => { e.stopPropagation(); if (u.loc) setMap({ lat: u.loc.lat, lon: u.loc.lon, title }); }}>
                     {where}{u.loc ? " 📍" : ""}
                   </text>
+                  {u.kind === "car" && u.loc && !u.c?.operator && has("admin") && (
+                    <text x={x0 + w / 2} y={T + (small ? 47 : 54)} textAnchor="middle" fontSize={small ? 9 : 10} fill="var(--amber)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
+                          style={{ cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); namePlace(u.c); }}>✏ pojmenovat nabíječku</text>)}
                 </g>); })}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
           {cur && !cur.far && (<g pointerEvents="none">
@@ -278,6 +289,7 @@ function DayDetail({ locId, date, wbName, onClose }) {
             {!cur.run && !cs && <div className="muted">mimo nabíjení</div>}
             {(cur.run || cs) && <div className="muted">{loc?.lat != null ? "📍 klikni pro velkou mapu" : cur.run ? "📍 doma (wallbox)" : "📍 poloha nepřišla"}{!cur.car && cur.run ? " · auto neurčeno" : ""}</div>}
             {loc?.lat != null && <div style={{ marginTop: 5 }}><MiniMap lat={Number(loc.lat)} lon={Number(loc.lon)} /></div>}
+            {!cur.run && cs && !cs.operator && has("admin") && <div style={{ color: "var(--amber)", marginTop: 3 }}>✏ provozovatel neznámý — klikni na popisek úseku a pojmenuj ho</div>}
           </div>); })()}
         {map && <MapModal {...map} onClose={() => setMap(null)} />}
         <table style={{ fontSize: 12, width: "100%" }}>
