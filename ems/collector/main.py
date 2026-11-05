@@ -223,10 +223,22 @@ async def process_queue(active: dict) -> None:
     except Exception as exc:
         logger.debug("Načtení fronty povelů selhalo: %s", exc)
         return
+    try:
+        from ems.battest import db as battest_db, engine as battest_engine
+        locked = await battest_db.running_modules()
+    except Exception:
+        locked, battest_engine = set(), None
     for c in cmds:
         adapter = (active.get(c["module_id"]) or {}).get("adapter")
         if adapter is None:
             continue
+        # 🧪 test baterie: do fronty modulu smí jen test, keepalive, strop exportu a samoléčba
+        if c["module_id"] in locked and battest_engine is not None:
+            src = (c["params"] or {}).get("source") or c.get("username") or "manual"
+            if src not in battest_engine.ALLOWED_SOURCES and c["action"] not in ("force_poke", "read_controls", "read_holding", "read_input"):
+                await control_db.complete(c["id"], False, {"error": "běží test baterie — povel odmítnut", "source": src})
+                logger.info("battest: povel #%s %s od %s odmítnut (zámek)", c["id"], c["action"], src)
+                continue
         # Zatoulaný keepalive „poke" (z doby před Stopem) nesmí znovu nahodit force.
         if c["action"] == "force_poke":
             try:
@@ -374,6 +386,8 @@ async def run() -> None:
         await cars_db.ensure_schema()
         from ems.emsbox import db as eb_db
         await eb_db.ensure_schema()
+        from ems.battest import db as battest_db
+        await battest_db.ensure_schema()
         from ems.alerts import db as alerts_db
         await alerts_db.ensure_schema()
         from ems.cells import db as cells_db
@@ -413,6 +427,11 @@ async def run() -> None:
             except Exception as exc:
                 logger.debug("cars tick: %s", exc)
             await tick_forecast(state)
+            try:
+                from ems.battest import engine as battest_engine
+                await battest_engine.tick(state)         # 🧪 test baterie (zámek řízení modulu)
+            except Exception as exc:
+                logger.debug("battest tick: %s", exc)
             await tick_planner(state)
             await tick_alerts()
             await tick_force_keepalive(state)
@@ -649,7 +668,14 @@ async def tick_planner(state: dict) -> None:
             if not planner_on:
                 plan_pick = None          # vypnutý plánovač nikdy nevydává povely (ani stop) — jen ⏰ a úklid po sobě
             src_map = await _control_sources_map()
+            try:
+                from ems.battest import db as battest_db
+                locked = await battest_db.running_modules()
+            except Exception:
+                locked = set()
             for dev in devs:
+                if dev in locked:
+                    continue                      # 🧪 běží test baterie — plánovač/⏰ modul nechávají na pokoji
                 st = states.get(dev) or {}
                 pick = pick_control(rule_pick, plan_pick, src_map.get(dev, {}))
                 if pick is None:
@@ -1089,9 +1115,14 @@ async def evaluate_spot_discharge(price, skip_devices=None) -> None:
     if not rules:
         return
     states = await control_db.get_states([r["module_id"] for r in rules])
+    try:
+        from ems.battest import db as _bt_db
+        locked = await _bt_db.running_modules()
+    except Exception:
+        locked = set()
     for r in rules:
         dev = r["module_id"]
-        if dev in skip:           # plánovač má přednost
+        if dev in skip or dev in locked:           # plánovač má přednost; 🧪 test baterie blokuje vše
             continue
         st = states.get(dev) or {}
         # ruční přebití: po manuálním povelu nech modul chvíli na pokoji

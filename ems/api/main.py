@@ -71,6 +71,8 @@ async def lifespan(app: FastAPI):
         await _ev_db.ensure_schema()
         from ems.cars import db as _cars_db
         await _cars_db.ensure_schema()
+        from ems.battest import db as _bt_db
+        await _bt_db.ensure_schema()
         from ems.emsbox import db as _eb_db
         await _eb_db.ensure_schema()
         from ems.contact import db as contact_db
@@ -91,7 +93,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="1.7.21", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="1.8.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -216,6 +218,8 @@ from ems.outages.routes import router as outages_router
 app.include_router(outages_router)
 from ems.cells.routes import router as cells_router  # noqa: E402
 app.include_router(cells_router)
+from ems.battest.routes import router as battest_router  # noqa: E402
+app.include_router(battest_router)
 from ems.datadiag.routes import router as datadiag_router  # noqa: E402
 app.include_router(datadiag_router)
 from ems.alerts.routes import router as alerts_router

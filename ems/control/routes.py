@@ -371,6 +371,15 @@ async def enqueue_command(module_id: str, body: CommandRequest,
     m = await _get_solis(module_id)
     _validate_command(body.action, body.params, m.adapter)
     await db.ensure_queue_schema()
+    if body.action not in ("read_controls", "read_holding", "read_input"):
+        try:
+            from ems.battest import db as battest_db
+            if await battest_db.running(module_id):
+                raise HTTPException(status_code=409, detail="Na modulu běží 🧪 test baterie — ruční povely jsou zablokované. Test lze jen přerušit.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     if body.action == "force_discharge" and body.params.get("power") is not None:
         # 🛡 strop exportu má nejvyšší prioritu i pro ruční povely (pokuty)
         try:

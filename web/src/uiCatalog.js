@@ -23,6 +23,7 @@ export const UI_CATALOG = [
     { key: "ctl:sources", label: "Zdroje řízení modulu (🧠/⏰/⚡) + samoléčba" },
     { key: "ctl:outputs", label: "🔌 Spotřebiče / spínané výstupy" },
     { key: "ctl:ev", label: "🚗 Wallbox — ruční řízení (proud, fáze, start/stop)" },
+    { key: "ctl:battery_test", label: "🧪 Test kapacity a kondice baterie (spuštění / přerušení)" },
     { key: "ctl:audit", label: "📜 Audit povelů" },
     { key: "ctl:scan", label: "🔬 Sken registrů měniče (diagnostika BMS/článků)" },
   ]},

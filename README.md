@@ -1,3 +1,17 @@
+## v1.8.0 — 🧪 Test kapacity a kondice baterie (verze 1: automat + zámek + základní UI)
+- `ems/battest/`: tabulky `battery_tests`, `battery_test_snapshots`, `battery_test_log`; automat v kolektoru (à 20 s):
+  preparing (čtení 43024 → dočasně dno) → discharge0 → charge (snímek po 10 %) → hold → discharge (snímek po 10 %) → done/aborted.
+  Energie = ∫battery_power (DC strana) lichoběžníkem ze `samples`. Výsledek: nabito/vybito/dokap, kapacita = E_vyb/(strop−dno), SoH, účinnost, drift packů.
+- Zámek řízení: běžící test → plánovač/⏰/spot modul vynechají, fronta povelů odmítne cizí zdroje (povolen test, keepalive, strop exportu, self-heal),
+  API ručního povelu vrátí 409. Při konci/přerušení: stop, obnova 43024, uvolnění wallboxu.
+- Bezpečnost: ztráta komunikace > 120 s, článek < 2,8 / > 3,65 V, teplota > 50 °C → abort. Hlavní jistič (`localities.main_breaker_a`) → ořez nabíjení.
+  Strop exportu má přednost (tick_export_guard). Wallbox při startu omezen na 6 A / 1f.
+- Předkontrola: blokátory (jistič nezadán, export limit, komunikace, běžící test), upozornění (43024, wallbox, blokace), odhad délky, doporučený start
+  (vybíjení v noci podle západu/východu slunce z lat/lon lokality).
+- API `/api/battery-test/{loc}/{defaults|precheck|start|current|list}`, `/test/{id}`, `/test/{id}/abort`. Právo: `control` + UI prvek `ctl:battery_test` (role).
+- UI: tlačítko 🧪 v boxu Články baterie a v detailu baterie; dialog s parametry, předkontrolou, průběhem (tabulka snímků), přerušením, historií a výsledkem.
+  Lokality: pole „Hlavní jistič A“.
+
 ## v1.7.21 — Nabíjení mimo dům z růstu SoC
 - `car_sessions`: relace i ze souvislého růstu SoC (≥ 2 %, mezera ≤ 3 h) — auto při DC nabíjení (ČEZ, Ionity) nestreamuje stav; poloha = GPS v době konce.
   Bez měřeného výkonu se uvádí průměr ΔkWh/čas. Překryv se stavovou relací → sloučení.

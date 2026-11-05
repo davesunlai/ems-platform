@@ -81,6 +81,7 @@ function ForecastSection({ loc, onChange }) {
   const [lat, setLat] = useState(loc.lat ?? "");
   const [lon, setLon] = useState(loc.lon ?? "");
   const [kwp, setKwp] = useState(loc.pv_kwp_total ?? "");
+  const [breaker, setBreaker] = useState(loc.main_breaker_a ?? "");
   const [blocks, setBlocks] = useState([]);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState([]);
@@ -111,6 +112,7 @@ function ForecastSection({ loc, onChange }) {
       await api.updateLocality(loc.id, {
         lat: lat === "" ? null : Number(lat), lon: lon === "" ? null : Number(lon),
         pv_kwp_total: kwp === "" ? null : Number(kwp),
+        main_breaker_a: breaker === "" ? null : Number(breaker),
       });
       await api.setForecastBlocks(loc.id, blocks.map((b) => ({
         name: b.name, share_pct: Number(b.share_pct || 0), panel_type: b.panel_type,
@@ -161,6 +163,7 @@ function ForecastSection({ loc, onChange }) {
         <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>Lat</label><input style={inp} value={lat} onChange={(e) => setLat(e.target.value)} /></div>
         <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>Lon</label><input style={inp} value={lon} onChange={(e) => setLon(e.target.value)} /></div>
         <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }}>FVE kWp celkem</label><input style={{ ...inp, borderColor: kwpMissing ? "#e5534b" : "var(--border)" }} value={kwp} onChange={(e) => setKwp(e.target.value)} placeholder="např. 23" /></div>
+        <div style={{ flex: "1 1 90px" }}><label style={{ fontSize: 12 }} title="3f hlavní jistič — strop odběru ze sítě (test baterie, nabíjení ze sítě)">Hlavní jistič A</label><input style={inp} value={breaker} onChange={(e) => setBreaker(e.target.value)} placeholder="např. 25" /></div>
       </div>
 
       <div style={{ fontSize: 12, fontWeight: 600, margin: "6px 0 2px" }}>

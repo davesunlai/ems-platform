@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { EvPanel, EV_CAR } from "../components/EvPanel";
+import { BatteryTestButton } from "../components/BatteryTest";
 import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
 import ForecastChart from "../components/ForecastChart";
@@ -735,6 +736,7 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose }) {
           <div className="muted" style={{ fontSize: 11.5, marginBottom: 2 }}>Ruční ovládání baterie</div>
           <ForceBtn mode="charge" dev={d.control_module} soc={d.soc} maxKw={d.max_charge_kw} />
           <ForceBtn mode="discharge" dev={d.control_module} soc={d.soc} maxKw={d.max_discharge_kw} />
+          <div style={{ marginTop: 6 }}><BatteryTestButton locId={locId} /></div>
         </div>)}
       <Links items={[{ to: "/control", l: "🎛 plánovač, časový plán, spot pravidla" }, has("admin") && { to: "/localities", l: "⚙ hlídání článků (Lokality)" }]} />
     </>;
@@ -1544,6 +1546,7 @@ function CellsBlock({ deviceIds, devs, localityId }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
         <h3 style={{ margin: 0 }}>🔋 Články baterie (BMS)</h3>
         <span className="muted" style={{ fontSize: 12 }}>· {id}{age ? ` · ${age}` : ""}</span>
+        {localityId && <BatteryTestButton locId={localityId} compact />}
         <span style={{ flex: 1 }} />
         {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
         <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
