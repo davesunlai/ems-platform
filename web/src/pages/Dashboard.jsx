@@ -89,6 +89,7 @@ function ControlBanners({ deviceIds, localityId }) {
   const [states, setStates] = useState({});
   const [outputs, setOutputs] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [bt, setBt] = useState(null);          // 🧪 běžící test baterie
   const key = deviceIds.join(",");
   useEffect(() => {
     if (!deviceIds.length && !localityId) return;
@@ -97,6 +98,7 @@ function ControlBanners({ deviceIds, localityId }) {
       if (deviceIds.length) api.controlStates(key).then((r) => alive && setStates(r.states || {})).catch(() => {});
       api.listOutputs().then((list) => alive && setOutputs(list || [])).catch(() => {});
       api.spotPlan().then((r) => alive && setPlans(r.plans || [])).catch(() => {});
+      if (localityId) api.btCurrent(localityId).then((r) => alive && setBt(r)).catch(() => {});
     };
     load();
     const t = setInterval(load, 5000);
@@ -108,7 +110,9 @@ function ControlBanners({ deviceIds, localityId }) {
   const items = deviceIds.map((id) => ({ id, st: states[id] }))
     .filter(({ st }) => st && st.action && st.action !== "idle");
   const onOutputs = (outputs || []).filter((o) => o.is_on && (localityId == null || o.locality_id === localityId));
-  if (!items.length && !onOutputs.length && !myPlans.length) return null;
+  if (!items.length && !onOutputs.length && !myPlans.length && !bt) return null;
+  const BT_PHASE = { preparing: "příprava", discharge0: "fáze 0 — vybití na dno", charge: "fáze 1 — nabíjení", hold: "fáze 2 — výdrž na stropu", discharge: "fáze 3 — vybíjení" };
+  const btSnap = bt?.snapshots?.length ? bt.snapshots[bt.snapshots.length - 1] : null;
 
   const fmtT = (iso) => {
     const d = new Date(iso); const now = new Date();
@@ -121,6 +125,14 @@ function ControlBanners({ deviceIds, localityId }) {
 
   return (
     <div style={{ margin: "0 0 12px" }}>
+      {bt && (
+        <div style={{ marginBottom: 6, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--amber)",
+                      background: "color-mix(in srgb, var(--amber) 10%, transparent)", fontSize: 12.5 }}>
+          <span style={{ fontWeight: 700 }}>🧪 Běží test baterie #{bt.id}</span> · {BT_PHASE[bt.status] || bt.status}
+          <span className="muted"> · od {new Date(bt.started_at).toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+          {btSnap && <span> · poslední snímek {btSnap.soc_step} % ({Number(btSnap.e_phase_kwh).toFixed(1)} kWh ve fázi)</span>}
+          <div className="muted" style={{ marginTop: 2 }}>Plánovač, časový plán i ruční řízení baterie jsou pro modul {bt.module_id} zablokované — průběh a přerušení v 🔋 Články baterie → 🧪.</div>
+        </div>)}
       {myPlans.map((p) => (
         <div key={`plan${p.module_id}`} style={{ marginBottom: 6, padding: "8px 12px", borderRadius: 10,
           border: "1px dashed var(--border)", background: "color-mix(in srgb, var(--blue) 8%, transparent)", fontSize: 12.5 }}>

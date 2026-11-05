@@ -1,3 +1,7 @@
+## v1.8.4 — Test baterie: banner v dashboardu + e-maily
+- Dashboard: žlutý banner „🧪 Běží test baterie #N · fáze · poslední snímek“ nad schématem.
+- Provozní události `battery_test` (spuštěn, fáze 1/2/3, dokončen s výsledkem, PŘERUŠEN s důvodem) → výstrahy + e-mail uživatelům s notifikacemi lokality.
+
 ## v1.8.3 — Předkontrola ukazuje strop importu
 - Předkontrola testu: výpočet „fáze × 230 V × A × 0,95 = N kW“ + strop exportu.
 

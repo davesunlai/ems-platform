@@ -146,6 +146,8 @@ async def start(locality_id: int, module_id: str, params: dict, username: str | 
     saved = {"soc_now": pc["soc_now"], "estimate": pc["estimate"]}
     t = await db.create(locality_id, module_id, params, saved, username)
     await db.log(t["id"], f"Test založen uživatelem {username or '?'}: {params}")
+    await _event(t, "spuštěn", f"{username or '?'} · nabíjení {params['p_chg_kw']} kW, vybíjení {params['p_dis_kw']} kW, výdrž {params['hold_min']} min, "
+                               f"{params['floor_pct']:g}–{params['ceil_pct']:g} % · odhad ≈ {pc['estimate']['h_total']} h. Řízení modulu {module_id} je do konce testu zablokované.")
     # krok 1: přečíst řídicí registry (43024) — výsledek vyzvedne tick
     cid = await control_db.enqueue(module_id, "read_controls", {"source": SRC, "reason": "test baterie: snímek nastavení"}, username=SRC)
     await db.update(t["id"], saved={**saved, "read_cmd": cid})
@@ -170,6 +172,15 @@ async def abort(test_id: int, reason: str, username: str | None = None) -> dict 
     return await db.get(test_id)
 
 
+async def _event(t: dict, title: str, detail: str = "") -> None:
+    """Provozní událost lokality → zobrazí se ve výstrahách a odejde e-mailem uživatelům s notifikacemi."""
+    try:
+        from ems.alerts import db as alerts_db
+        await alerts_db.record_event(t.get("locality_id"), "battery_test", f"Test baterie #{t['id']}: {title}", detail)
+    except Exception as exc:
+        logger.debug("battest event: %s", exc)
+
+
 async def _finish(t: dict, status: str, reason: str | None) -> None:
     mod = t["module_id"]
     await control_db.enqueue(mod, "stop", {"source": SRC, "reason": f"test baterie: {status}"}, username=SRC)
@@ -182,6 +193,12 @@ async def _finish(t: dict, status: str, reason: str | None) -> None:
         await control_db.enqueue(ev, "ev_release", {"source": SRC, "reason": "test baterie: konec"}, username=SRC)
     await db.update(t["id"], status=status, ended_at=datetime.now(timezone.utc), abort_reason=reason)
     await db.log(t["id"], f"Konec testu: {status}" + (f" — {reason}" if reason else ""), "warn" if status == "aborted" else "info")
+    if status == "aborted":
+        await _event(t, "PŘERUŠEN", reason or "")
+    else:
+        full = await db.get(t["id"]); r = (full or {}).get("result") or {}
+        await _event(t, "dokončen", f"nabito {r.get('e_charge_kwh')} kWh, vybito {r.get('e_discharge_kwh')} kWh, kapacita ≈ {r.get('capacity_est_kwh')} kWh, "
+                                    f"SoH {r.get('soh_pct')} %, účinnost {r.get('efficiency_pct')} %")
 
 
 # ---------- výpočet výsledku ----------
@@ -287,6 +304,7 @@ async def _step(t: dict, state: dict) -> None:
     if status == "discharge0":
         if soc <= floor:
             await db.log(tid, f"Dno {floor:g} % dosaženo (SoC {soc:.0f} %) → nabíjení.")
+            await _event(t, "fáze 1 — nabíjení", f"dno {floor:g} % dosaženo, nabíjení {p['p_chg_kw']} kW na {ceil:g} %")
             await db.update(tid, status="charge", phase_started_at=now, saved={**saved, "next_step": _next_step_up(soc, floor)})
             await _snapshot(t, "charge", int(round(soc)), now, now, m, 0.0, None)
             return
@@ -301,6 +319,7 @@ async def _step(t: dict, state: dict) -> None:
             await db.update(tid, saved=saved)
         if soc >= ceil:
             await db.log(tid, f"Strop {ceil:g} % dosažen → výdrž {p['hold_min']} min.")
+            await _event(t, "fáze 2 — výdrž", f"strop {ceil:g} % dosažen, výdrž {p['hold_min']} min")
             await db.update(tid, status="hold", phase_started_at=now)
         return
 
@@ -309,6 +328,7 @@ async def _step(t: dict, state: dict) -> None:
         if (now - phase_start).total_seconds() >= float(p["hold_min"]) * 60:
             await _snapshot(t, "hold", int(ceil), phase_start, now, m)
             await db.log(tid, "Výdrž ukončena → vybíjení.")
+            await _event(t, "fáze 3 — vybíjení", f"vybíjení {p['p_dis_kw']} kW na {floor:g} %")
             await db.update(tid, status="discharge", phase_started_at=now, saved={**saved, "next_step": _next_step_down(soc, ceil)})
             await _snapshot(t, "discharge", int(round(soc)), now, now, m, 0.0, None)
         return
