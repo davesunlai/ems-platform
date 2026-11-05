@@ -89,7 +89,7 @@ async def abort(test_id: int, user: dict = Depends(tester)):
 async def current(locality_id: int, _: dict = Depends(read)):
     for t in await db.running():
         if t["locality_id"] == locality_id:
-            return await db.get(t["id"])
+            return await _with_live(await db.get(t["id"]))
     return None
 
 
@@ -98,9 +98,25 @@ async def list_tests(locality_id: int, limit: int = 50, _: dict = Depends(read))
     return await db.list_tests(locality_id, limit)
 
 
+async def _with_live(t: dict) -> dict:
+    """Doplní živý stav (SoC, výkon, energie v aktuální fázi) a sérii po minutě pro graf."""
+    from datetime import datetime, timezone
+    t0 = datetime.fromisoformat(t["started_at"]); t1 = datetime.fromisoformat(t["ended_at"]) if t.get("ended_at") else datetime.now(timezone.utc)
+    t["series"] = await db.series(t["module_id"], t0, t1)
+    t["phase_marks"] = await db.phase_marks(t["id"])
+    if t["status"] in db.RUNNING and t.get("phase_started_at"):
+        m = await db.latest_metrics(t["module_id"], ["battery_soc", "battery_power", "grid_power"], 300)
+        ps = datetime.fromisoformat(t["phase_started_at"])
+        chg, dis = await db.energy_kwh(t["module_id"], ps, t1)
+        t["live"] = {"soc": m.get("battery_soc"), "bat_w": m.get("battery_power"), "grid_w": m.get("grid_power"),
+                     "e_phase_chg_kwh": round(chg, 2), "e_phase_dis_kwh": round(dis, 2),
+                     "phase_elapsed_min": round((t1 - ps).total_seconds() / 60)}
+    return t
+
+
 @router.get("/test/{test_id}")
 async def get_test(test_id: int, _: dict = Depends(read)):
     t = await db.get(test_id)
     if not t:
         raise HTTPException(status_code=404, detail="Test nenalezen")
-    return t
+    return await _with_live(t)

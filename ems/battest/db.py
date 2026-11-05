@@ -178,3 +178,34 @@ async def latest_metrics(device_id: str, metrics: list[str], max_age_s: int = 18
             "SELECT DISTINCT ON (metric) metric, value, time FROM samples WHERE device_id=$1 AND metric = ANY($2::text[]) "
             "AND time > now() - make_interval(secs => $3) ORDER BY metric, time DESC", device_id, metrics, max_age_s)
     return {r["metric"]: float(r["value"]) for r in rows}
+
+
+async def series(device_id: str, t0: datetime, t1: datetime) -> list[dict]:
+    """Průběh po minutě: výkon baterie (W, + nabíjení / − vybíjení), SoC, síť, FVE."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT time_bucket('1 minute', time) AS t,
+                   avg(value) FILTER (WHERE metric='battery_power') AS bat_w,
+                   avg(value) FILTER (WHERE metric='battery_soc') AS soc,
+                   avg(value) FILTER (WHERE metric='grid_power') AS grid_w,
+                   avg(value) FILTER (WHERE metric='pv_power') AS pv_w
+            FROM samples WHERE device_id=$1 AND metric IN ('battery_power','battery_soc','grid_power','pv_power')
+              AND time >= $2::timestamptz AND time <= $3::timestamptz
+            GROUP BY t ORDER BY t""", device_id, t0, t1)
+    return [{"ts": r["t"].isoformat(), "bat_w": r["bat_w"], "soc": r["soc"], "grid_w": r["grid_w"], "pv_w": r["pv_w"]} for r in rows]
+
+
+async def phase_marks(test_id: int) -> list[dict]:
+    """Začátky fází z protokolu (log) — pro stínování grafu."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT ts, msg FROM battery_test_log WHERE test_id=$1 ORDER BY ts", test_id)
+    out = []
+    for r in rows:
+        m = r["msg"]
+        ph = ("discharge0" if "fáze 0" in m else "charge" if "→ nabíjení" in m else "hold" if "→ výdrž" in m
+              else "discharge" if "→ vybíjení" in m else None)
+        if ph:
+            out.append({"phase": ph, "ts": r["ts"].isoformat()})
+    return out

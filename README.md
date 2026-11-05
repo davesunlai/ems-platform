@@ -1,3 +1,7 @@
+## v1.8.5 — Test baterie: živý graf
+- `/current` a `/test/{id}` nesou `series` (po minutě: výkon baterie, SoC, síť, FVE), `phase_marks`, `live` (SoC, výkon, energie ve fázi, čas ve fázi).
+- Dialog: živé hodnoty, graf výkonu ±kW + SoC (pravá osa) se stínováním fází a značkami snímků, sloupce kWh po 10 % s jmenovitou linkou.
+
 ## v1.8.4 — Test baterie: banner v dashboardu + e-maily
 - Dashboard: žlutý banner „🧪 Běží test baterie #N · fáze · poslední snímek“ nad schématem.
 - Provozní události `battery_test` (spuštěn, fáze 1/2/3, dokončen s výsledkem, PŘERUŠEN s důvodem) → výstrahy + e-mail uživatelům s notifikacemi lokality.
