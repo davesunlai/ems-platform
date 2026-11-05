@@ -209,6 +209,16 @@ function DayDetail({ locId, date, onClose }) {
           {d.runs.map((r, i) => (
             <rect key={i} x={xs(r.start)} y={T} width={Math.max(1, xs(r.end) - xs(r.start))} height={H - T - B} fill="var(--green)" opacity="0.12" style={{ cursor: carFor(r) ? "pointer" : "default" }}
                   onClick={() => { const c = carFor(r); if (c) setMap({ lat: c.lat, lon: c.lon, title: `wallbox · ${tm(r.start)}–${tm(r.end)}` }); }} />))}
+          {/* popisek auta nad každým úsekem (wallbox zeleně, nabíjení mimo dům modře); „probíhá“ u otevřené relace */}
+          {[...d.runs.map((r) => ({ s: r.start, e: r.end, c: carAny(r), kind: "wb", open: !!(d.sessions || []).find((x) => !x.ended_at && new Date(x.started_at) <= new Date(r.end)) && new Date(r.end) > Date.now() - 180000 })),
+            ...carS.filter((c) => !d.runs.some((r) => overlaps(c, r.start, r.end))).map((c) => ({ s: c.start, e: c.end || new Date().toISOString(), c, kind: "car", open: !c.end }))]
+            .map((u, i) => { const x0 = xs(u.s), x1 = xs(u.e); const w = x1 - x0; if (w < 2) return null;
+              const name = u.c ? `🚘 ${u.c.name}` : "🚘 auto neurčeno"; const txt = `${name}${u.open ? " · nabíjí se" : ""}`; const small = w < 90;
+              return (
+                <text key={`lbl${i}`} x={x0 + w / 2} y={T + (small ? 11 : 13)} textAnchor="middle" fontSize={small ? 9 : 11} fontWeight="600"
+                      fill={u.kind === "wb" ? "var(--green)" : "#58a6ff"} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">
+                  {small && w < 40 ? "🚘" : small ? (u.c ? u.c.name : "?") : txt}
+                </text>); })}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
           {cur && !cur.far && (<g pointerEvents="none">
             <line x1={xs(cur.p.ts)} x2={xs(cur.p.ts)} y1={T} y2={H - B} stroke="var(--fg)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.6" />

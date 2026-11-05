@@ -1,3 +1,6 @@
+## v1.8.10 — Auto nad každým úsekem v detailu dne
+- Detail dne wallboxu: nad každým úsekem popisek „🚘 iX3“ (zelený = wallbox, modrý = nabíjení mimo dům), u běžícího „· nabíjí se“; úzké úseky jen jméno/ikona.
+
 ## v1.8.9 — Jednotky v nadpisech správně (kWh, ne KWH)
 - Zrušen `text-transform: uppercase` u hlaviček tabulek, titulků grafů, popisků karet a polí (verzálky měnily význam jednotek: kW ≠ KW, b ≠ B). Zůstává jen u značky a názvu role.
 
