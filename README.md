@@ -1,3 +1,11 @@
+## v1.8.20 — Popisky nad křivkou; sloupce testu na časové ose s packy
+- Detail dne wallboxu: popisky aut (auto / kWh · doba / místo / ✏) v pásmu NAD křivkou výkonu, svislá značka na úsek.
+- Test baterie: sloupce po 10 % kreslené na stejné časové ose jako graf nad nimi (od předchozího snímku do tohoto); uvnitř dva podsloupce
+  = kWh do/z baterie 1 (fialová) a 2 (tyrkys) za úsek (`e1_kwh`/`e2_kwh` dopočet z `battery_power_1/2` při čtení, `t_from`).
+
+## v1.8.19 — Kurzorový box mimo kurzor
+- Detail dne wallboxu i graf testu: info box je ukotvený v horním rohu grafu na opačné straně, než je kurzor (přeskočí, když kurzor přejde polovinu) — nikdy nezakrývá místo, kam uživatel kliká.
+
 ## v1.8.18 — Ručně pojmenované nabíječky
 - `geo_places` (lat, lon, okruh 150 m, provozovatel, název): mají přednost před OSM/OCM (ČEZ Unčovice v žádné databázi není).
   Detail dne: u úseku bez provozovatele „✏ pojmenovat nabíječku“ (admin) → dialog → hned se propíše; Auta → 📍 Místa: seznam + mazání.

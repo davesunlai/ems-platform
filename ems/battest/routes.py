@@ -102,8 +102,22 @@ async def _with_live(t: dict) -> dict:
     """Doplní živý stav (SoC, výkon, energie v aktuální fázi) a sérii po minutě pro graf."""
     from datetime import datetime, timezone
     t0 = datetime.fromisoformat(t["started_at"]); t1 = datetime.fromisoformat(t["ended_at"]) if t.get("ended_at") else datetime.now(timezone.utc)
+    # začátek každé fáze z protokolu → t_from prvního snímku fáze
+    marks = {m["phase"]: datetime.fromisoformat(m["ts"]) for m in await db.phase_marks(t["id"])}
     t["series"] = await db.series(t["module_id"], t0, t1)
     t["phase_marks"] = await db.phase_marks(t["id"])
+    # energie po packách mezi snímky (pack 1 / pack 2) — dopočet při čtení z battery_power_1/2
+    prev = {}
+    for s in t.get("snapshots") or []:
+        ph = s["phase"]; ts = datetime.fromisoformat(s["ts"])
+        start = prev.get(ph) or marks.get(ph) or (datetime.fromisoformat(t["phase_started_at"]) if ph == t["status"] and t.get("phase_started_at") else None)
+        s["t_from"] = start.isoformat() if start else None
+        if start and (ts - start).total_seconds() > 30:
+            c1, d1 = await db.energy_kwh(t["module_id"], start, ts, "battery_power_1")
+            c2, d2 = await db.energy_kwh(t["module_id"], start, ts, "battery_power_2")
+            up = ph in ("charge", "hold")
+            s["e1_kwh"] = round(c1 if up else d1, 3); s["e2_kwh"] = round(c2 if up else d2, 3)
+        prev[ph] = ts
     if t["status"] in db.RUNNING and t.get("phase_started_at"):
         m = await db.latest_metrics(t["module_id"], ["battery_soc", "battery_power", "grid_power"], 300)
         ps = datetime.fromisoformat(t["phase_started_at"])

@@ -157,17 +157,18 @@ async def last_snapshot(test_id: int, phase: str) -> dict | None:
     return _row(r) if r else None
 
 
-async def energy_kwh(device_id: str, t0: datetime, t1: datetime) -> tuple[float, float]:
-    """(nabito, vybito) kWh z metric battery_power (+ nabíjení / − vybíjení) lichoběžníkem; Δt omezeno na 60 s (výpadky)."""
+async def energy_kwh(device_id: str, t0: datetime, t1: datetime, metric: str = "battery_power") -> tuple[float, float]:
+    """(nabito, vybito) kWh z metriky výkonu (+ nabíjení / − vybíjení) lichoběžníkem; Δt omezeno na 60 s (výpadky).
+    metric: battery_power (celek), battery_power_1 / battery_power_2 (packy)."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         r = await conn.fetchrow("""
             WITH s AS (
               SELECT time, value, lead(time) OVER (ORDER BY time) AS t2, lead(value) OVER (ORDER BY time) AS v2
-              FROM samples WHERE device_id=$1 AND metric='battery_power' AND time >= $2::timestamptz AND time <= $3::timestamptz)
+              FROM samples WHERE device_id=$1 AND metric=$4 AND time >= $2::timestamptz AND time <= $3::timestamptz)
             SELECT COALESCE(SUM(CASE WHEN (value+v2)/2 > 0 THEN (value+v2)/2 * LEAST(EXTRACT(EPOCH FROM (t2-time)), 60) END),0)/3.6e6 AS chg,
                    COALESCE(SUM(CASE WHEN (value+v2)/2 < 0 THEN -(value+v2)/2 * LEAST(EXTRACT(EPOCH FROM (t2-time)), 60) END),0)/3.6e6 AS dis
-            FROM s WHERE t2 IS NOT NULL""", device_id, t0, t1)
+            FROM s WHERE t2 IS NOT NULL""", device_id, t0, t1, metric)
     return float(r["chg"] or 0), float(r["dis"] or 0)
 
 

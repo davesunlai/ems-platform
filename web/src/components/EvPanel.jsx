@@ -208,9 +208,10 @@ function DayDetail({ locId, date, wbName, onClose }) {
     const p = ser[best];
     const run = (d.runs || []).find((r) => new Date(r.start) <= t && new Date(r.end) >= t);
     const car = run ? carAny(run) : carS.find((c) => overlaps(c, t.toISOString(), t.toISOString()));
-    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, p, t, run, car, far: bd > 15 * 60000 });
+    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, w: b.width, p, t, run, car, far: bd > 15 * 60000 });
   };
-  const W = 1400, H = 220, L = 44, B = 26, T = 12, R = 8;
+  const LBL = 60;                                   // pásmo pro popisky aut NAD křivkou
+  const W = 1400, H = 220 + LBL, L = 44, B = 26, T = 12 + LBL, R = 8;
   const ser = d?.series || [];
   const maxKw = Math.max(4, ...ser.map((p) => (p.power_w || 0) / 1000));
   const top = Math.ceil(maxKw / 2) * 2;
@@ -255,19 +256,20 @@ function DayDetail({ locId, date, wbName, onClose }) {
               const title = u.loc ? `${u.c?.name || "wallbox"} · ${tm(u.s)}–${tm(u.e)}` : null;
               return (
                 <g key={`lbl${i}`}>
-                  <text x={x0 + w / 2} y={T + (small ? 11 : 13)} textAnchor="middle" fontSize={small ? 9 : 11} fontWeight="600"
+                  <line x1={x0 + w / 2} x2={x0 + w / 2} y1={T - 4} y2={T} stroke={col} strokeWidth="1.2" />
+                  <text x={x0 + w / 2} y={T - LBL + 14} textAnchor="middle" fontSize={small ? 10 : 12} fontWeight="700"
                         fill={col} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">
                     {small && w < 40 ? "🚘" : small ? (u.c ? u.c.name : "?") : txt}
                   </text>
                   {/* kWh + místo vždy (i u úzkých úseků, menším písmem — smí přesahovat šířku úseku) */}
-                  <text x={x0 + w / 2} y={T + (small ? 24 : 27)} textAnchor="middle" fontSize={small ? 9.5 : 11} fontWeight="600" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>
-                  <text x={x0 + w / 2} y={T + (small ? 36 : 41)} textAnchor="middle" fontSize={small ? 9 : 10.5} fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
+                  <text x={x0 + w / 2} y={T - LBL + 29} textAnchor="middle" fontSize={small ? 10 : 11.5} fontWeight="600" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>
+                  <text x={x0 + w / 2} y={T - LBL + 43} textAnchor="middle" fontSize={small ? 9.5 : 11} fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
                         style={{ cursor: u.loc ? "pointer" : "default" }}
                         onClick={(e) => { e.stopPropagation(); if (u.loc) setMap({ lat: u.loc.lat, lon: u.loc.lon, title }); }}>
                     {where}{u.loc ? " 📍" : ""}
                   </text>
                   {u.kind === "car" && u.loc && !u.c?.operator && has("admin") && (
-                    <text x={x0 + w / 2} y={T + (small ? 47 : 54)} textAnchor="middle" fontSize={small ? 9 : 10} fill="var(--amber)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
+                    <text x={x0 + w / 2} y={T - LBL + 56} textAnchor="middle" fontSize={small ? 9.5 : 10.5} fill="var(--amber)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
                           style={{ cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); namePlace(u.c); }}>✏ pojmenovat nabíječku</text>)}
                 </g>); })}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
@@ -280,7 +282,7 @@ function DayDetail({ locId, date, wbName, onClose }) {
           const cs = carS.find((c) => overlaps(c, cur.t.toISOString(), cur.t.toISOString()));   // relace auta (CarData) v tom čase
           const loc = cur.run ? carFor(cur.run) : cs;
           return (
-          <div style={{ position: "absolute", left: cur.x > 620 ? cur.x - 270 : cur.x + 22, top: Math.max(40, cur.y - 30), background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
+          <div style={{ position: "absolute", ...(cur.x > (cur.w || 1200) / 2 ? { left: 56 } : { right: 12 }), top: 44, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
                         padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 230 }}>
             <div><b>{tm(cur.p.ts)}</b> · <b style={{ color: "var(--green)" }}>{((cur.p.power_w || 0) / 1000).toFixed(2)} kW</b>{cur.p.amp_set != null ? ` · ${cur.p.amp_set} A` : ""}{cur.run?.phases ? ` · ${cur.run.phases}f` : ""}</div>
             {cur.car && <div>🚘 <b>{cur.car.name}</b>{cs?.soc_from != null ? ` · ${Math.round(cs.soc_from)} → ${cs.soc_to != null ? Math.round(cs.soc_to) : "?"} %` : ""}{cs?.kwh != null ? ` · ≈ ${cs.kwh} kWh` : ""}</div>}

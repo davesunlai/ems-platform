@@ -260,7 +260,7 @@ function TestChart({ t }) {
     let best = 0, bd = Infinity;
     ser.forEach((p, i) => { const d = Math.abs(new Date(p.ts).getTime() - tt); if (d < bd) { bd = d; best = i; } });
     const mark = [...marks].reverse().find((m) => new Date(m.ts).getTime() <= new Date(ser[best].ts).getTime());
-    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, p: ser[best], step: mark ? PH[mark.phase]?.[1] : "⚙ 0 · Příprava" });
+    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, w: b.width, p: ser[best], step: mark ? PH[mark.phase]?.[1] : "⚙ 0 · Příprava" });
   };
   return (
     <div style={{ position: "relative" }}>
@@ -294,7 +294,7 @@ function TestChart({ t }) {
         </g>)}
       </svg>
       {cur && (
-        <div style={{ position: "absolute", left: cur.x > 700 ? cur.x - 290 : cur.x + 22, top: Math.max(30, cur.y - 20), background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
+        <div style={{ position: "absolute", ...(cur.x > (cur.w || 1200) / 2 ? { left: 60 } : { right: 60 }), top: 36, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
                       padding: "6px 10px", fontSize: 12.5, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 250 }}>
           <div><b>{tm(cur.p.ts)}</b> <span className="muted">· {cur.step}</span></div>
           {SERIES.filter((sr) => vis(sr) && sr.get(cur.p) != null).map((sr) => (
@@ -308,27 +308,61 @@ function TestChart({ t }) {
   );
 }
 
-// Sloupce kWh po 10 % (⬆ nabíjení zelené, ⬇ vybíjení červené) s časem úseku
+// Sloupce kWh po 10 % na STEJNÉ časové ose jako graf nad nimi: sloupec = od předchozího snímku do tohoto;
+// uvnitř dva podsloupce = kolik kWh teklo do/z baterie 1 a 2 (když měnič hlásí packy)
 function StepBars({ t }) {
-  const snaps = (t.snapshots || []).filter((s) => (s.phase === "charge" || s.phase === "discharge") && s.e_step_kwh != null && s.minutes_step > 0.5);
-  if (!snaps.length) return null;
+  const ser = t.series || [];
+  const snaps = (t.snapshots || []).filter((s) => (s.phase === "charge" || s.phase === "discharge") && s.e_step_kwh != null && s.minutes_step > 0.5 && s.t_from);
+  if (!snaps.length || ser.length < 2) return null;
   const nominal = Number(t.params?.capacity_kwh || 0) / 10;
-  const W = 1400, H = 190, L = 46, T = 18, B = 40; const n = snaps.length; const bw = Math.min(80, (W - L - 10) / n - 8);
-  const maxV = Math.max(nominal || 0, ...snaps.map((s) => Number(s.e_step_kwh)));
+  const W = 1400, H = 210, L = 54, R = 52, T = 18, B = 34, F = 13;
+  const t0 = new Date(t.started_at).getTime(); const t1 = new Date(ser[ser.length - 1].ts).getTime() + 60000;
+  const span = Math.max(1, t1 - t0);
+  const xs = (ts) => L + (W - L - R) * ((new Date(ts).getTime() - t0) / span);
+  const maxV = Math.max(nominal || 0, ...snaps.map((s) => Number(s.e_step_kwh))) * 1.15;
   const y = (v) => T + (H - T - B) * (1 - v / maxV);
+  const hasPacks = snaps.some((s) => s.e1_kwh != null && s.e2_kwh != null);
+  const stepMs = span < 2 * 3600000 ? 600000 : span < 6 * 3600000 ? 1800000 : span < 30 * 3600000 ? 3600000 : 7200000;
+  const ticks = []; for (let x = Math.ceil(t0 / stepMs) * stepMs; x < t1; x += stepMs) ticks.push(x);
+  const tm = (ts) => new Date(ts).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", marginTop: 4 }}>
-      {nominal > 0 && <g><line x1={L} x2={W - 10} y1={y(nominal)} y2={y(nominal)} stroke="var(--amber)" strokeDasharray="4 3" />
-        <text x={W - 12} y={y(nominal) - 4} textAnchor="end" fontSize="13" fill="var(--amber)">jmenovitě {nominal.toFixed(2)} kWh / 10 %</text></g>}
-      <text x={4} y={T + 2} fontSize="13" fill="var(--muted)">kWh</text>
-      {snaps.map((s, i) => { const x = L + 6 + i * ((W - L - 10) / n); const v = Number(s.e_step_kwh); const up = s.phase === "charge"; return (
-        <g key={s.id}>
-          <rect x={x} y={y(v)} width={bw} height={H - B - y(v)} fill={up ? "var(--green)" : "#f85149"} opacity="0.8" rx="3" />
-          <text x={x + bw / 2} y={y(v) - 4} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--fg)">{v.toFixed(2)}</text>
-          <text x={x + bw / 2} y={H - B + 15} textAnchor="middle" fontSize="13" fill="var(--fg)">{up ? "⬆" : "⬇"} {s.soc_step} %</text>
-          <text x={x + bw / 2} y={H - B + 30} textAnchor="middle" fontSize="12" fill="var(--muted)">{Math.round(s.minutes_step)} min · {(v / (s.minutes_step / 60)).toFixed(1)} kW</text>
-        </g>); })}
-    </svg>
+    <div>
+      <div style={{ display: "flex", gap: 14, fontSize: 12.5, margin: "8px 0 2px" }}>
+        <span><span style={{ display: "inline-block", width: 14, height: 10, background: "var(--green)", borderRadius: 2 }} /> kWh za 10 % (⬆ nabíjení)</span>
+        <span><span style={{ display: "inline-block", width: 14, height: 10, background: "#f85149", borderRadius: 2 }} /> kWh za 10 % (⬇ vybíjení)</span>
+        {hasPacks && <><span><span style={{ display: "inline-block", width: 14, height: 10, background: "#a371f7", borderRadius: 2 }} /> baterie 1</span>
+          <span><span style={{ display: "inline-block", width: 14, height: 10, background: "#39c5cf", borderRadius: 2 }} /> baterie 2</span></>}
+        <span className="muted">— čárkovaně jmenovitých {nominal.toFixed(2)} kWh / 10 %</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}>
+        {[0, maxV / 2, maxV].map((v) => (
+          <g key={v}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--border)" strokeWidth="0.6" />
+            <text x={L - 5} y={y(v) + 4} textAnchor="end" fontSize={F} fill="var(--muted)">{v.toFixed(1)}</text></g>))}
+        <text x={4} y={T + 2} fontSize={F} fill="var(--muted)">kWh</text>
+        {ticks.map((x) => <g key={x}><line x1={xs(x)} x2={xs(x)} y1={T} y2={H - B + 5} stroke="var(--border)" strokeWidth="0.6" />
+          <text x={xs(x)} y={H - B + 19} textAnchor="middle" fontSize={F} fill="var(--muted)">{tm(x)}</text></g>)}
+        {nominal > 0 && <line x1={L} x2={W - R} y1={y(nominal)} y2={y(nominal)} stroke="var(--amber)" strokeDasharray="5 4" />}
+        {snaps.map((s) => {
+          const x0 = xs(s.t_from), x1 = xs(s.ts); const w = Math.max(3, x1 - x0); const v = Number(s.e_step_kwh); const up = s.phase === "charge";
+          const col = up ? "var(--green)" : "#f85149"; const narrow = w < 46;
+          const pw = Math.max(2, (w - 8) / 2);
+          return (
+            <g key={s.id}>
+              <rect x={x0 + 1} y={y(v)} width={w - 2} height={H - B - y(v)} fill={col} opacity="0.35" rx="3" />
+              {hasPacks && s.e1_kwh != null && (<>
+                <rect x={x0 + 3} y={y(Number(s.e1_kwh))} width={pw} height={H - B - y(Number(s.e1_kwh))} fill="#a371f7" opacity="0.9" rx="2" />
+                <rect x={x0 + 3 + pw + 2} y={y(Number(s.e2_kwh))} width={pw} height={H - B - y(Number(s.e2_kwh))} fill="#39c5cf" opacity="0.9" rx="2" />
+                {!narrow && <>
+                  <text x={x0 + 3 + pw / 2} y={y(Number(s.e1_kwh)) - 3} textAnchor="middle" fontSize="10.5" fill="#a371f7" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">{Number(s.e1_kwh).toFixed(1)}</text>
+                  <text x={x0 + 3 + pw + 2 + pw / 2} y={y(Number(s.e2_kwh)) - 3} textAnchor="middle" fontSize="10.5" fill="#39c5cf" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">{Number(s.e2_kwh).toFixed(1)}</text>
+                </>}
+              </>)}
+              <text x={x0 + w / 2} y={y(v) - (hasPacks ? 16 : 4)} textAnchor="middle" fontSize={narrow ? 10 : 13} fontWeight="700" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{v.toFixed(2)}</text>
+              <text x={x0 + w / 2} y={H - B - 4} textAnchor="middle" fontSize={narrow ? 10 : 12.5} fontWeight="600" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{up ? "⬆" : "⬇"} {s.soc_step} %</text>
+              {!narrow && <text x={x0 + w / 2} y={H - B - 18} textAnchor="middle" fontSize="10.5" fill="var(--muted)" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">{Math.round(s.minutes_step)} min · {(v / (s.minutes_step / 60)).toFixed(1)} kW</text>}
+            </g>); })}
+      </svg>
+    </div>
   );
 }
 
