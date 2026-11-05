@@ -1,3 +1,6 @@
+## v1.8.31 — Tabulka snímků: Δ článků
+- Sloupce „článek bat. 1/2“: třetí řádek „Δ NNN mV“ (max − min).
+
 ## v1.8.30 — Tabulka snímků: čísla článků
 - Snímky ukládají i `cell_nmin/nmax_1/2` a `cpm_1/2` (články na modul); starší snímky dopočet z telemetrie.
 - Sloupce „článek bat. 1/2“: dva řádky „min 3.126 V · čl. 162 (modul 11, poz. 12)“ / „max …“ — stejný zápis jako u nejslabších článků.

@@ -403,6 +403,7 @@ function cellCol(s, p) {
     <div style={{ lineHeight: 1.3 }}>
       <div><span style={{ color: "#f85149" }}>min {Number(vmin).toFixed(3)} V</span>{nmin && <span className="muted"> · {nmin}</span>}</div>
       <div><span style={{ color: "var(--green)" }}>max {Number(vmax).toFixed(3)} V</span>{nmax && <span className="muted"> · {nmax}</span>}</div>
+      {vmax != null && <div style={{ color: "var(--amber)" }}>Δ {Math.round((Number(vmax) - Number(vmin)) * 1000)} mV</div>}
     </div>);
 }
 
