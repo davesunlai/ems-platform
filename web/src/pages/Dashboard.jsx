@@ -358,7 +358,7 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
       {groups.map((g) => (
         <div key={g.id} style={{ marginBottom: 6 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600,
-                        textTransform: "uppercase", letterSpacing: 0.4, opacity: 0.55, margin: "8px 2px 4px" }}>
+                        letterSpacing: 0.4, opacity: 0.55, margin: "8px 2px 4px" }}>
             <Icon name={g.icon} size={13} /> {g.label}
           </div>
           <div className="cards">

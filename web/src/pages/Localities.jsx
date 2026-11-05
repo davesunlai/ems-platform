@@ -38,7 +38,7 @@ function OutageSection({ loc, onChange }) {
 
   return (
     <div style={{ marginTop: 16, borderTop: "1px solid var(--border, #2a2a35)", paddingTop: 12 }}>
-      <label className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>
+      <label className="muted" style={{ fontSize: 12, letterSpacing: ".05em" }}>
         Plánované odstávky (ČEZ)
       </label>
       <p className="muted" style={{ fontSize: 12, margin: "4px 0 10px" }}>
@@ -492,7 +492,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
 
       <div className="row" style={{ marginTop: 14, alignItems: "flex-start", gap: 30 }}>
         <div style={{ flex: 1 }}>
-          <label className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>Zařízení</label>
+          <label className="muted" style={{ fontSize: 12, letterSpacing: ".05em" }}>Zařízení</label>
           <div style={{ margin: "6px 0" }}>
             {loc.devices.length === 0 && <span className="muted">žádné</span>}
             {loc.devices.map((d) => (
@@ -511,7 +511,7 @@ function LocalityCard({ loc, allUsers, allModules, onChange }) {
         </div>
 
         <div style={{ flex: 1 }}>
-          <label className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>Uživatelé</label>
+          <label className="muted" style={{ fontSize: 12, letterSpacing: ".05em" }}>Uživatelé</label>
           <div style={{ margin: "6px 0", display: "grid", gap: 4 }}>
             {loc.users.length === 0 && <span className="muted">žádní</span>}
             {loc.users.map((u) => (

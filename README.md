@@ -1,3 +1,6 @@
+## v1.8.9 — Jednotky v nadpisech správně (kWh, ne KWH)
+- Zrušen `text-transform: uppercase` u hlaviček tabulek, titulků grafů, popisků karet a polí (verzálky měnily význam jednotek: kW ≠ KW, b ≠ B). Zůstává jen u značky a názvu role.
+
 ## v1.8.8 — Graf testu: legenda, křížový kurzor, SoC packů
 - Série: výkon baterie, SoC celkem, SoC baterie 1 / 2 (když měnič hlásí packy), síť a FVE (výchozí skryté); legenda klikem skrývá řady.
 - Křížový kurzor: svislá čára, tečky na každé řadě, box u kurzoru (čas, krok, hodnoty). `series` nese `soc1/soc2`.
