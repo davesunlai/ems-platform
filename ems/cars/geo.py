@@ -15,7 +15,11 @@ from ems.api.db import get_pool
 logger = logging.getLogger("ems.cars.geo")
 UA = "TERA-EMS/1.0 (energy management; contact via teraems.com)"
 NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
-OVERPASS = "https://overpass-api.de/api/interpreter"
+# overpass-api.de (i lz4.) aktivně odmítá IP franty (blocklist, lekce 5. 11.), kumi timeoutuje, osm.ch kryje jen Švýcarsko →
+# zkoušet zrcadla v pořadí, první odpověď s 'elements' vyhrává; pak OpenChargeMap (klíč v app_settings.ocm_api_key nebo EMS_OCM_API_KEY)
+OVERPASS_MIRRORS = ["https://overpass.private.coffee/api/interpreter", "https://overpass.osm.jp/api/interpreter",
+                    "https://overpass.kumi.systems/api/interpreter", "https://overpass-api.de/api/interpreter"]
+OCM = "https://api.openchargemap.io/v3/poi/"
 RADIUS_M = 1500      # BMW posílá polohu zaokrouhlenou (při zapojení na 2 des. místa ≈ ±0,7 km) → hledat široko, vzít nejbližší
 _last_nominatim = 0.0
 
@@ -80,15 +84,56 @@ async def _lookup(lat: float, lon: float) -> dict:
         out["place"] = place_from_nominatim(res); out["raw"]["nominatim"] = res.get("address")
     except Exception as exc:
         logger.info("nominatim %.4f,%.4f: %s", lat, lon, exc)
-    try:
-        q = f'[out:json][timeout:8];(node["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon});way["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon}););out center tags;'
-        res = await asyncio.to_thread(_post, OVERPASS, "data=" + urllib.parse.quote(q))
-        op, name, d = operator_from_overpass(res, lat, lon)
-        out.update(operator=op, station_name=name, distance_m=round(d) if d is not None else None)
-        out["raw"]["stations"] = len(res.get("elements") or []); out["raw"]["radius_m"] = RADIUS_M
-    except Exception as exc:
-        logger.info("overpass %.4f,%.4f: %s", lat, lon, exc)
+    q = f'[out:json][timeout:8];(node["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon});way["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon}););out center tags;'
+    for url in OVERPASS_MIRRORS:
+        try:
+            res = await asyncio.to_thread(_post, url, "data=" + urllib.parse.quote(q), 12)
+            if not isinstance(res, dict) or "elements" not in res:
+                continue
+            op, name, d = operator_from_overpass(res, lat, lon)
+            out.update(operator=op, station_name=name, distance_m=round(d) if d is not None else None)
+            out["raw"].update(stations=len(res.get("elements") or []), radius_m=RADIUS_M, overpass=url)
+            break
+        except Exception as exc:
+            logger.warning("overpass %s %.4f,%.4f: %s", url.split("/")[2], lat, lon, exc)
+    if out["operator"] is None:
+        await _ocm(lat, lon, out)
     return out
+
+
+async def _ocm(lat: float, lon: float, out: dict) -> None:
+    """OpenChargeMap (druhý zdroj): nejbližší POI do RADIUS_M, OperatorInfo.Title."""
+    import os
+    from ems.api.db import get_setting
+    key = (await get_setting("ocm_api_key", None)) or os.getenv("EMS_OCM_API_KEY")
+    if not key:
+        out["raw"]["ocm"] = "bez klíče"
+        return
+    try:
+        import math
+        url = f"{OCM}?{urllib.parse.urlencode({'output': 'json', 'latitude': lat, 'longitude': lon, 'distance': RADIUS_M / 1000, 'distanceunit': 'km', 'maxresults': 10, 'compact': 'true', 'verbose': 'false'})}"
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json", "X-API-Key": key})
+        def _run():
+            with urllib.request.urlopen(req, timeout=12) as r:
+                return json.loads(r.read().decode("utf-8"))
+        res = await asyncio.to_thread(_run)
+        best = None
+        for poi in res or []:
+            a = poi.get("AddressInfo") or {}
+            la, lo = a.get("Latitude"), a.get("Longitude")
+            if la is None or lo is None:
+                continue
+            d = math.hypot((la - lat) * 111320, (lo - lon) * 111320 * math.cos(math.radians(lat)))
+            op = (poi.get("OperatorInfo") or {}).get("Title")
+            if best is None or d < best[2]:
+                best = (op, a.get("Title"), d)
+        out["raw"]["ocm"] = len(res or [])
+        if best and best[0]:
+            out.update(operator=best[0], station_name=best[1], distance_m=round(best[2]))
+            out["raw"]["source"] = "openchargemap"
+    except Exception as exc:
+        logger.warning("openchargemap %.4f,%.4f: %s", lat, lon, exc)
+        out["raw"]["ocm"] = f"chyba: {exc}"
 
 
 async def resolve_many(points: list[tuple[float, float]], max_new: int = 3) -> dict[tuple[float, float], dict]:

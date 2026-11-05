@@ -154,6 +154,34 @@ async def month_stats(month: str, locality_id: int | None = None, _: dict = Depe
     return [await db.month_stats(v, s, e) for v in await db.list_vehicles(locality_id) if v.get("enabled", True)]
 
 
+@router.get("/geo-settings")
+async def geo_settings_get(_: dict = Depends(admin)):
+    from ems.api.db import get_setting
+    key = await get_setting("ocm_api_key", None)
+    return {"ocm_api_key_set": bool(key), "ocm_api_key_hint": (key[:4] + "…" + key[-4:]) if key and len(key) > 10 else None}
+
+
+class GeoSettingsIn(BaseModel):
+    ocm_api_key: str | None = None
+
+
+@router.put("/geo-settings")
+async def geo_settings_put(body: GeoSettingsIn, _: dict = Depends(admin)):
+    from ems.api.db import set_setting
+    await set_setting("ocm_api_key", (body.ocm_api_key or "").strip() or None)
+    return {"ok": True}
+
+
+@router.post("/geo-retry")
+async def geo_retry(_: dict = Depends(admin)):
+    """Smaže z cache místa bez provozovatele → při příštím otevření detailu se dohledají znovu (zrcadla + OCM)."""
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        n = await conn.fetchval("WITH d AS (DELETE FROM geo_cache WHERE operator IS NULL RETURNING 1) SELECT count(*) FROM d")
+    return {"deleted": n}
+
+
 @router.get("/roles")
 async def roles(_: dict = Depends(read)):
     return {"roles": db.ROLES, "role_labels": db.ROLE_LABELS, "default_key_map": db.DEFAULT_KEY_MAP,

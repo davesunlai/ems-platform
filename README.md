@@ -1,3 +1,8 @@
+## v1.8.15 — Provozovatel nabíječky: zrcadla Overpass + OpenChargeMap
+- overpass-api.de/lz4 odmítá IP franty (blocklist), kumi timeoutuje, osm.ch jen CH → seznam zrcadel (private.coffee, osm.jp, kumi, api.de), první s `elements` vyhrává.
+- Druhý zdroj OpenChargeMap (`app_settings.ocm_api_key` / `EMS_OCM_API_KEY`): nejbližší POI do 1,5 km, `OperatorInfo.Title`. Auta → „📍 Místa nabíjení“: klíč + „↻ Dohledat znovu“.
+- API `/api/cars/geo-settings` (GET/PUT), `/api/cars/geo-retry`.
+
 ## v1.8.14 — Místo nabíjení vždy v grafu
 - Detail dne: kWh + doba nabíjení (např. „≈ 26 kWh · 43 min“) a místo/provozovatel se vypisují i u úzkých úseků (menším písmem, smí přesahovat šířku úseku).
 

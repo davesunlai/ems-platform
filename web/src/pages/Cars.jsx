@@ -114,6 +114,7 @@ export default function Cars() {
       </div>
 
       {roles?.stream_keys?.length > 0 && <StreamKeys keys={roles.stream_keys} />}
+      {isAdmin && <GeoSettings />}
 
       {keysFor && roles && (
         <div onClick={() => setKeysFor(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -130,6 +131,31 @@ export default function Cars() {
           </div>
         </div>)}
     </main>
+  );
+}
+
+// 📍 Místa nabíjení: OSM (Nominatim + Overpass zrcadla) + OpenChargeMap (klíč)
+function GeoSettings() {
+  const [st, setSt] = useState(null); const [key, setKey] = useState(""); const [msg, setMsg] = useState("");
+  const load = () => api.carsGeoSettings().then(setSt).catch(() => {});
+  useEffect(() => { load(); }, []);
+  const save = async () => { try { await api.carsGeoSettingsPut({ ocm_api_key: key }); setKey(""); setMsg("Uloženo."); load(); } catch (e) { setMsg(e.message); } };
+  const retry = async () => { try { const r = await api.carsGeoRetry(); setMsg(`Smazáno ${r.deleted} míst bez provozovatele — dohledají se při příštím otevření detailu dne.`); } catch (e) { setMsg(e.message); } };
+  return (
+    <div className="panel" style={{ marginTop: 14 }}>
+      <b style={{ fontSize: 14 }}>📍 Místa nabíjení (obec + provozovatel)</b>
+      <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+        Obec z OpenStreetMap (Nominatim), provozovatel ze stanic v OSM (Overpass, zrcadla) a jako druhý zdroj <b>OpenChargeMap</b> — bezplatný API klíč
+        získáš po registraci na openchargemap.org (My Apps → API key). Bez klíče se použije jen OSM.
+      </p>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12.5 }}>OpenChargeMap klíč: {st?.ocm_api_key_set ? <b>nastaven ({st.ocm_api_key_hint})</b> : <span className="muted">není</span>}</span>
+        <input style={{ ...FLD, width: 300 }} placeholder="vložit / změnit klíč" value={key} onChange={(e) => setKey(e.target.value)} />
+        <button className="btn" onClick={save} disabled={!key.trim()}>Uložit klíč</button>
+        <button className="btn" onClick={retry} title="smaže z cache místa bez provozovatele">↻ Dohledat provozovatele znovu</button>
+      </div>
+      {msg && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{msg}</div>}
+    </div>
   );
 }
 
