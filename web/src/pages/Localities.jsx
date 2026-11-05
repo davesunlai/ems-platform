@@ -11,7 +11,7 @@ const fmtDT = (iso) => {
 
 function OutageSection({ loc, onChange }) {
   const [form, setForm] = useState({
-    cez_ean: loc.cez_ean || "", cez_meter: loc.cez_meter || "", main_breaker_a: loc.main_breaker_a ?? "",
+    cez_ean: loc.cez_ean || "", cez_meter: loc.cez_meter || "", main_breaker_a: loc.main_breaker_a ?? "", main_breaker_phases: loc.main_breaker_phases || 3,
     addr_zip: loc.addr_zip || "", addr_city: loc.addr_city || "", addr_street: loc.addr_street || "",
   });
   const [data, setData] = useState(null);
@@ -24,7 +24,7 @@ function OutageSection({ loc, onChange }) {
   const set = (k, v) => setForm({ ...form, [k]: v });
   const save = async () => {
     setBusy(true); setMsg("");
-    try { await api.updateLocality(loc.id, { ...form, main_breaker_a: form.main_breaker_a === "" ? null : Number(form.main_breaker_a) }); onChange(); setMsg("Uloženo."); }
+    try { await api.updateLocality(loc.id, { ...form, main_breaker_a: form.main_breaker_a === "" ? null : Number(form.main_breaker_a), main_breaker_phases: Number(form.main_breaker_phases) || 3 }); onChange(); setMsg("Uloženo."); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   };
   const refresh = async () => {
@@ -51,8 +51,11 @@ function OutageSection({ loc, onChange }) {
         <div className="field" style={{ marginBottom: 0, minWidth: 150 }}><label>Číslo elektroměru</label>
           <input value={form.cez_meter} onChange={(e) => set("cez_meter", e.target.value)} /></div>
         <div className="field" style={{ marginBottom: 0, maxWidth: 130 }} title="3f hlavní jistič odběrného místa — strop odběru ze sítě (nabíjení baterie ze sítě, test baterie)">
-          <label>Hlavní jistič (A)</label>
-          <input type="number" value={form.main_breaker_a} onChange={(e) => set("main_breaker_a", e.target.value)} placeholder="např. 25" /></div>
+          <label>Hlavní jistič</label>
+          <div style={{ display: "flex", gap: 4 }}>
+            <select value={form.main_breaker_phases} onChange={(e) => set("main_breaker_phases", Number(e.target.value))} style={{ width: 62 }}><option value={3}>3×</option><option value={1}>1×</option></select>
+            <input type="number" value={form.main_breaker_a} onChange={(e) => set("main_breaker_a", e.target.value)} placeholder="25" style={{ width: 64 }} /><span style={{ alignSelf: "center" }}>A</span>
+          </div></div>
       </div>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
         <div className="field" style={{ marginBottom: 0, maxWidth: 110 }}><label>PSČ</label>

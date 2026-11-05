@@ -115,9 +115,10 @@ async def precheck(locality_id: int, module_id: str, params: dict) -> dict:
     if not breaker:
         blockers.append("Není zadána velikost hlavního jističe lokality (A) — nabíjení ze sítě se musí hlídat proti jističi. Zadej ji v Lokalitách.")
     else:
-        imp_kw = 3 * 230 * float(breaker) * BREAKER_PF / 1000
+        ph = int(loc.get("main_breaker_phases") or 3)
+        imp_kw = ph * 230 * float(breaker) * BREAKER_PF / 1000
         if float(params["p_chg_kw"]) > imp_kw * 0.8:
-            warnings.append(f"Nabíjecí výkon {params['p_chg_kw']} kW je blízko limitu jističe ({breaker:g} A ≈ {imp_kw:.1f} kW) — engine ho bude ořezávat podle odběru domu.")
+            warnings.append(f"Nabíjecí výkon {params['p_chg_kw']} kW je blízko limitu jističe ({ph}×{breaker:g} A ≈ {imp_kw:.1f} kW) — engine ho bude ořezávat podle odběru domu.")
     if not cfg.get("grid_export_limit_kw"):
         blockers.append("Není nastaven strop exportu (Řízení → Limity) — vybíjení do sítě bez něj nelze.")
     warnings.append(f"Záložní SoC měniče (reg. 43024) bude po dobu testu dočasně nastaven na {params['floor_pct']:g} % a po skončení/přerušení vrácen.")
@@ -344,7 +345,7 @@ async def _charge_with_breaker_guard(t: dict, m: dict) -> None:
     loc = await loc_db.get(t["locality_id"]) or {}
     br = loc.get("main_breaker_a")
     if br:
-        limit = 3 * 230 * float(br) * BREAKER_PF / 1000
+        limit = int(loc.get("main_breaker_phases") or 3) * 230 * float(br) * BREAKER_PF / 1000
         grid = float(m.get("grid_power") or 0) / 1000      # + import
         bat = max(0.0, float(m.get("battery_power") or 0) / 1000)
         house = max(0.0, grid - bat)                        # import mimo baterii

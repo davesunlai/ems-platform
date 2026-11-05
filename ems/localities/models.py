@@ -27,6 +27,7 @@ class LocalityUpdate(BaseModel):
     lon: float | None = None
     pv_kwp_total: float | None = None
     main_breaker_a: float | None = None
+    main_breaker_phases: int | None = None
     audit_mode: bool | None = None
 
 

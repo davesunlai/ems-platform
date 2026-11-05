@@ -71,7 +71,8 @@ async def ensure_schema() -> None:
             ("lon", "DOUBLE PRECISION"),
             ("pv_kwp_total", "DOUBLE PRECISION"),
             ("audit_mode", "BOOLEAN NOT NULL DEFAULT FALSE"),   # 🔎 režim auditu (vzorce, registry, snapshot)
-            ("main_breaker_a", "REAL"),                          # hlavní jistič (A, 3f) — strop importu (test baterie, nabíjení ze sítě)
+            ("main_breaker_a", "REAL"),                          # hlavní jistič (A) — strop importu (test baterie, nabíjení ze sítě)
+            ("main_breaker_phases", "SMALLINT NOT NULL DEFAULT 3"),  # 1f / 3f
         ):
             await conn.execute(
                 f"ALTER TABLE localities ADD COLUMN IF NOT EXISTS {col} {ddl}"
@@ -149,7 +150,7 @@ async def create(name: str, address, region: str, note) -> dict:
 async def update(loc_id: int, patch: dict) -> dict | None:
     sets, args = [], []
     for k in ("name", "address", "region", "note", "cez_ean", "cez_meter", "addr_zip", "addr_city", "addr_street",
-              "lat", "lon", "pv_kwp_total", "audit_mode", "main_breaker_a"):
+              "lat", "lon", "pv_kwp_total", "audit_mode", "main_breaker_a", "main_breaker_phases"):
         if k in patch and patch[k] is not None:
             args.append(patch[k]); sets.append(f"{k} = ${len(args)}")
     if not sets:
