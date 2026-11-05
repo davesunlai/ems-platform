@@ -1,3 +1,6 @@
+## v1.8.22 — Oprava záporného důkazu
+- „wallbox nabíjí“ = výkon > 0,5 kW z telemetrie (dřív navíc vyžadován aktivní povel EMS `ev_set` → při nabíjení bez cíle TERA se −3 nepoužilo). Skóre aut se loguje à 20 s.
+
 ## v1.8.21 — Které auto nabíjí: záporný důkaz, REST kick, dashboard nehádá
 - Čerstvé `NOCHARGING` od auta (≥ 45 s po startu relace), zatímco wallbox nabíjí > 0,5 kW → −3 (auto to není).
 - Relace bez rozhodnutí → jednou vyžádat REST u auta bez čerstvých dat (X3 nemá stream) — 1 dotaz z rozpočtu.

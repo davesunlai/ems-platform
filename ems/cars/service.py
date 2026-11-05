@@ -343,12 +343,6 @@ async def assign_cars_to_sessions() -> None:
         return
     vehicles = [v for v in await db.list_vehicles() if v.get("enabled", True)]
     views = {}
-    wb_states = {}
-    try:
-        from ems.control import db as control_db
-        wb_states = await control_db.get_states([s["module_id"] for s in sessions])
-    except Exception:
-        pass
     for s in sessions:
         cands = [v for v in vehicles if v.get("locality_id") == s.get("locality_id") or v.get("wallbox_module_id") == s["module_id"]]
         ranked = []
@@ -364,7 +358,7 @@ async def assign_cars_to_sessions() -> None:
             cv = views[v["vin"]]
             soc_rise = await db.soc_rise_since(v["vin"], {**db.DEFAULT_KEY_MAP, **(v.get("key_map") or {})}["soc"], s["started_at"])
             # čerstvé NOCHARGING od auta, zatímco wallbox nabíjí = auto to není (lekce 5. 11.: iX3 odpojeno, X3 zapojeno bez streamu)
-            wb_charging = (wb_states.get(s["module_id"]) or {}).get("action") == "ev_set" and (await _wb_power_w(s["module_id"])) > 500
+            wb_charging = (await _wb_power_w(s["module_id"])) > 500      # wallbox skutečně dodává (bez ohledu na povel EMS)
             neg = -3 if (cv.get("charging") is False and newer(cv.get("charging_ts")) and wb_charging
                          and datetime.fromisoformat(cv["charging_ts"]) >= s["started_at"] + timedelta(seconds=45)) else 0
             sc = (4 if cv.get("charging") and newer(cv.get("charging_ts")) else 0) \
@@ -374,6 +368,7 @@ async def assign_cars_to_sessions() -> None:
                 + (1 if v.get("wallbox_module_id") == s["module_id"] else 0) + neg
             ranked.append((sc, v, cv))
         ranked.sort(key=lambda r: -r[0])
+        logger.info("ev_session #%s skóre: %s", s["id"], ", ".join(f"{cv['name']}={sc}" for sc, v, cv in ranked))
         pick = None
         if ranked and ranked[0][0] >= 0 and (len(ranked) == 1 or ranked[0][0] > ranked[1][0]):
             pick = ranked[0]
