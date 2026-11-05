@@ -222,42 +222,89 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
 // Graf průběhu: výkon baterie (zelená = nabíjení, červená = vybíjení) + SoC (modrá, pravá osa) + stínování fází + značky snímků
 function TestChart({ t }) {
   const ser = t.series || [];
+  const [hide, setHide] = useState({});           // legenda: skryté řady
+  const [cur, setCur] = useState(null);           // křížový kurzor
   if (ser.length < 2) return <p className="muted" style={{ fontSize: 12 }}>Graf se vykreslí po prvních minutách dat.</p>;
-  const W = 1400, H = 300, L = 54, R = 52, T = 18, B = 32, F = 13;
+  const hasPacks = ser.some((p) => p.soc1 != null && p.soc2 != null);
+  const SERIES = [
+    { k: "bat", label: "výkon baterie (+ nabíjení / − vybíjení)", color: "var(--green)", unit: "kW", get: (p) => (p.bat_w == null ? null : p.bat_w / 1000), axis: "kw" },
+    { k: "soc", label: "SoC celkem", color: "#58a6ff", unit: "%", get: (p) => p.soc, axis: "pct", dash: "4 3" },
+    ...(hasPacks ? [
+      { k: "soc1", label: "SoC baterie 1", color: "#a371f7", unit: "%", get: (p) => p.soc1, axis: "pct", dash: "2 3" },
+      { k: "soc2", label: "SoC baterie 2", color: "#39c5cf", unit: "%", get: (p) => p.soc2, axis: "pct", dash: "2 3" }] : []),
+    { k: "grid", label: "síť (+ odběr / − dodávka)", color: "#d29922", unit: "kW", get: (p) => (p.grid_w == null ? null : p.grid_w / 1000), axis: "kw", off: true },
+    { k: "pv", label: "FVE", color: "#e3b341", unit: "kW", get: (p) => (p.pv_w == null ? null : p.pv_w / 1000), axis: "kw", off: true },
+  ];
+  const vis = (sr) => (hide[sr.k] == null ? !sr.off : !hide[sr.k]);
+  const W = 1400, H = 320, L = 54, R = 52, T = 18, B = 32, F = 13;
   const t0 = new Date(t.started_at).getTime(); const t1 = new Date(ser[ser.length - 1].ts).getTime() + 60000;
   const span = Math.max(1, t1 - t0);
-  const maxKw = Math.max(2, ...ser.map((p) => Math.abs((p.bat_w || 0) / 1000)));
+  const maxKw = Math.max(2, ...SERIES.filter((sr) => sr.axis === "kw" && vis(sr)).flatMap((sr) => ser.map((p) => Math.abs(sr.get(p) || 0))));
   const top = Math.ceil(maxKw / 2) * 2;
   const xs = (ts) => L + (W - L - R) * ((new Date(ts).getTime() - t0) / span);
   const yk = (kw) => T + (H - T - B) * (1 - (kw + top) / (2 * top));
   const ys = (s) => T + (H - T - B) * (1 - s / 100);
+  const yOf = (sr, v) => (sr.axis === "kw" ? yk(v) : ys(v));
   const y0 = yk(0);
-  const area = ser.map((p, i) => `${i ? "L" : "M"}${xs(p.ts).toFixed(1)},${yk((p.bat_w || 0) / 1000).toFixed(1)}`).join(" ");
-  const socPath = ser.filter((p) => p.soc != null).map((p, i) => `${i ? "L" : "M"}${xs(p.ts).toFixed(1)},${ys(p.soc).toFixed(1)}`).join(" ");
+  const pathOf = (sr) => ser.filter((p) => sr.get(p) != null).map((p, i) => `${i ? "L" : "M"}${xs(p.ts).toFixed(1)},${yOf(sr, sr.get(p)).toFixed(1)}`).join(" ");
+  const batPath = pathOf(SERIES[0]);
   const marks = t.phase_marks || [];
   const PH = { discharge0: ["#f8514922", "⬇ 1 · Předvybití"], charge: ["#3fb95022", "⬆ 2 · Nabíjení"], hold: ["#d2992222", "⏸ 3 · Výdrž"], discharge: ["#f8514922", "⬇ 4 · Vybíjení"] };
   const tm = (ts) => new Date(ts).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
   const stepMs = span < 2 * 3600000 ? 600000 : span < 6 * 3600000 ? 1800000 : span < 30 * 3600000 ? 3600000 : 7200000;
   const ticks = []; for (let x = Math.ceil(t0 / stepMs) * stepMs; x < t1; x += stepMs) ticks.push(x);
+  const onMove = (e) => {
+    const b = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - b.left) * (W / b.width);
+    const tt = t0 + Math.max(0, Math.min(1, (px - L) / (W - L - R))) * span;
+    let best = 0, bd = Infinity;
+    ser.forEach((p, i) => { const d = Math.abs(new Date(p.ts).getTime() - tt); if (d < bd) { bd = d; best = i; } });
+    const mark = [...marks].reverse().find((m) => new Date(m.ts).getTime() <= new Date(ser[best].ts).getTime());
+    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, p: ser[best], step: mark ? PH[mark.phase]?.[1] : "⚙ 0 · Příprava" });
+  };
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", marginTop: 6 }}>
-      {marks.map((m, i) => { const a = xs(m.ts), b = i + 1 < marks.length ? xs(marks[i + 1].ts) : W - R; return (
-        <g key={i}><rect x={a} y={T} width={Math.max(0, b - a)} height={H - T - B} fill={PH[m.phase]?.[0] || "transparent"} />
-          <text x={a + 5} y={T + 13} fontSize={F} fill="var(--muted)">{PH[m.phase]?.[1]}</text></g>); })}
-      {[-top, -top / 2, 0, top / 2, top].map((v) => (
-        <g key={v}><line x1={L} x2={W - R} y1={yk(v)} y2={yk(v)} stroke="var(--border)" strokeWidth={v === 0 ? 1.2 : 0.6} />
-          <text x={L - 5} y={yk(v) + 4} textAnchor="end" fontSize={F} fill="var(--muted)">{v > 0 ? "+" : ""}{v}</text></g>))}
-      <text x={4} y={T + 2} fontSize={F} fill="var(--muted)">kW</text>
-      {[0, 25, 50, 75, 100].map((v) => <text key={v} x={W - R + 5} y={ys(v) + 4} fontSize={F} fill="#58a6ff">{v} %</text>)}
-      {ticks.map((x) => <g key={x}><line x1={xs(x)} x2={xs(x)} y1={T} y2={H - B + 5} stroke="var(--border)" strokeWidth="0.6" />
-        <text x={xs(x)} y={H - B + 19} textAnchor="middle" fontSize={F} fill="var(--muted)">{tm(x)}</text></g>)}
-      <path d={`${area} L${xs(ser[ser.length - 1].ts).toFixed(1)},${y0} L${xs(ser[0].ts).toFixed(1)},${y0} Z`} fill="var(--green)" opacity="0.15" />
-      <path d={area} fill="none" stroke="var(--green)" strokeWidth="1.4" />
-      {socPath && <path d={socPath} fill="none" stroke="#58a6ff" strokeWidth="1.6" strokeDasharray="4 3" />}
-      {(t.snapshots || []).filter((s) => s.phase !== "hold").map((s) => (
-        <g key={s.id}><line x1={xs(s.ts)} x2={xs(s.ts)} y1={T} y2={H - B} stroke="var(--fg)" strokeWidth="0.6" strokeDasharray="2 3" opacity="0.6" />
-          <text x={xs(s.ts)} y={H - B - 5} textAnchor="middle" fontSize={F} fontWeight="600" fill="var(--fg)">{s.soc_step} %</text></g>))}
-    </svg>
+    <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 12.5, margin: "6px 0 2px" }}>
+        {SERIES.map((sr) => (
+          <span key={sr.k} onClick={() => setHide({ ...hide, [sr.k]: vis(sr) })} style={{ cursor: "pointer", opacity: vis(sr) ? 1 : 0.4, display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 18, height: 0, borderTop: `3px ${sr.dash ? "dashed" : "solid"} ${sr.color}` }} />{sr.label}
+          </span>))}
+        <span className="muted">· klik = skrýt/zobrazit řadu</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }} onMouseMove={onMove} onMouseLeave={() => setCur(null)}>
+        {marks.map((m, i) => { const a = xs(m.ts), bb = i + 1 < marks.length ? xs(marks[i + 1].ts) : W - R; return (
+          <g key={i}><rect x={a} y={T} width={Math.max(0, bb - a)} height={H - T - B} fill={PH[m.phase]?.[0] || "transparent"} />
+            <text x={a + 5} y={T + 13} fontSize={F} fill="var(--muted)">{PH[m.phase]?.[1]}</text></g>); })}
+        {[-top, -top / 2, 0, top / 2, top].map((v) => (
+          <g key={v}><line x1={L} x2={W - R} y1={yk(v)} y2={yk(v)} stroke="var(--border)" strokeWidth={v === 0 ? 1.2 : 0.6} />
+            <text x={L - 5} y={yk(v) + 4} textAnchor="end" fontSize={F} fill="var(--muted)">{v > 0 ? "+" : ""}{v}</text></g>))}
+        <text x={4} y={T + 2} fontSize={F} fill="var(--muted)">kW</text>
+        {[0, 25, 50, 75, 100].map((v) => <text key={v} x={W - R + 5} y={ys(v) + 4} fontSize={F} fill="#58a6ff">{v} %</text>)}
+        {ticks.map((x) => <g key={x}><line x1={xs(x)} x2={xs(x)} y1={T} y2={H - B + 5} stroke="var(--border)" strokeWidth="0.6" />
+          <text x={xs(x)} y={H - B + 19} textAnchor="middle" fontSize={F} fill="var(--muted)">{tm(x)}</text></g>)}
+        {vis(SERIES[0]) && <path d={`${batPath} L${xs(ser[ser.length - 1].ts).toFixed(1)},${y0} L${xs(ser[0].ts).toFixed(1)},${y0} Z`} fill="var(--green)" opacity="0.15" />}
+        {SERIES.filter(vis).map((sr) => <path key={sr.k} d={pathOf(sr)} fill="none" stroke={sr.color} strokeWidth={sr.k === "bat" ? 1.6 : 1.5} strokeDasharray={sr.dash} />)}
+        {(t.snapshots || []).filter((s) => s.phase !== "hold").map((s) => (
+          <g key={s.id}><line x1={xs(s.ts)} x2={xs(s.ts)} y1={T} y2={H - B} stroke="var(--fg)" strokeWidth="0.6" strokeDasharray="2 3" opacity="0.6" />
+            <text x={xs(s.ts)} y={H - B - 5} textAnchor="middle" fontSize={F} fontWeight="600" fill="var(--fg)">{s.soc_step} %</text></g>))}
+        {cur && (<g pointerEvents="none">
+          <line x1={xs(cur.p.ts)} x2={xs(cur.p.ts)} y1={T} y2={H - B} stroke="var(--fg)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.7" />
+          {SERIES.filter((sr) => vis(sr) && sr.get(cur.p) != null).map((sr) => (
+            <circle key={sr.k} cx={xs(cur.p.ts)} cy={yOf(sr, sr.get(cur.p))} r="4.5" fill={sr.color} stroke="var(--bg)" strokeWidth="1.5" />))}
+        </g>)}
+      </svg>
+      {cur && (
+        <div style={{ position: "absolute", left: cur.x > 700 ? cur.x - 290 : cur.x + 22, top: Math.max(30, cur.y - 20), background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
+                      padding: "6px 10px", fontSize: 12.5, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 250 }}>
+          <div><b>{tm(cur.p.ts)}</b> <span className="muted">· {cur.step}</span></div>
+          {SERIES.filter((sr) => vis(sr) && sr.get(cur.p) != null).map((sr) => (
+            <div key={sr.k} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ width: 10, height: 10, borderRadius: 5, background: sr.color, display: "inline-block" }} />
+              <span className="muted" style={{ flex: 1 }}>{sr.label}</span>
+              <b>{sr.unit === "%" ? Math.round(sr.get(cur.p)) : sr.get(cur.p).toFixed(2)} {sr.unit}</b>
+            </div>))}
+        </div>)}
+    </div>
   );
 }
 

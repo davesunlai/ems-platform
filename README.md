@@ -1,3 +1,7 @@
+## v1.8.8 — Graf testu: legenda, křížový kurzor, SoC packů
+- Série: výkon baterie, SoC celkem, SoC baterie 1 / 2 (když měnič hlásí packy), síť a FVE (výchozí skryté); legenda klikem skrývá řady.
+- Křížový kurzor: svislá čára, tečky na každé řadě, box u kurzoru (čas, krok, hodnoty). `series` nese `soc1/soc2`.
+
 ## v1.8.7 — Test baterie: kroky místo „fází“
 - „Fáze“ je vyhrazena pro L1–L3. Test má Kroky 0 Příprava › 1 Předvybití › 2 Nabíjení › 3 Výdrž › 4 Vybíjení › Vyhodnocení / Přerušeno —
   progres pruh (`StepBar`) v dialogu i v banneru dashboardu; popisky v grafu, tabulce, protokolu a e-mailech. Klíče stavů v API beze změny.
