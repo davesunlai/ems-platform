@@ -204,8 +204,8 @@ async def phase_marks(test_id: int) -> list[dict]:
     out = []
     for r in rows:
         m = r["msg"]
-        ph = ("discharge0" if "fáze 0" in m else "charge" if "→ nabíjení" in m else "hold" if "→ výdrž" in m
-              else "discharge" if "→ vybíjení" in m else None)
+        ph = ("discharge0" if ("fáze 0" in m or "Krok 1" in m) else "charge" if ("→ nabíjení" in m or "→ Krok 2" in m)
+              else "hold" if ("→ výdrž" in m or "→ Krok 3" in m) else "discharge" if ("→ vybíjení" in m or "→ Krok 4" in m) else None)
         if ph:
             out.append({"phase": ph, "ts": r["ts"].isoformat()})
     return out

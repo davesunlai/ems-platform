@@ -1,3 +1,7 @@
+## v1.8.7 — Test baterie: kroky místo „fází“
+- „Fáze“ je vyhrazena pro L1–L3. Test má Kroky 0 Příprava › 1 Předvybití › 2 Nabíjení › 3 Výdrž › 4 Vybíjení › Vyhodnocení / Přerušeno —
+  progres pruh (`StepBar`) v dialogu i v banneru dashboardu; popisky v grafu, tabulce, protokolu a e-mailech. Klíče stavů v API beze změny.
+
 ## v1.8.6 — Test baterie: dialog na šířku, větší popisky, osa času
 - Dialog 98vw; písma grafů 13 px; osa X adaptivní (10 min / 30 min / 1 h / 2 h podle délky) — dřív jen celé hodiny, krátce po startu bez popisků.
 

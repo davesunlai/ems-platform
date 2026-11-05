@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { EvPanel, EV_CAR } from "../components/EvPanel";
-import { BatteryTestButton } from "../components/BatteryTest";
+import { BatteryTestButton, StepBar } from "../components/BatteryTest";
 import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
 import ForecastChart from "../components/ForecastChart";
@@ -111,7 +111,7 @@ function ControlBanners({ deviceIds, localityId }) {
     .filter(({ st }) => st && st.action && st.action !== "idle");
   const onOutputs = (outputs || []).filter((o) => o.is_on && (localityId == null || o.locality_id === localityId));
   if (!items.length && !onOutputs.length && !myPlans.length && !bt) return null;
-  const BT_PHASE = { preparing: "příprava", discharge0: "fáze 0 — vybití na dno", charge: "fáze 1 — nabíjení", hold: "fáze 2 — výdrž na stropu", discharge: "fáze 3 — vybíjení" };
+  const BT_PHASE = { preparing: "Krok 0 · Příprava", discharge0: "Krok 1 · Předvybití na dno", charge: "Krok 2 · Nabíjení", hold: "Krok 3 · Výdrž na stropu", discharge: "Krok 4 · Vybíjení" };
   const btSnap = bt?.snapshots?.length ? bt.snapshots[bt.snapshots.length - 1] : null;
 
   const fmtT = (iso) => {
@@ -130,7 +130,8 @@ function ControlBanners({ deviceIds, localityId }) {
                       background: "color-mix(in srgb, var(--amber) 10%, transparent)", fontSize: 12.5 }}>
           <span style={{ fontWeight: 700 }}>🧪 Běží test baterie #{bt.id}</span> · {BT_PHASE[bt.status] || bt.status}
           <span className="muted"> · od {new Date(bt.started_at).toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-          {btSnap && <span> · poslední snímek {btSnap.soc_step} % ({Number(btSnap.e_phase_kwh).toFixed(1)} kWh ve fázi)</span>}
+          {btSnap && <span> · poslední snímek {btSnap.soc_step} % ({Number(btSnap.e_phase_kwh).toFixed(1)} kWh v kroku)</span>}
+          <div style={{ marginTop: 6 }}><StepBar status={bt.status} size={12} /></div>
           <div className="muted" style={{ marginTop: 2 }}>Plánovač, časový plán i ruční řízení baterie jsou pro modul {bt.module_id} zablokované — průběh a přerušení v 🔋 Články baterie → 🧪.</div>
         </div>)}
       {myPlans.map((p) => (

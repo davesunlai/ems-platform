@@ -5,8 +5,43 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 
 const FLD = { padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", width: 90 };
-const PHASE = { preparing: "⏳ příprava (čtení nastavení měniče)", discharge0: "⬇ fáze 0 — vybití na dno", charge: "⬆ fáze 1 — nabíjení",
-  hold: "⏸ fáze 2 — výdrž na stropu", discharge: "⬇ fáze 3 — vybíjení", done: "✅ dokončen", aborted: "⛔ přerušen" };
+// Kroky testu („fáze“ je vyhrazené pro L1–L3). Klíče stavů v API se nemění.
+export const STEPS = [
+  { key: "preparing", n: 0, icon: "⚙", name: "Příprava", hint: "čtení nastavení měniče, nastavení dna" },
+  { key: "discharge0", n: 1, icon: "⬇", name: "Předvybití", hint: "vybití na dno před měřením" },
+  { key: "charge", n: 2, icon: "⬆", name: "Nabíjení", hint: "na strop, snímek po 10 %" },
+  { key: "hold", n: 3, icon: "⏸", name: "Výdrž", hint: "na stropu, balancování" },
+  { key: "discharge", n: 4, icon: "⬇", name: "Vybíjení", hint: "na dno, snímek po 10 %" },
+];
+const PHASE = Object.fromEntries(STEPS.map((s) => [s.key, `${s.icon} Krok ${s.n} · ${s.name}`]));
+PHASE.done = "✅ Vyhodnocení"; PHASE.aborted = "⛔ Přerušeno";
+export const STEP_SHORT = Object.fromEntries(STEPS.map((s) => [s.key, s.name]));
+
+export function StepBar({ status, size = 13 }) {
+  const idx = STEPS.findIndex((s) => s.key === status);
+  const done = status === "done", aborted = status === "aborted";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", fontSize: size }}>
+      {STEPS.map((s, i) => {
+        const state = done ? "done" : aborted ? "muted" : i < idx ? "done" : i === idx ? "active" : "todo";
+        const col = state === "active" ? "var(--amber)" : state === "done" ? "var(--green)" : "var(--muted)";
+        return (
+          <span key={s.key} title={s.hint} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span style={{ padding: "2px 9px", borderRadius: 999, border: `1.5px solid ${col}`, color: state === "todo" ? "var(--muted)" : "var(--fg)",
+                           background: state === "active" ? "color-mix(in srgb, var(--amber) 18%, transparent)" : state === "done" ? "color-mix(in srgb, var(--green) 12%, transparent)" : "transparent",
+                           fontWeight: state === "active" ? 700 : 500 }}>
+              {state === "done" ? "✓" : s.icon} {s.n} · {s.name}
+            </span>
+            {i < STEPS.length - 1 && <span className="muted">›</span>}
+          </span>);
+      })}
+      <span className="muted">›</span>
+      <span style={{ padding: "2px 9px", borderRadius: 999, border: `1.5px solid ${done ? "var(--green)" : aborted ? "#f85149" : "var(--muted)"}`, fontWeight: done || aborted ? 700 : 500 }}>
+        {aborted ? "⛔ Přerušeno" : "✅ Vyhodnocení"}
+      </span>
+    </div>
+  );
+}
 const dt = (iso) => (iso ? new Date(iso).toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 const hrs = (h) => (h == null ? "—" : h >= 1 ? `${h.toFixed(1)} h` : `${Math.round(h * 60)} min`);
 
@@ -23,7 +58,7 @@ export function BatteryTestButton({ locId, compact }) {
   return (<>
     <button className="btn" style={{ padding: compact ? "2px 9px" : "4px 10px", fontSize: 12, borderColor: cur ? "var(--amber)" : undefined }}
             onClick={() => setOpen(true)} title="Reálný test kapacity a kondice baterie (vybít → nabít → výdrž → vybít, snímky po 10 %)">
-      🧪 {cur ? `test běží · ${PHASE[cur.status]?.split(" — ")[0] || cur.status}` : "Test baterie"}
+      🧪 {cur ? `test běží · ${PHASE[cur.status] || cur.status}` : "Test baterie"}
     </button>
     {open && <BatteryTestDialog locId={locId} onClose={() => setOpen(false)} />}
   </>);
@@ -76,7 +111,7 @@ export function BatteryTestDialog({ locId, onClose }) {
         {cur ? <TestProgress t={cur} onAbort={abort} busy={busy} /> : p && (
           <div style={{ marginTop: 8, fontSize: 13 }}>
             <p className="muted" style={{ margin: "0 0 8px", fontSize: 12.5 }}>
-              Cyklus: vybití na dno → nabíjení na strop (snímek po 10 %) → výdrž → vybíjení na dno (snímek po 10 %). Měří se energie na DC straně baterie.
+              Kroky: 0 Příprava → 1 Předvybití na dno → 2 Nabíjení na strop (snímek po 10 %) → 3 Výdrž → 4 Vybíjení na dno (snímek po 10 %) → Vyhodnocení. Měří se energie na DC straně baterie.
               Výsledek: nabito / vybito kWh, kapacita, účinnost, kondice vs. {p.capacity_kwh} kWh jmenovitých, rozdíl packů.
             </p>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -118,7 +153,7 @@ export function BatteryTestDialog({ locId, onClose }) {
             <table style={{ fontSize: 12, width: "100%", marginTop: 4 }}>
               <thead><tr><th>#</th><th>Start</th><th>Konec</th><th>Stav</th><th>nabito kWh</th><th>vybito kWh</th><th>kapacita</th><th>SoH</th><th>účinnost</th><th></th></tr></thead>
               <tbody>{hist.map((t) => (
-                <tr key={t.id}><td>{t.id}</td><td>{dt(t.started_at)}</td><td>{dt(t.ended_at)}</td><td>{PHASE[t.status]?.split(" — ")[0] || t.status}</td>
+                <tr key={t.id}><td>{t.id}</td><td>{dt(t.started_at)}</td><td>{dt(t.ended_at)}</td><td>{PHASE[t.status] || t.status}</td>
                   <td>{t.result?.e_charge_kwh ?? "—"}</td><td>{t.result?.e_discharge_kwh ?? "—"}</td><td>{t.result?.capacity_est_kwh != null ? `${t.result.capacity_est_kwh} kWh` : "—"}</td>
                   <td>{t.result?.soh_pct != null ? `${t.result.soh_pct} %` : "—"}</td><td>{t.result?.efficiency_pct != null ? `${t.result.efficiency_pct} %` : "—"}</td>
                   <td><button className="btn" style={{ padding: "1px 8px" }} onClick={async () => setSel(await api.btGet(t.id))}>detail</button></td></tr>))}
@@ -137,12 +172,13 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
   return (
     <div style={{ marginTop: 8, fontSize: 14 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <b style={{ fontSize: 16 }}>Test #{t.id}</b> <span>{PHASE[t.status] || t.status}</span>
+        <b style={{ fontSize: 16 }}>Test #{t.id}</b>
         <span className="muted">start {dt(t.started_at)}{t.ended_at ? ` · konec ${dt(t.ended_at)}` : ""}</span>
         {t.abort_reason && <span style={{ color: "#f85149" }}>{t.abort_reason}</span>}
         {running && onAbort && <button className="btn" style={{ marginLeft: "auto", borderColor: "#f85149" }} disabled={busy} onClick={onAbort}>⛔ Přerušit test</button>}
         {onClose && <button className="btn" style={{ marginLeft: "auto", padding: "1px 8px" }} onClick={onClose}>✕</button>}
       </div>
+      <div style={{ margin: "8px 0 4px" }}><StepBar status={t.status} /></div>
       <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
         nabíjení {t.params?.p_chg_kw} kW · vybíjení {t.params?.p_dis_kw} kW · výdrž {t.params?.hold_min} min · {t.params?.floor_pct}–{t.params?.ceil_pct} % · jmenovitě {t.params?.capacity_kwh} kWh
       </div>
@@ -150,8 +186,8 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
         <div style={{ margin: "6px 0", display: "flex", gap: 16, flexWrap: "wrap" }}>
           <Stat l="SoC teď" v={`${t.live.soc != null ? Math.round(t.live.soc) : "?"} %`} big />
           <Stat l="výkon baterie" v={`${t.live.bat_w != null ? (t.live.bat_w / 1000).toFixed(1) : "?"} kW`} />
-          <Stat l="ve fázi" v={`${t.live.phase_elapsed_min} min`} />
-          <Stat l="nabito ve fázi" v={`${t.live.e_phase_chg_kwh} kWh`} /><Stat l="vybito ve fázi" v={`${t.live.e_phase_dis_kwh} kWh`} />
+          <Stat l="v kroku" v={`${t.live.phase_elapsed_min} min`} />
+          <Stat l="nabito v kroku" v={`${t.live.e_phase_chg_kwh} kWh`} /><Stat l="vybito v kroku" v={`${t.live.e_phase_dis_kwh} kWh`} />
           <Stat l="síť" v={`${t.live.grid_w != null ? (t.live.grid_w / 1000).toFixed(1) : "?"} kW`} />
         </div>)}
       <TestChart t={t} />
@@ -165,9 +201,9 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
         </div>)}
       {snaps.length > 0 && (
         <table style={{ fontSize: 13, width: "100%", marginTop: 6 }}>
-          <thead><tr><th>fáze</th><th>SoC</th><th>čas</th><th>kWh od začátku fáze</th><th>+kWh / 10 %</th><th>min</th><th>⌀ kW</th><th>pack 1 / 2</th><th>článek min/max V</th><th>síť kW</th></tr></thead>
+          <thead><tr><th>krok</th><th>SoC</th><th>čas</th><th>kWh od začátku kroku</th><th>+kWh / 10 %</th><th>min</th><th>⌀ kW</th><th>pack 1 / 2</th><th>článek min/max V</th><th>síť kW</th></tr></thead>
           <tbody>{snaps.map((s) => (
-            <tr key={s.id}><td>{s.phase === "charge" ? "⬆" : "⬇"}</td><td><b>{s.soc_step} %</b></td><td>{dt(s.ts)}</td><td>{Number(s.e_phase_kwh).toFixed(2)}</td>
+            <tr key={s.id}><td>{s.phase === "charge" ? "⬆ 2 · Nabíjení" : "⬇ 4 · Vybíjení"}</td><td><b>{s.soc_step} %</b></td><td>{dt(s.ts)}</td><td>{Number(s.e_phase_kwh).toFixed(2)}</td>
               <td>{s.e_step_kwh != null ? Number(s.e_step_kwh).toFixed(2) : "—"}</td><td>{s.minutes_step != null ? Math.round(s.minutes_step) : "—"}</td>
               <td>{s.e_step_kwh && s.minutes_step ? (Number(s.e_step_kwh) / (Number(s.minutes_step) / 60)).toFixed(2) : "—"}</td>
               <td>{s.soc1 != null ? `${Math.round(s.soc1)} / ${Math.round(s.soc2)} %` : "—"}</td>
@@ -199,7 +235,7 @@ function TestChart({ t }) {
   const area = ser.map((p, i) => `${i ? "L" : "M"}${xs(p.ts).toFixed(1)},${yk((p.bat_w || 0) / 1000).toFixed(1)}`).join(" ");
   const socPath = ser.filter((p) => p.soc != null).map((p, i) => `${i ? "L" : "M"}${xs(p.ts).toFixed(1)},${ys(p.soc).toFixed(1)}`).join(" ");
   const marks = t.phase_marks || [];
-  const PH = { discharge0: ["#f8514922", "fáze 0 ⬇"], charge: ["#3fb95022", "fáze 1 ⬆"], hold: ["#d2992222", "fáze 2 ⏸"], discharge: ["#f8514922", "fáze 3 ⬇"] };
+  const PH = { discharge0: ["#f8514922", "⬇ 1 · Předvybití"], charge: ["#3fb95022", "⬆ 2 · Nabíjení"], hold: ["#d2992222", "⏸ 3 · Výdrž"], discharge: ["#f8514922", "⬇ 4 · Vybíjení"] };
   const tm = (ts) => new Date(ts).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
   const stepMs = span < 2 * 3600000 ? 600000 : span < 6 * 3600000 ? 1800000 : span < 30 * 3600000 ? 3600000 : 7200000;
   const ticks = []; for (let x = Math.ceil(t0 / stepMs) * stepMs; x < t1; x += stepMs) ticks.push(x);

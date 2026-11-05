@@ -19,6 +19,9 @@ from . import db
 logger = logging.getLogger("ems.battest")
 _TZ = ZoneInfo("Europe/Prague")
 SRC = "battery_test"
+# Názvy kroků (slovo „fáze“ je vyhrazené pro L1–L3): klíč stavu → popisek
+STEP_NAMES = {"preparing": "Krok 0 · Příprava", "discharge0": "Krok 1 · Předvybití", "charge": "Krok 2 · Nabíjení",
+              "hold": "Krok 3 · Výdrž", "discharge": "Krok 4 · Vybíjení", "done": "Vyhodnocení", "aborted": "Přerušeno"}
 ALLOWED_SOURCES = {SRC, "keepalive", "export_guard", "self-heal", "target"}   # kdo smí do fronty modulu během testu
 TICK_S = 20
 COMM_LOSS_S = 120
@@ -303,12 +306,12 @@ async def _step(t: dict, state: dict) -> None:
 
     if status == "discharge0":
         if soc <= floor:
-            await db.log(tid, f"Dno {floor:g} % dosaženo (SoC {soc:.0f} %) → nabíjení.")
-            await _event(t, "fáze 1 — nabíjení", f"dno {floor:g} % dosaženo, nabíjení {p['p_chg_kw']} kW na {ceil:g} %")
+            await db.log(tid, f"Dno {floor:g} % dosaženo (SoC {soc:.0f} %) → Krok 2 · Nabíjení.")
+            await _event(t, "Krok 2 · Nabíjení", f"dno {floor:g} % dosaženo, nabíjení {p['p_chg_kw']} kW na {ceil:g} %")
             await db.update(tid, status="charge", phase_started_at=now, saved={**saved, "next_step": _next_step_up(soc, floor)})
             await _snapshot(t, "charge", int(round(soc)), now, now, m, 0.0, None)
             return
-        return await _force(t, "force_discharge", float(p["p_dis_kw"]), "fáze 0: vybití na dno")
+        return await _force(t, "force_discharge", float(p["p_dis_kw"]), "Krok 1 · Předvybití na dno")
 
     if status == "charge":
         await _charge_with_breaker_guard(t, m)
@@ -318,8 +321,8 @@ async def _step(t: dict, state: dict) -> None:
             saved["next_step"] = nxt + 10
             await db.update(tid, saved=saved)
         if soc >= ceil:
-            await db.log(tid, f"Strop {ceil:g} % dosažen → výdrž {p['hold_min']} min.")
-            await _event(t, "fáze 2 — výdrž", f"strop {ceil:g} % dosažen, výdrž {p['hold_min']} min")
+            await db.log(tid, f"Strop {ceil:g} % dosažen → Krok 3 · Výdrž {p['hold_min']} min.")
+            await _event(t, "Krok 3 · Výdrž", f"strop {ceil:g} % dosažen, výdrž {p['hold_min']} min")
             await db.update(tid, status="hold", phase_started_at=now)
         return
 
@@ -327,14 +330,14 @@ async def _step(t: dict, state: dict) -> None:
         await _charge_with_breaker_guard(t, m)
         if (now - phase_start).total_seconds() >= float(p["hold_min"]) * 60:
             await _snapshot(t, "hold", int(ceil), phase_start, now, m)
-            await db.log(tid, "Výdrž ukončena → vybíjení.")
-            await _event(t, "fáze 3 — vybíjení", f"vybíjení {p['p_dis_kw']} kW na {floor:g} %")
+            await db.log(tid, "Výdrž ukončena → Krok 4 · Vybíjení.")
+            await _event(t, "Krok 4 · Vybíjení", f"vybíjení {p['p_dis_kw']} kW na {floor:g} %")
             await db.update(tid, status="discharge", phase_started_at=now, saved={**saved, "next_step": _next_step_down(soc, ceil)})
             await _snapshot(t, "discharge", int(round(soc)), now, now, m, 0.0, None)
         return
 
     if status == "discharge":
-        await _force(t, "force_discharge", float(p["p_dis_kw"]), "fáze 3: vybíjení")
+        await _force(t, "force_discharge", float(p["p_dis_kw"]), "Krok 4 · Vybíjení na dno")
         nxt = int(saved.get("next_step") or _next_step_down(soc, ceil))
         if soc <= nxt:
             await _snapshot(t, "discharge", nxt, phase_start, now, m)
@@ -394,4 +397,4 @@ async def _snapshot(t: dict, phase: str, step: int, phase_start: datetime, now: 
         t_min=min([v for k, v in m.items() if k.startswith("battery_cell_tmin")] or [None]) if any(k.startswith("battery_cell_tmin") for k in m) else None,
         t_max=max([v for k, v in m.items() if k.startswith("battery_cell_tmax")] or [None]) if any(k.startswith("battery_cell_tmax") for k in m) else None,
         inv_chg_total=m.get("energy_bat_charge_total"), inv_dis_total=m.get("energy_bat_discharge_total"))
-    await db.log(t["id"], f"{phase} {step} %: {e:.2f} kWh od začátku fáze (+{e_step:.2f} kWh / {mins:.0f} min)")
+    await db.log(t["id"], f"{STEP_NAMES.get(phase, phase)} {step} %: {e:.2f} kWh od začátku kroku (+{e_step:.2f} kWh / {mins:.0f} min)")
