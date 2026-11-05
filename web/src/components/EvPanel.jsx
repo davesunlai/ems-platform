@@ -150,7 +150,27 @@ export function MapModal({ lat, lon, title, onClose }) {
   );
 }
 
-function DayDetail({ locId, date, onClose }) {
+// 🗺 Mini mapa (OSM dlaždice 3×3 kolem bodu, zoom 15) — do boxu u kurzoru; bez knihoven
+export function MiniMap({ lat, lon, w = 230, h = 130, zoom = 15 }) {
+  const n = 2 ** zoom;
+  const xf = (lon + 180) / 360 * n;
+  const yf = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n;
+  const tx = Math.floor(xf), ty = Math.floor(yf);
+  const cx = w / 2 - (xf - tx) * 256, cy = h / 2 - (yf - ty) * 256;    // poloha dlaždice (tx,ty) tak, aby bod byl ve středu
+  const tiles = [];
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) tiles.push([dx, dy]);
+  return (
+    <div style={{ position: "relative", width: w, height: h, overflow: "hidden", borderRadius: 6, border: "1px solid var(--border)", background: "#1b2230" }}>
+      {tiles.map(([dx, dy]) => (
+        <img key={`${dx}${dy}`} alt="" src={`https://tile.openstreetmap.org/${zoom}/${tx + dx}/${ty + dy}.png`}
+             style={{ position: "absolute", left: cx + dx * 256, top: cy + dy * 256, width: 256, height: 256, filter: "saturate(.8)" }} />))}
+      <div style={{ position: "absolute", left: w / 2 - 7, top: h / 2 - 14, fontSize: 16, lineHeight: 1, textShadow: "0 0 3px #000" }}>📍</div>
+      <div style={{ position: "absolute", right: 3, bottom: 1, fontSize: 8, color: "#333", background: "rgba(255,255,255,.7)", padding: "0 3px", borderRadius: 3 }}>© OpenStreetMap</div>
+    </div>
+  );
+}
+
+function DayDetail({ locId, date, wbName, onClose }) {
   const [d, setD] = useState(null);
   const [carS, setCarS] = useState([]);           // relace aut (CarData) v tento den — s GPS
   const [map, setMap] = useState(null);            // {lat, lon, title}
@@ -210,15 +230,29 @@ function DayDetail({ locId, date, onClose }) {
             <rect key={i} x={xs(r.start)} y={T} width={Math.max(1, xs(r.end) - xs(r.start))} height={H - T - B} fill="var(--green)" opacity="0.12" style={{ cursor: carFor(r) ? "pointer" : "default" }}
                   onClick={() => { const c = carFor(r); if (c) setMap({ lat: c.lat, lon: c.lon, title: `wallbox · ${tm(r.start)}–${tm(r.end)}` }); }} />))}
           {/* popisek auta nad každým úsekem (wallbox zeleně, nabíjení mimo dům modře); „probíhá“ u otevřené relace */}
-          {[...d.runs.map((r) => ({ s: r.start, e: r.end, c: carAny(r), kind: "wb", open: !!(d.sessions || []).find((x) => !x.ended_at && new Date(x.started_at) <= new Date(r.end)) && new Date(r.end) > Date.now() - 180000 })),
-            ...carS.filter((c) => !d.runs.some((r) => overlaps(c, r.start, r.end))).map((c) => ({ s: c.start, e: c.end || new Date().toISOString(), c, kind: "car", open: !c.end }))]
+          {[...d.runs.map((r) => ({ s: r.start, e: r.end, c: carAny(r), loc: carFor(r), kwh: r.kwh, approx: false, kind: "wb", open: !!(d.sessions || []).find((x) => !x.ended_at && new Date(x.started_at) <= new Date(r.end)) && new Date(r.end) > Date.now() - 180000 })),
+            ...carS.filter((c) => !d.runs.some((r) => overlaps(c, r.start, r.end))).map((c) => ({ s: c.start, e: c.end || new Date().toISOString(), c, loc: c.lat != null ? c : null, kwh: c.kwh, approx: true, kind: "car", open: !c.end }))]
             .map((u, i) => { const x0 = xs(u.s), x1 = xs(u.e); const w = x1 - x0; if (w < 2) return null;
               const name = u.c ? `🚘 ${u.c.name}` : "🚘 auto neurčeno"; const txt = `${name}${u.open ? " · nabíjí se" : ""}`; const small = w < 90;
+              const col = u.kind === "wb" ? "var(--green)" : "#58a6ff";
+              const kwh = u.kwh != null ? `${u.approx ? "≈ " : ""}${Number(u.kwh).toFixed(u.approx ? 0 : 1)} kWh` : "";
+              const where = u.kind === "wb" ? `🏠 ${wbName}` : "🔌 mimo dům";
+              const title = u.loc ? `${u.c?.name || "wallbox"} · ${tm(u.s)}–${tm(u.e)}` : null;
               return (
-                <text key={`lbl${i}`} x={x0 + w / 2} y={T + (small ? 11 : 13)} textAnchor="middle" fontSize={small ? 9 : 11} fontWeight="600"
-                      fill={u.kind === "wb" ? "var(--green)" : "#58a6ff"} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">
-                  {small && w < 40 ? "🚘" : small ? (u.c ? u.c.name : "?") : txt}
-                </text>); })}
+                <g key={`lbl${i}`}>
+                  <text x={x0 + w / 2} y={T + (small ? 11 : 13)} textAnchor="middle" fontSize={small ? 9 : 11} fontWeight="600"
+                        fill={col} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">
+                    {small && w < 40 ? "🚘" : small ? (u.c ? u.c.name : "?") : txt}
+                  </text>
+                  {!small && (
+                    <text x={x0 + w / 2} y={T + 26} textAnchor="middle" fontSize="10" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
+                          style={{ cursor: u.loc ? "pointer" : "default" }}
+                          onClick={(e) => { e.stopPropagation(); if (u.loc) setMap({ lat: u.loc.lat, lon: u.loc.lon, title }); }}>
+                      {kwh}{kwh ? " · " : ""}{where}{u.loc ? " 📍" : ""}
+                    </text>)}
+                  {small && w >= 40 && kwh && (
+                    <text x={x0 + w / 2} y={T + 22} textAnchor="middle" fontSize="8.5" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>)}
+                </g>); })}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
           {cur && !cur.far && (<g pointerEvents="none">
             <line x1={xs(cur.p.ts)} x2={xs(cur.p.ts)} y1={T} y2={H - B} stroke="var(--fg)" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.6" />
@@ -233,10 +267,11 @@ function DayDetail({ locId, date, onClose }) {
                         padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 230 }}>
             <div><b>{tm(cur.p.ts)}</b> · <b style={{ color: "var(--green)" }}>{((cur.p.power_w || 0) / 1000).toFixed(2)} kW</b>{cur.p.amp_set != null ? ` · ${cur.p.amp_set} A` : ""}{cur.run?.phases ? ` · ${cur.run.phases}f` : ""}</div>
             {cur.car && <div>🚘 <b>{cur.car.name}</b>{cs?.soc_from != null ? ` · ${Math.round(cs.soc_from)} → ${cs.soc_to != null ? Math.round(cs.soc_to) : "?"} %` : ""}{cs?.kwh != null ? ` · ≈ ${cs.kwh} kWh` : ""}</div>}
-            {cur.run && <div className="muted">🚗 wallbox {tm(cur.run.start)}–{tm(cur.run.end)} · {cur.run.kwh.toFixed(2)} kWh · max {cur.run.max_kw} kW</div>}
+            {cur.run && <div className="muted">🏠 {wbName} {tm(cur.run.start)}–{tm(cur.run.end)} · {cur.run.kwh.toFixed(2)} kWh · max {cur.run.max_kw} kW</div>}
             {!cur.run && cs && <div className="muted">🚘 nabíjení mimo wallbox {tm(cs.start)}–{cs.end ? tm(cs.end) : "probíhá"}{cs.max_kw != null ? ` · max ${cs.max_kw} kW` : ""}</div>}
             {!cur.run && !cs && <div className="muted">mimo nabíjení</div>}
-            {(cur.run || cs) && <div className="muted">{loc?.lat != null ? "📍 klikni pro mapu" : cur.run ? "📍 doma (wallbox)" : "📍 poloha nepřišla"}{!cur.car && cur.run ? " · auto neurčeno" : ""}</div>}
+            {(cur.run || cs) && <div className="muted">{loc?.lat != null ? "📍 klikni pro velkou mapu" : cur.run ? "📍 doma (wallbox)" : "📍 poloha nepřišla"}{!cur.car && cur.run ? " · auto neurčeno" : ""}</div>}
+            {loc?.lat != null && <div style={{ marginTop: 5 }}><MiniMap lat={Number(loc.lat)} lon={Number(loc.lon)} /></div>}
           </div>); })()}
         {map && <MapModal {...map} onClose={() => setMap(null)} />}
         <table style={{ fontSize: 12, width: "100%" }}>
@@ -321,7 +356,7 @@ export function EvPanel({ locId, mod, onClose }) {
           <span className="muted" style={{ fontSize: 11.5 }}>světlý sloupec = celkem za den (kWh) · tenké sloupečky od nuly = jednotlivé úseky nabíjení (pauza = nový úsek) · klik na den = detail</span>
         </div>
         <MonthChart month={month} daily={daily} runs={runs} onDay={setDay} />
-        {day && <DayDetail locId={locId} date={day} onClose={() => setDay(null)} />}
+        {day && <DayDetail locId={locId} date={day} wbName={mod?.name || mod?.id || "wallbox"} onClose={() => setDay(null)} />}
 
         <b style={{ fontSize: 13 }}>Historie relací</b>
         {sessions.length ? (

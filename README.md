@@ -1,3 +1,7 @@
+## v1.8.11 — Detail dne: kWh a místo pod autem, mini mapa u kurzoru
+- Pod popiskem auta: „12,3 kWh · 🏠 wb-dave“ / „≈ 26 kWh · 🔌 mimo dům 📍“ (klik na řádek s 📍 otevře mapu).
+- Box u kurzoru nad úsekem s GPS obsahuje `MiniMap` (OSM dlaždice 3×3, zoom 15, bez knihoven) s připínáčkem; klik na úsek = velká mapa.
+
 ## v1.8.10 — Auto nad každým úsekem v detailu dne
 - Detail dne wallboxu: nad každým úsekem popisek „🚘 iX3“ (zelený = wallbox, modrý = nabíjení mimo dům), u běžícího „· nabíjí se“; úzké úseky jen jméno/ikona.
 
