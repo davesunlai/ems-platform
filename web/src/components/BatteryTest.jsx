@@ -320,7 +320,7 @@ function StepBars({ t }) {
   const snaps = (t.snapshots || []).filter((s) => (s.phase === "charge" || s.phase === "discharge") && s.e_step_kwh != null && s.minutes_step > 0.5 && s.t_from);
   if (!snaps.length || ser.length < 2) return null;
   const nominal = Number(t.params?.capacity_kwh || 0) / 10;
-  const W = 1400, H = 210, L = 54, R = 52, T = 18, B = 34, F = 13;
+  const W = 1400, H = 250, L = 54, R = 52, T = 18, B = 74, F = 13;      // B: osa času + 3 řádky popisků pod ní
   const t0 = new Date(t.started_at).getTime(); const t1 = new Date(ser[ser.length - 1].ts).getTime() + 60000;
   const span = Math.max(1, t1 - t0);
   const xs = (ts) => L + (W - L - R) * ((new Date(ts).getTime() - t0) / span);
@@ -357,14 +357,16 @@ function StepBars({ t }) {
               {hasPacks && s.e1_kwh != null && (<>
                 <rect x={x0 + 3} y={y(Number(s.e1_kwh))} width={pw} height={H - B - y(Number(s.e1_kwh))} fill="#a371f7" opacity="0.9" rx="2" />
                 <rect x={x0 + 3 + pw + 2} y={y(Number(s.e2_kwh))} width={pw} height={H - B - y(Number(s.e2_kwh))} fill="#39c5cf" opacity="0.9" rx="2" />
-                {!narrow && <>
-                  <text x={x0 + 3 + pw / 2} y={y(Number(s.e1_kwh)) - 3} textAnchor="middle" fontSize="10.5" fill="#a371f7" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">{Number(s.e1_kwh).toFixed(1)}</text>
-                  <text x={x0 + 3 + pw + 2 + pw / 2} y={y(Number(s.e2_kwh)) - 3} textAnchor="middle" fontSize="10.5" fill="#39c5cf" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">{Number(s.e2_kwh).toFixed(1)}</text>
-                </>}
+
               </>)}
-              <text x={x0 + w / 2} y={y(v) - (hasPacks ? 16 : 4)} textAnchor="middle" fontSize={narrow ? 10 : 13} fontWeight="700" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{v.toFixed(2)}</text>
-              <text x={x0 + w / 2} y={H - B - 4} textAnchor="middle" fontSize={narrow ? 10 : 12.5} fontWeight="600" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{up ? "⬆" : "⬇"} {s.soc_step} %</text>
-              {!narrow && <text x={x0 + w / 2} y={H - B - 18} textAnchor="middle" fontSize="10.5" fill="var(--muted)" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">{Math.round(s.minutes_step)} min · {(v / (s.minutes_step / 60)).toFixed(1)} kW</text>}
+              {/* nad osou jen procenta úseku; hodnoty (celkem kWh, packy, čas, výkon) POD osou X */}
+              <text x={x0 + w / 2} y={H - B - 5} textAnchor="middle" fontSize={narrow ? 10.5 : 13} fontWeight="700" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{up ? "⬆" : "⬇"} {s.soc_step} %</text>
+              <text x={x0 + w / 2} y={H - B + 34} textAnchor="middle" fontSize={narrow ? 10.5 : 12.5} fontWeight="700" fill={col} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{v.toFixed(2)} kWh</text>
+              {hasPacks && s.e1_kwh != null && !narrow && (
+                <text x={x0 + w / 2} y={H - B + 48} textAnchor="middle" fontSize="10.5" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">
+                  <tspan fill="#a371f7">{Number(s.e1_kwh).toFixed(2)}</tspan><tspan fill="var(--muted)"> / </tspan><tspan fill="#39c5cf">{Number(s.e2_kwh).toFixed(2)}</tspan>
+                </text>)}
+              {!narrow && <text x={x0 + w / 2} y={H - B + 62} textAnchor="middle" fontSize="10.5" fill="var(--muted)" stroke="var(--bg)" strokeWidth="2.5" paintOrder="stroke">{Math.round(s.minutes_step)} min · {(v / (s.minutes_step / 60)).toFixed(1)} kW</text>}
             </g>); })}
       </svg>
     </div>

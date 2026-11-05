@@ -1,3 +1,6 @@
+## v1.8.27 — Sloupce testu: popisky pod osou X
+- Nad osou jen „⬆ 40 %“; pod osou tři řádky: celkem kWh (barva směru), baterie 1 / 2 kWh, minuty · ⌀ kW.
+
 ## v1.8.26 — Kurzorový box testu vedle kurzoru
 - Graf testu: box jede s kurzorem ~48 px vpravo (u pravého okraje vlevo), svisle u kurzoru, nikdy pod ním.
 
