@@ -1,3 +1,6 @@
+## v1.8.1 — Hlavní jistič u EAN
+- Lokality: pole „Hlavní jistič (A)“ přesunuto do sekce odběrného místa vedle EAN a čísla elektroměru.
+
 ## v1.8.0 — 🧪 Test kapacity a kondice baterie (verze 1: automat + zámek + základní UI)
 - `ems/battest/`: tabulky `battery_tests`, `battery_test_snapshots`, `battery_test_log`; automat v kolektoru (à 20 s):
   preparing (čtení 43024 → dočasně dno) → discharge0 → charge (snímek po 10 %) → hold → discharge (snímek po 10 %) → done/aborted.
