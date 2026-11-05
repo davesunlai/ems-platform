@@ -203,13 +203,15 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
         </div>)}
       {snaps.length > 0 && (
         <table style={{ fontSize: 13, width: "100%", marginTop: 6 }}>
-          <thead><tr><th>krok</th><th>SoC</th><th>čas</th><th>kWh od začátku kroku</th><th>+kWh / 10 %</th><th>min</th><th>⌀ kW</th><th>pack 1 / 2</th><th>článek min/max V</th><th>síť kW</th></tr></thead>
+          <thead><tr><th>krok</th><th>SoC</th><th>čas</th><th>kWh od začátku kroku</th><th>+kWh / 10 %</th><th>min</th><th>⌀ kW</th><th>SoC bat. 1 / 2</th><th>kWh bat. 1 / 2</th><th>článek bat. 1 min / max V</th><th>článek bat. 2 min / max V</th><th>síť kW</th></tr></thead>
           <tbody>{snaps.map((s) => (
             <tr key={s.id}><td>{s.phase === "charge" ? "⬆ 2 · Nabíjení" : "⬇ 4 · Vybíjení"}</td><td><b>{s.soc_step} %</b></td><td>{dt(s.ts)}</td><td>{Number(s.e_phase_kwh).toFixed(2)}</td>
               <td>{s.e_step_kwh != null ? Number(s.e_step_kwh).toFixed(2) : "—"}</td><td>{s.minutes_step != null ? Math.round(s.minutes_step) : "—"}</td>
               <td>{s.e_step_kwh && s.minutes_step ? (Number(s.e_step_kwh) / (Number(s.minutes_step) / 60)).toFixed(2) : "—"}</td>
               <td>{s.soc1 != null ? `${Math.round(s.soc1)} / ${Math.round(s.soc2)} %` : "—"}</td>
-              <td>{s.cell_vmin != null ? `${Number(s.cell_vmin).toFixed(3)} / ${Number(s.cell_vmax).toFixed(3)}` : "—"}</td>
+              <td>{s.e1_kwh != null ? `${Number(s.e1_kwh).toFixed(2)} / ${Number(s.e2_kwh).toFixed(2)}` : "—"}</td>
+              <td>{s.cell_vmin_1 != null ? <><span style={{ color: "#f85149" }}>{Number(s.cell_vmin_1).toFixed(3)}</span> / <span style={{ color: "var(--green)" }}>{Number(s.cell_vmax_1).toFixed(3)}</span></> : "—"}</td>
+              <td>{s.cell_vmin_2 != null ? <><span style={{ color: "#f85149" }}>{Number(s.cell_vmin_2).toFixed(3)}</span> / <span style={{ color: "var(--green)" }}>{Number(s.cell_vmax_2).toFixed(3)}</span></> : "—"}</td>
               <td>{s.grid_w != null ? (Number(s.grid_w) / 1000).toFixed(1) : "—"}</td></tr>))}
           </tbody></table>)}
       {t.log?.length > 0 && (

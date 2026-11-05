@@ -1,3 +1,7 @@
+## v1.8.29 — Tabulka snímků: články per pack
+- `battery_test_snapshots` += `cell_vmin_1/vmax_1/vmin_2/vmax_2` (nové snímky), starší dopočet z telemetrie k času snímku (`metrics_at`).
+- Tabulka: sloupce „SoC bat. 1 / 2“, „kWh bat. 1 / 2“, „článek bat. 1 min / max V“, „článek bat. 2 min / max V“.
+
 ## v1.8.28 — Sloupce testu: karty nad vrcholky, kaskádově
 - Hodnoty (celkem kWh, baterie 1 / 2, min · kW) v kartách nad vrcholky sloupců; při kolizi řádek výš (jako u wallboxu); nad osou jen „⬆ 40 %“.
 

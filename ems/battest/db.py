@@ -56,6 +56,8 @@ async def ensure_schema() -> None:
                 msg TEXT NOT NULL
             )""")
         await conn.execute("ALTER TABLE localities ADD COLUMN IF NOT EXISTS main_breaker_a REAL")
+        for c in ("cell_vmin_1", "cell_vmax_1", "cell_vmin_2", "cell_vmax_2"):
+            await conn.execute(f"ALTER TABLE battery_test_snapshots ADD COLUMN IF NOT EXISTS {c} REAL")
 
 
 def _row(r) -> dict:
@@ -170,6 +172,16 @@ async def energy_kwh(device_id: str, t0: datetime, t1: datetime, metric: str = "
                    COALESCE(SUM(CASE WHEN (value+v2)/2 < 0 THEN -(value+v2)/2 * LEAST(EXTRACT(EPOCH FROM (t2-time)), 60) END),0)/3.6e6 AS dis
             FROM s WHERE t2 IS NOT NULL""", device_id, t0, t1, metric)
     return float(r["chg"] or 0), float(r["dis"] or 0)
+
+
+async def metrics_at(device_id: str, metrics: list[str], ts: datetime, max_age_s: int = 300) -> dict:
+    """Poslední hodnota každé metriky k okamžiku ts (pro dopočet u starších snímků)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT DISTINCT ON (metric) metric, value FROM samples WHERE device_id=$1 AND metric = ANY($2::text[]) "
+            "AND time <= $3::timestamptz AND time > $3::timestamptz - make_interval(secs => $4) ORDER BY metric, time DESC", device_id, metrics, ts, max_age_s)
+    return {r["metric"]: float(r["value"]) for r in rows}
 
 
 async def latest_metrics(device_id: str, metrics: list[str], max_age_s: int = 180) -> dict:

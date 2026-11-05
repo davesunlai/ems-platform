@@ -396,5 +396,7 @@ async def _snapshot(t: dict, phase: str, step: int, phase_start: datetime, now: 
         cell_vmax=max([v for k, v in m.items() if k.startswith("battery_cell_vmax")] or [None]) if any(k.startswith("battery_cell_vmax") for k in m) else None,
         t_min=min([v for k, v in m.items() if k.startswith("battery_cell_tmin")] or [None]) if any(k.startswith("battery_cell_tmin") for k in m) else None,
         t_max=max([v for k, v in m.items() if k.startswith("battery_cell_tmax")] or [None]) if any(k.startswith("battery_cell_tmax") for k in m) else None,
-        inv_chg_total=m.get("energy_bat_charge_total"), inv_dis_total=m.get("energy_bat_discharge_total"))
+        inv_chg_total=m.get("energy_bat_charge_total"), inv_dis_total=m.get("energy_bat_discharge_total"),
+        cell_vmin_1=m.get("battery_cell_vmin_1"), cell_vmax_1=m.get("battery_cell_vmax_1"),
+        cell_vmin_2=m.get("battery_cell_vmin_2"), cell_vmax_2=m.get("battery_cell_vmax_2"))
     await db.log(t["id"], f"{STEP_NAMES.get(phase, phase)} {step} %: {e:.2f} kWh od začátku kroku (+{e_step:.2f} kWh / {mins:.0f} min)")
