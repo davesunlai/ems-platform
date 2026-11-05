@@ -319,6 +319,18 @@ async def _consume(aid: int, st: Stream) -> None:
                     logger.debug("stream write %s: %s", vin, exc)
 
 
+_rest_kicked: dict = {}
+
+
+async def _wb_power_w(module_id: str) -> float:
+    try:
+        from ems.evcharger import db as ev_db
+        row = await ev_db.latest_for_modules([module_id])
+        return float((row or {}).get("power_w") or 0)
+    except Exception:
+        return 0.0
+
+
 async def assign_cars_to_sessions() -> None:
     """Ke každé OTEVŘENÉ relaci wallboxu přiřadí auto podle CarData (stejné skóre jako dashboard):
     nabíjí 4 · zapojeno 3 · přiřazený wallbox 1 · odpojeno −10. Přepisuje se, dokud relace běží (CarData dobíhá)."""
@@ -331,6 +343,12 @@ async def assign_cars_to_sessions() -> None:
         return
     vehicles = [v for v in await db.list_vehicles() if v.get("enabled", True)]
     views = {}
+    wb_states = {}
+    try:
+        from ems.control import db as control_db
+        wb_states = await control_db.get_states([s["module_id"] for s in sessions])
+    except Exception:
+        pass
     for s in sessions:
         cands = [v for v in vehicles if v.get("locality_id") == s.get("locality_id") or v.get("wallbox_module_id") == s["module_id"]]
         ranked = []
@@ -345,11 +363,15 @@ async def assign_cars_to_sessions() -> None:
                 views[v["vin"]] = car_view(v, await db.state(v["vin"]))
             cv = views[v["vin"]]
             soc_rise = await db.soc_rise_since(v["vin"], {**db.DEFAULT_KEY_MAP, **(v.get("key_map") or {})}["soc"], s["started_at"])
+            # čerstvé NOCHARGING od auta, zatímco wallbox nabíjí = auto to není (lekce 5. 11.: iX3 odpojeno, X3 zapojeno bez streamu)
+            wb_charging = (wb_states.get(s["module_id"]) or {}).get("action") == "ev_set" and (await _wb_power_w(s["module_id"])) > 500
+            neg = -3 if (cv.get("charging") is False and newer(cv.get("charging_ts")) and wb_charging
+                         and datetime.fromisoformat(cv["charging_ts"]) >= s["started_at"] + timedelta(seconds=45)) else 0
             sc = (4 if cv.get("charging") and newer(cv.get("charging_ts")) else 0) \
                 + (3 if cv.get("plugged_bool") is True and newer(cv.get("plugged_ts")) else 0) \
                 + (-10 if cv.get("plugged_bool") is False and newer(cv.get("plugged_ts")) else 0) \
                 + (5 if soc_rise is not None and soc_rise >= 1 else 0) \
-                + (1 if v.get("wallbox_module_id") == s["module_id"] else 0)
+                + (1 if v.get("wallbox_module_id") == s["module_id"] else 0) + neg
             ranked.append((sc, v, cv))
         ranked.sort(key=lambda r: -r[0])
         pick = None
@@ -357,6 +379,19 @@ async def assign_cars_to_sessions() -> None:
             pick = ranked[0]
         if pick and len(ranked) > 1 and pick[0] <= 1 and s.get("car_vin"):
             continue      # jen „přiřazený wallbox“ bez důkazu nepřepisuje dřívější volbu
+        if (pick is None or pick[0] <= 1) and not s.get("car_vin"):
+            # bez důkazu: jednou za relaci vyžádat REST u aut bez čerstvých dat (1 dotaz z rozpočtu 45/den)
+            key = f"cars_rest_kick_{s['id']}"
+            if not _rest_kicked.get(key):
+                _rest_kicked[key] = True
+                for v in cands:
+                    cv = views[v["vin"]]
+                    if not newer(cv.get("charging_ts")) and not newer(cv.get("plugged_ts")):
+                        try:
+                            await poll_rest(v["account_id"]); logger.info("ev_session #%s: REST kick pro %s", s["id"], v["vin"][-7:])
+                        except Exception as exc:
+                            logger.info("REST kick: %s", exc)
+                        break
         if pick and pick[1]["vin"] != s.get("car_vin"):
             await ev_db.set_session_car(s["id"], pick[1]["vin"], pick[2]["name"])
             logger.info("ev_session #%s ← %s (skóre %s)", s["id"], pick[2]["name"], pick[0])

@@ -1,3 +1,8 @@
+## v1.8.21 — Které auto nabíjí: záporný důkaz, REST kick, dashboard nehádá
+- Čerstvé `NOCHARGING` od auta (≥ 45 s po startu relace), zatímco wallbox nabíjí > 0,5 kW → −3 (auto to není).
+- Relace bez rozhodnutí → jednou vyžádat REST u auta bez čerstvých dat (X3 nemá stream) — 1 dotaz z rozpočtu.
+- Dashboard: při více autech bez rozhodnutí kolektoru žádný kabel k autu (dřív „přiřazený wallbox“ o 1 bod určil špatné auto).
+
 ## v1.8.20 — Popisky nad křivkou; sloupce testu na časové ose s packy
 - Detail dne wallboxu: popisky aut (auto / kWh · doba / místo / ✏) v pásmu NAD křivkou výkonu, svislá značka na úsek.
 - Test baterie: sloupce po 10 % kreslené na stejné časové ose jako graf nad nimi (od předchozího snímku do tohoto); uvnitř dva podsloupce
