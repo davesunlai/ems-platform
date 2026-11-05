@@ -236,7 +236,7 @@ function DayDetail({ locId, date, wbName, onClose }) {
               const name = u.c ? `🚘 ${u.c.name}` : "🚘 auto neurčeno"; const txt = `${name}${u.open ? " · nabíjí se" : ""}`; const small = w < 90;
               const col = u.kind === "wb" ? "var(--green)" : "#58a6ff";
               const kwh = u.kwh != null ? `${u.approx ? "≈ " : ""}${Number(u.kwh).toFixed(u.approx ? 0 : 1)} kWh` : "";
-              const where = u.kind === "wb" ? `🏠 ${wbName}` : "🔌 mimo dům";
+              const where = u.kind === "wb" ? `🏠 ${wbName}` : `🔌 ${u.c?.place_label || "mimo dům"}`;
               const title = u.loc ? `${u.c?.name || "wallbox"} · ${tm(u.s)}–${tm(u.e)}` : null;
               return (
                 <g key={`lbl${i}`}>
@@ -268,7 +268,7 @@ function DayDetail({ locId, date, wbName, onClose }) {
             <div><b>{tm(cur.p.ts)}</b> · <b style={{ color: "var(--green)" }}>{((cur.p.power_w || 0) / 1000).toFixed(2)} kW</b>{cur.p.amp_set != null ? ` · ${cur.p.amp_set} A` : ""}{cur.run?.phases ? ` · ${cur.run.phases}f` : ""}</div>
             {cur.car && <div>🚘 <b>{cur.car.name}</b>{cs?.soc_from != null ? ` · ${Math.round(cs.soc_from)} → ${cs.soc_to != null ? Math.round(cs.soc_to) : "?"} %` : ""}{cs?.kwh != null ? ` · ≈ ${cs.kwh} kWh` : ""}</div>}
             {cur.run && <div className="muted">🏠 {wbName} {tm(cur.run.start)}–{tm(cur.run.end)} · {cur.run.kwh.toFixed(2)} kWh · max {cur.run.max_kw} kW</div>}
-            {!cur.run && cs && <div className="muted">🚘 nabíjení mimo wallbox {tm(cs.start)}–{cs.end ? tm(cs.end) : "probíhá"}{cs.max_kw != null ? ` · max ${cs.max_kw} kW` : ""}</div>}
+            {!cur.run && cs && <div className="muted">🔌 {cs.place_label || "nabíjení mimo dům"}{cs.station_name && cs.station_name !== cs.operator ? ` (${cs.station_name})` : ""} {tm(cs.start)}–{cs.end ? tm(cs.end) : "probíhá"}{cs.max_kw != null ? ` · max ${cs.max_kw} kW` : ""}</div>}
             {!cur.run && !cs && <div className="muted">mimo nabíjení</div>}
             {(cur.run || cs) && <div className="muted">{loc?.lat != null ? "📍 klikni pro velkou mapu" : cur.run ? "📍 doma (wallbox)" : "📍 poloha nepřišla"}{!cur.car && cur.run ? " · auto neurčeno" : ""}</div>}
             {loc?.lat != null && <div style={{ marginTop: 5 }}><MiniMap lat={Number(loc.lat)} lon={Number(loc.lon)} /></div>}
@@ -288,7 +288,7 @@ function DayDetail({ locId, date, wbName, onClose }) {
               <tr key={i}><td>{c.name}</td><td>{tm(c.start)}</td><td>{c.end ? tm(c.end) : "probíhá"}</td>
                 <td>{c.soc_from != null ? `${Math.round(c.soc_from)} → ${c.soc_to != null ? Math.round(c.soc_to) : "?"} %` : "—"}</td>
                 <td><b>{c.kwh ?? "—"}</b></td><td>{c.max_kw ?? "—"}</td>
-                <td>{c.lat != null ? <a href="#map" onClick={(e) => { e.preventDefault(); setMap({ lat: c.lat, lon: c.lon, title: `${c.name} · ${tm(c.start)}` }); }}>📍 mapa</a> : <span className="muted">—</span>}</td></tr>))}
+                <td>{c.lat != null ? <a href="#map" onClick={(e) => { e.preventDefault(); setMap({ lat: c.lat, lon: c.lon, title: `${c.name} · ${tm(c.start)}` }); }}>📍 {c.place_label || "mapa"}</a> : <span className="muted">—</span>}</td></tr>))}
             </tbody></table>)}
         {d.sessions.length > 0 && <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>
           Relace (připojení kabelu) zasahující do dne: {d.sessions.map((s) => `${dt(s.started_at)} → ${s.ended_at ? dt(s.ended_at) : "probíhá"} (${(((s.wh ?? s.wh_max) || 0) / 1000).toFixed(1)} kWh)`).join(" · ")}</p>}

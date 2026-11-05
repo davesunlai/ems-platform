@@ -127,6 +127,17 @@ async def sessions(locality_id: int | None = None, date: str | None = None, mont
         if v.get("enabled", True):
             out.extend(await db.car_sessions(v, s, e))
     out.sort(key=lambda r: r["start"])
+    # místo nabíjení (obec + provozovatel) z OSM — cache, max 3 nové dotazy na požadavek
+    try:
+        from . import geo
+        info = await geo.resolve_many([(r["lat"], r["lon"]) for r in out if r.get("lat") is not None], max_new=3)
+        for r in out:
+            if r.get("lat") is not None:
+                g = info.get((round(float(r["lat"]), 4), round(float(r["lon"]), 4)))
+                r["place"] = (g or {}).get("place"); r["operator"] = (g or {}).get("operator")
+                r["station_name"] = (g or {}).get("station_name"); r["place_label"] = geo.label(g)
+    except Exception as exc:
+        import logging; logging.getLogger("ems.cars").info("geo: %s", exc)
     return out
 
 

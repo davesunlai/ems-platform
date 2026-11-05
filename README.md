@@ -1,3 +1,8 @@
+## v1.8.12 — Místo nabíjení: obec + provozovatel (OSM)
+- `ems/cars/geo.py`: Nominatim reverse (obec) + Overpass `amenity=charging_station` do 300 m (operator/brand/network); cache `geo_cache` (4 des. místa);
+  max 3 nové dotazy na požadavek, Nominatim 1/s. `/api/cars/sessions` nese `place`, `operator`, `station_name`, `place_label` („Ionity · Mohelnice“).
+- Detail dne: popisek pod autem a kurzorový box ukazují provozovatele a obec místo „mimo dům“; tabulka relací aut má odkaz „📍 Ionity · Mohelnice“.
+
 ## v1.8.11 — Detail dne: kWh a místo pod autem, mini mapa u kurzoru
 - Pod popiskem auta: „12,3 kWh · 🏠 wb-dave“ / „≈ 26 kWh · 🔌 mimo dům 📍“ (klik na řádek s 📍 otevře mapu).
 - Box u kurzoru nad úsekem s GPS obsahuje `MiniMap` (OSM dlaždice 3×3, zoom 15, bez knihoven) s připínáčkem; klik na úsek = velká mapa.

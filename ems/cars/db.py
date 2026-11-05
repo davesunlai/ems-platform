@@ -66,6 +66,11 @@ STREAM_KEYS = [
 
 
 async def ensure_schema() -> None:
+    try:
+        from . import geo
+        await geo.ensure_schema()
+    except Exception:
+        pass
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("""
