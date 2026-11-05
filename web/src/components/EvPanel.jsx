@@ -235,7 +235,8 @@ function DayDetail({ locId, date, wbName, onClose }) {
             .map((u, i) => { const x0 = xs(u.s), x1 = xs(u.e); const w = x1 - x0; if (w < 2) return null;
               const name = u.c ? `🚘 ${u.c.name}` : "🚘 auto neurčeno"; const txt = `${name}${u.open ? " · nabíjí se" : ""}`; const small = w < 90;
               const col = u.kind === "wb" ? "var(--green)" : "#58a6ff";
-              const kwh = u.kwh != null ? `${u.approx ? "≈ " : ""}${Number(u.kwh).toFixed(u.approx ? 0 : 1)} kWh` : "";
+              const durS = (new Date(u.e) - new Date(u.s)) / 1000;
+              const kwh = (u.kwh != null ? `${u.approx ? "≈ " : ""}${Number(u.kwh).toFixed(u.approx ? 0 : 1)} kWh` : "") + (durS >= 60 ? ` · ${dur(durS)}` : "");
               const homePlace = (carS.find((c) => c.lat != null && d.runs.some((r) => overlaps(c, r.start, r.end))) || {}).place;
               const where = u.kind === "wb" ? `🏠 ${wbName}${homePlace ? ` · ${homePlace}` : ""}` : `🔌 ${u.c?.place_label || "mimo dům"}`;
               const title = u.loc ? `${u.c?.name || "wallbox"} · ${tm(u.s)}–${tm(u.e)}` : null;
@@ -245,15 +246,13 @@ function DayDetail({ locId, date, wbName, onClose }) {
                         fill={col} stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">
                     {small && w < 40 ? "🚘" : small ? (u.c ? u.c.name : "?") : txt}
                   </text>
-                  {!small && (<>
-                    <text x={x0 + w / 2} y={T + 27} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>
-                    <text x={x0 + w / 2} y={T + 41} textAnchor="middle" fontSize="10.5" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
-                          style={{ cursor: u.loc ? "pointer" : "default" }}
-                          onClick={(e) => { e.stopPropagation(); if (u.loc) setMap({ lat: u.loc.lat, lon: u.loc.lon, title }); }}>
-                      {where}{u.loc ? " 📍" : ""}
-                    </text></>)}
-                  {small && w >= 40 && kwh && (
-                    <text x={x0 + w / 2} y={T + 22} textAnchor="middle" fontSize="8.5" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>)}
+                  {/* kWh + místo vždy (i u úzkých úseků, menším písmem — smí přesahovat šířku úseku) */}
+                  <text x={x0 + w / 2} y={T + (small ? 24 : 27)} textAnchor="middle" fontSize={small ? 9.5 : 11} fontWeight="600" fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke">{kwh}</text>
+                  <text x={x0 + w / 2} y={T + (small ? 36 : 41)} textAnchor="middle" fontSize={small ? 9 : 10.5} fill="var(--fg)" stroke="var(--bg)" strokeWidth="3" paintOrder="stroke"
+                        style={{ cursor: u.loc ? "pointer" : "default" }}
+                        onClick={(e) => { e.stopPropagation(); if (u.loc) setMap({ lat: u.loc.lat, lon: u.loc.lon, title }); }}>
+                    {where}{u.loc ? " 📍" : ""}
+                  </text>
                 </g>); })}
           {path && <path d={path} fill="none" stroke="var(--green)" strokeWidth="1.6" />}
           {cur && !cur.far && (<g pointerEvents="none">

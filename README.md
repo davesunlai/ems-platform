@@ -1,3 +1,6 @@
+## v1.8.14 — Místo nabíjení vždy v grafu
+- Detail dne: kWh + doba nabíjení (např. „≈ 26 kWh · 43 min“) a místo/provozovatel se vypisují i u úzkých úseků (menším písmem, smí přesahovat šířku úseku).
+
 ## v1.8.13 — Místo nabíjení: širší hledání, třetí řádek popisku
 - Overpass poloměr 300 → 1 500 m (BMW zaokrouhluje polohu); záznamy bez provozovatele se dohledají znovu (širší poloměr / 1× denně).
 - Detail dne: popisek nad úsekem má tři řádky — auto / kWh / „🔌 ČEZ · Unčovice 📍“ (doma „🏠 wb-dave · Kopřivnice“).
