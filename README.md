@@ -1,3 +1,8 @@
+## v1.8.33 — Oprava: strop 100 % nedosažitelný (průměr SoC packů)
+- `battery_soc` = průměr packů (99 + 100 = 99,5 %) → engine porovnával 99,5 ≥ 100 → test stál na nabíjení. Prahy (dno, strop, snímky po 10 %) teď používají SoC zaokrouhlené na celé %.
+- Pojistka: pokud kterýkoli pack hlásí ≥ strop a BMS nenabíjí (|P| < 300 W) déle než 10 min od začátku kroku, strop se bere jako dosažený (zapíše se do protokolu).
+- Při přechodu na výdrž se dopíše chybějící snímek stropu.
+
 ## v1.8.32 — Live blok testu: nabito/vybito per pack
 - `/battest/current|test` live += `e1/e2_chg_kwh`, `e1/e2_dis_kwh` (z `battery_power_1/2` od začátku kroku).
 - UI: „nabito bat. 1 / 2“ a „vybito bat. 1 / 2“ vedle celkových hodnot.

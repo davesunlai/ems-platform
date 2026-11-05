@@ -279,7 +279,12 @@ async def _step(t: dict, state: dict) -> None:
         return await _finish(t, "aborted", f"napětí článku mimo meze (min {vmin:.3f} V, max {vmax:.3f} V)")
     if tmax > T_MAX:
         return await _finish(t, "aborted", f"teplota baterie {tmax:.0f} °C > {T_MAX:g} °C")
-    soc = float(m["battery_soc"]); floor, ceil = float(p["floor_pct"]), float(p["ceil_pct"])
+    soc_raw = float(m["battery_soc"]); floor, ceil = float(p["floor_pct"]), float(p["ceil_pct"])
+    # battery_soc je u dvou packů průměr (99 % + 100 % = 99,5 %) → pro prahy zaokrouhlujeme na celé %,
+    # jinak se strop 100 % nikdy nedosáhne (test #1 stál 5 h na 99,5 %).
+    soc = float(round(soc_raw))
+    socs = [float(m[k]) for k in ("battery_soc_1", "battery_soc_2") if k in m]
+    full_bms = (socs and max(socs) >= ceil and abs(float(m.get("battery_power") or 0)) < 300)   # jeden pack 100 % a BMS už nenabíjí
     saved = t.get("saved") or {}
     status = t["status"]
     phase_start = datetime.fromisoformat(t["phase_started_at"]) if t.get("phase_started_at") else now
@@ -321,7 +326,11 @@ async def _step(t: dict, state: dict) -> None:
             await _snapshot(t, "charge", nxt, phase_start, now, m)
             saved["next_step"] = nxt + 10
             await db.update(tid, saved=saved)
-        if soc >= ceil:
+        if soc >= ceil or (full_bms and (now - phase_start).total_seconds() > 600):
+            if soc < ceil:
+                await db.log(tid, f"SoC {soc_raw:.1f} % (packy {'/'.join(f'{s:g}' for s in socs)} %), BMS nabíjení ukončil → strop považován za dosažený.")
+            if int(saved.get("next_step") or 0) <= int(ceil):
+                await _snapshot(t, "charge", int(ceil), phase_start, now, m)
             await db.log(tid, f"Strop {ceil:g} % dosažen → Krok 3 · Výdrž {p['hold_min']} min.")
             await _event(t, "Krok 3 · Výdrž", f"strop {ceil:g} % dosažen, výdrž {p['hold_min']} min")
             await db.update(tid, status="hold", phase_started_at=now)
