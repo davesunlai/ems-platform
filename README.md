@@ -1,3 +1,7 @@
+## v1.8.17 — Geo: IPv4-only HTTPS, delší timeouty
+- Kontejner api má IPv6 bez cesty ven → overpass-api.de „Network is unreachable“; `_IPv4HTTPSConnection` vynucuje IPv4 (Nominatim, Overpass, OCM).
+- Overpass timeout 8 → 40 s (dotaz `[timeout:30]`, běží na pozadí); osm.jp vyřazen (neplatný certifikát); pořadí api.de → private.coffee → kumi.
+
 ## v1.8.16 — Dohledání místa na pozadí (oprava zmizelých úseků)
 - `/api/cars/sessions` odpovídá hned z cache; chybějící místa se dohledávají v úloze na pozadí (`place_pending`), detail dne se obnoví po 20 s (max 3×).
   Dřív zrcadla Overpass (timeouty) držela odpověď > 1 min → prohlížeč ji zahodil a modré úseky zmizely.

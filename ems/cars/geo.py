@@ -7,8 +7,31 @@ import asyncio
 import json
 import logging
 import time
+import http.client
+import socket
+import ssl
 import urllib.parse
 import urllib.request
+
+
+class _IPv4HTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS jen přes IPv4 — kontejner má IPv6 adresu bez cesty ven („Network is unreachable“, lekce 5. 11.; dřív Docker Hub)."""
+    def connect(self):
+        infos = socket.getaddrinfo(self.host, self.port, socket.AF_INET, socket.SOCK_STREAM)
+        if not infos:
+            raise OSError(f"{self.host}: žádná IPv4 adresa")
+        sock = socket.create_connection(infos[0][4], timeout=self.timeout)
+        if self._tunnel_host:
+            self.sock = sock; self._tunnel()
+        self.sock = ssl.create_default_context().wrap_socket(sock, server_hostname=self.host)
+
+
+class _IPv4HTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_IPv4HTTPSConnection, req)
+
+
+_opener = urllib.request.build_opener(_IPv4HTTPSHandler())
 
 from ems.api.db import get_pool
 
@@ -17,8 +40,8 @@ UA = "TERA-EMS/1.0 (energy management; contact via teraems.com)"
 NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
 # overpass-api.de (i lz4.) aktivně odmítá IP franty (blocklist, lekce 5. 11.), kumi timeoutuje, osm.ch kryje jen Švýcarsko →
 # zkoušet zrcadla v pořadí, první odpověď s 'elements' vyhrává; pak OpenChargeMap (klíč v app_settings.ocm_api_key nebo EMS_OCM_API_KEY)
-OVERPASS_MIRRORS = ["https://overpass.private.coffee/api/interpreter", "https://overpass.osm.jp/api/interpreter",
-                    "https://overpass.kumi.systems/api/interpreter", "https://overpass-api.de/api/interpreter"]
+OVERPASS_MIRRORS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter",
+                    "https://overpass.kumi.systems/api/interpreter"]      # osm.jp má neplatný certifikát
 OCM = "https://api.openchargemap.io/v3/poi/"
 RADIUS_M = 1500      # BMW posílá polohu zaokrouhlenou (při zapojení na 2 des. místa ≈ ±0,7 km) → hledat široko, vzít nejbližší
 _last_nominatim = 0.0
@@ -37,14 +60,14 @@ async def ensure_schema() -> None:
 
 def _get(url: str, timeout: float = 6) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _opener.open(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
 def _post(url: str, data: str, timeout: float = 10) -> dict:
     req = urllib.request.Request(url, data=data.encode("utf-8"), headers={"User-Agent": UA, "Accept": "application/json",
                                                                           "Content-Type": "application/x-www-form-urlencoded"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _opener.open(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
@@ -84,10 +107,10 @@ async def _lookup(lat: float, lon: float) -> dict:
         out["place"] = place_from_nominatim(res); out["raw"]["nominatim"] = res.get("address")
     except Exception as exc:
         logger.info("nominatim %.4f,%.4f: %s", lat, lon, exc)
-    q = f'[out:json][timeout:8];(node["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon});way["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon}););out center tags;'
+    q = f'[out:json][timeout:30];(node["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon});way["amenity"="charging_station"](around:{RADIUS_M},{lat},{lon}););out center tags;'
     for url in OVERPASS_MIRRORS:
         try:
-            res = await asyncio.to_thread(_post, url, "data=" + urllib.parse.quote(q), 8)
+            res = await asyncio.to_thread(_post, url, "data=" + urllib.parse.quote(q), 40)   # běží na pozadí; Overpass běžně 10–30 s
             if not isinstance(res, dict) or "elements" not in res:
                 continue
             op, name, d = operator_from_overpass(res, lat, lon)
@@ -114,7 +137,7 @@ async def _ocm(lat: float, lon: float, out: dict) -> None:
         url = f"{OCM}?{urllib.parse.urlencode({'output': 'json', 'latitude': lat, 'longitude': lon, 'distance': RADIUS_M / 1000, 'distanceunit': 'km', 'maxresults': 10, 'compact': 'true', 'verbose': 'false'})}"
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json", "X-API-Key": key})
         def _run():
-            with urllib.request.urlopen(req, timeout=12) as r:
+            with _opener.open(req, timeout=20) as r:
                 return json.loads(r.read().decode("utf-8"))
         res = await asyncio.to_thread(_run)
         best = None
