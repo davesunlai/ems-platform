@@ -100,6 +100,10 @@ export function BatteryTestDialog({ locId, onClose }) {
                   výdrž {hrs(pre.estimate.h_hold)} · vybíjení {hrs(pre.estimate.h_discharge)} → <b>celkem ≈ {hrs(pre.estimate.h_total)}</b>
                 </div>
                 <div style={{ marginTop: 4 }}>🌙 {pre.recommend.msg}</div>
+                <div style={{ marginTop: 4 }}>
+                  🔌 strop importu při testu = {pre.breaker_phases} × 230 V × {pre.breaker_a ?? "?"} A × 0,95 = <b>{pre.import_limit_kw != null ? `${pre.import_limit_kw} kW` : "— (zadej jistič)"}</b>
+                  {" · "}🛡 strop exportu <b>{pre.export_limit_kw ?? "—"} kW</b> (vybíjení = strop − FVE)
+                </div>
                 {pre.ok && (
                   <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
                     <label style={{ fontSize: 12.5 }}><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> Rozumím upozorněním (záložní SoC, wallbox, blokace řízení)</label>

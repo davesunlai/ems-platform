@@ -1,3 +1,6 @@
+## v1.8.3 — Předkontrola ukazuje strop importu
+- Předkontrola testu: výpočet „fáze × 230 V × A × 0,95 = N kW“ + strop exportu.
+
 ## v1.8.2 — Jistič 1f / 3f
 - `localities.main_breaker_phases` (1|3, default 3); limit importu = fáze × 230 V × A × 0,95; výběr 3×/1× v Lokalitách u EAN.
 

@@ -127,8 +127,10 @@ async def precheck(locality_id: int, module_id: str, params: dict) -> dict:
     soc = await _soc_now([module_id])
     est = estimate(params, soc)
     rec = recommend_start(est, loc.get("lat"), loc.get("lon"), datetime.now(timezone.utc))
+    ph = int(loc.get("main_breaker_phases") or 3)
+    imp_kw = round(ph * 230 * float(breaker) * BREAKER_PF / 1000, 1) if breaker else None
     return {"ok": not blockers, "blockers": blockers, "warnings": warnings, "soc_now": soc, "estimate": est, "recommend": rec,
-            "breaker_a": breaker, "export_limit_kw": cfg.get("grid_export_limit_kw")}
+            "breaker_a": breaker, "breaker_phases": ph, "import_limit_kw": imp_kw, "export_limit_kw": cfg.get("grid_export_limit_kw")}
 
 
 def default_params(capacity_kwh: float) -> dict:
