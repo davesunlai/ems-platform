@@ -99,6 +99,7 @@ export const api = {
   carsGeoSettingsPut: (body) => request("/api/cars/geo-settings", { method: "PUT", body }),
   carsGeoRetry: () => request("/api/cars/geo-retry", { method: "POST" }),
   carsGeoPlaces: () => request("/api/cars/geo-places"),
+  evSessionSetCar: (id, vin) => request(`/api/ev/sessions/${id}/car`, { method: "PUT", body: { vin } }),
   carsGeoPlaceAdd: (body) => request("/api/cars/geo-places", { method: "POST", body }),
   carsGeoPlaceDel: (id) => request(`/api/cars/geo-places/${id}`, { method: "DELETE" }),
   evMonth: (loc, month) => request(`/api/localities/${loc}/ev/month?month=${month}`),

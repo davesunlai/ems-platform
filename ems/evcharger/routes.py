@@ -50,6 +50,21 @@ async def ev_state(locality_id: int, _: dict = Depends(read)) -> dict:
     return {"module_ids": mods, "state": row, "session": open_s}
 
 
+@router.put("/ev/sessions/{session_id}/car")
+async def ev_session_set_car(session_id: int, body: dict, _: dict = Depends(require_permission("control"))):
+    """Ruční určení auta u relace wallboxu (když CarData nedává důkaz). body: {vin} nebo {vin: null}."""
+    from ems.cars import db as cars_db
+    vin = (body or {}).get("vin")
+    name = None
+    if vin:
+        v = next((x for x in await cars_db.list_vehicles() if x["vin"] == vin), None)
+        if not v:
+            raise HTTPException(status_code=404, detail="VIN nenalezen")
+        name = v.get("name") or v.get("model") or vin[-6:]
+    await ev_db.set_session_car(session_id, vin, name)
+    return {"ok": True, "session_id": session_id, "car_vin": vin, "car_name": name}
+
+
 @router.get("/localities/{locality_id}/ev/sessions")
 async def ev_sessions(locality_id: int, limit: int = 50, month: str | None = None, _: dict = Depends(read)) -> list[dict]:
     mods = await _ev_modules(locality_id); _need(mods)

@@ -359,8 +359,10 @@ async def assign_cars_to_sessions() -> None:
             soc_rise = await db.soc_rise_since(v["vin"], {**db.DEFAULT_KEY_MAP, **(v.get("key_map") or {})}["soc"], s["started_at"])
             # čerstvé NOCHARGING od auta, zatímco wallbox nabíjí = auto to není (lekce 5. 11.: iX3 odpojeno, X3 zapojeno bez streamu)
             wb_charging = (await _wb_power_w(s["module_id"])) > 500      # wallbox skutečně dodává (bez ohledu na povel EMS)
-            neg = -3 if (cv.get("charging") is False and newer(cv.get("charging_ts")) and wb_charging
-                         and datetime.fromisoformat(cv["charging_ts"]) >= s["started_at"] + timedelta(seconds=45)) else 0
+            # stav od auta po startu relace (±60 s) říká „nenabíjím“, wallbox přitom dodává a relace běží ≥ 2 min → auto to není
+            neg = -3 if (cv.get("charging") is False and cv.get("charging_ts") and wb_charging
+                         and datetime.fromisoformat(cv["charging_ts"]) >= s["started_at"] - timedelta(seconds=60)
+                         and datetime.now(timezone.utc) - s["started_at"] >= timedelta(minutes=2)) else 0
             sc = (4 if cv.get("charging") and newer(cv.get("charging_ts")) else 0) \
                 + (3 if cv.get("plugged_bool") is True and newer(cv.get("plugged_ts")) else 0) \
                 + (-10 if cv.get("plugged_bool") is False and newer(cv.get("plugged_ts")) else 0) \
@@ -387,7 +389,7 @@ async def assign_cars_to_sessions() -> None:
                         except Exception as exc:
                             logger.info("REST kick: %s", exc)
                         break
-        if pick and pick[1]["vin"] != s.get("car_vin"):
+        if pick and pick[1]["vin"] != s.get("car_vin") and (not s.get("car_vin") or pick[0] >= 3):   # ruční/dřívější volbu přepíše jen silný důkaz
             await ev_db.set_session_car(s["id"], pick[1]["vin"], pick[2]["name"])
             logger.info("ev_session #%s ← %s (skóre %s)", s["id"], pick[2]["name"], pick[0])
 

@@ -356,6 +356,13 @@ export function EvPanel({ locId, mod, onClose }) {
             <span>výkon <b style={{ color: live.power_w > 50 ? "var(--green)" : "var(--fg)" }}>{kw} kW</b>{live.phases_active ? ` (${live.phases_active}f)` : ""}</span>
             <span>proud {live.amp_set} A{live.amp_allowed != null && live.amp_allowed !== live.amp_set ? ` (povoleno ${live.amp_allowed})` : ""}</span>
             <span>relace <b>{((live.session_wh || 0) / 1000).toFixed(1)} kWh</b></span>
+            {live.car_state !== "idle" && cars.length > 0 && has("control") && (
+              <span title="Které auto je na wallboxu — TERA určuje z CarData; tady lze ručně opravit">🚘
+                <select style={{ ...FLD, marginLeft: 4, padding: "2px 6px" }} value={live.car_vin || ""}
+                        onChange={async (e) => { const sid = (await api.evState(locId))?.session?.id; if (sid) { await api.evSessionSetCar(sid, e.target.value || null); load(); } }}>
+                  <option value="">auto neurčeno</option>
+                  {cars.map((c) => <option key={c.vin} value={c.vin}>{c.name}</option>)}
+                </select></span>)}
             <span>celkem {((live.energy_total_wh || 0) / 1000).toFixed(0)} kWh</span>
             <span className="muted" title="modelStatus">{live.model_status_cz}</span>
             {live.error ? <span style={{ color: "#f85149" }}>⛔ chyba {live.error}</span> : null}

@@ -1,3 +1,7 @@
+## v1.8.23 — Záporný důkaz od startu relace + ruční volba auta
+- NOCHARGING od auta ≥ start relace − 60 s (dřív +45 s → ve stejné minutě se nepoužil), relace ≥ 2 min, wallbox > 0,5 kW → −3.
+- Panel wallboxu: výběr „🚘 auto u wallboxu“ u živého stavu (právo control) → `PUT /api/ev/sessions/{id}/car`; automat ruční volbu přepíše jen silným důkazem (skóre ≥ 3).
+
 ## v1.8.22 — Oprava záporného důkazu
 - „wallbox nabíjí“ = výkon > 0,5 kW z telemetrie (dřív navíc vyžadován aktivní povel EMS `ev_set` → při nabíjení bez cíle TERA se −3 nepoužilo). Skóre aut se loguje à 20 s.
 
