@@ -489,12 +489,13 @@ export function ReportView({ t, onClose }) {
               <Stat l="účinnost" v={`${t.result.efficiency_pct ?? "—"} %`} /><Stat l="jmenovitě" v={`${f2(a.nominal_total_kwh)} kWh`} />
             </div>)}
           <table style={{ width: "100%", fontSize: 12.5 }}>
-            <thead><tr><th>blok</th><th>jmen. kWh</th><th>nabito kWh</th><th>vybito kWh</th><th>SoC vybíjení</th><th>využitelná kWh</th><th>SoH</th><th>účinnost</th><th>hodnocení</th></tr></thead>
+            <thead><tr><th>blok</th><th>jmen. kWh</th><th>nabito kWh</th><th>vybito kWh</th><th>SoC vybíjení</th><th>využitelná kWh</th><th title="kapacita z lineární části škály SoC = co články mají">články (lin.) kWh</th><th>SoH</th><th>účinnost</th><th>hodnocení</th></tr></thead>
             <tbody>{a.blocks.map((b) => (
               <tr key={b.idx}><td><b>{b.name}</b>{b.module_model ? <span className="muted"> {b.modules_count ? `${b.modules_count}× ` : ""}{b.module_model}{b.installed ? `, ${b.installed}` : ""}</span> : null}</td>
                 <td>{f2(b.nominal_kwh)}</td><td>{f2(b.e_chg_kwh)}</td><td>{f2(b.e_dis_kwh)}</td>
                 <td>{b.soc_dis_from != null ? `${Math.round(b.soc_dis_from)} → ${Math.round(b.soc_dis_to)} %` : "—"}</td>
-                <td><b>{f2(b.capacity_est_kwh)}</b></td><td><b style={{ color: LVL_COLOR[b.level] }}>{b.soh_pct ?? "—"} %</b></td><td>{b.efficiency_pct ?? "—"} %</td>
+                <td><b>{f2(b.capacity_est_kwh)}</b></td><td>{f2(b.capacity_linear_kwh)}</td><td><b style={{ color: LVL_COLOR[b.level] }}>{b.soh_pct ?? "—"} %</b></td>
+                <td title="účinnost jen při uzavřeném cyklu a ≤ 100 %; jinak bilance vybito ÷ nabito">{b.efficiency_pct != null ? `${b.efficiency_pct} %` : <span className="muted">— (bilance {b.balance_pct ?? "—"} %)</span>}</td>
                 <td style={{ color: LVL_COLOR[b.level], fontWeight: 600 }}>{LVL_TXT[b.level]}</td></tr>))}
             </tbody></table>
           {a.blocks.map((b) => (
@@ -509,6 +510,8 @@ export function ReportView({ t, onClose }) {
                 <span>nejnižší / nejvyšší v klidu</span><span>{top(b.cells?.min_rest)} / {top(b.cells?.max_rest)}</span>
                 <span>Δ nahoře (SoC ≥ 85 %) / dole (≤ 20 %) pod zátěží</span><span>max {b.delta?.knee_top?.max_mv ?? "—"} / {b.delta?.knee_bottom?.max_mv ?? "—"} mV</span>
                 <span>Δ na plató nabíjení / vybíjení · v klidu</span><span>medián {b.delta?.plateau_charge?.median_mv ?? "—"} / {b.delta?.plateau_discharge?.median_mv ?? "—"} · {b.delta?.rest?.median_mv ?? "—"} mV</span>
+                {b.soc_steps?.charge?.length > 0 && <><span>kWh / 10 % nabíjení</span><span>{b.soc_steps.charge.map((x) => <span key={x.from} style={{ color: b.jump_steps?.some((j) => j.from === x.from && j.to === x.to) ? "#f85149" : "inherit", marginRight: 8 }}>{x.from}→{x.to}: {f2(x.kwh)}</span>)}</span></>}
+                {b.soc_steps?.discharge?.length > 0 && <><span>kWh / 10 % vybíjení</span><span>{b.soc_steps.discharge.map((x) => <span key={x.from} style={{ color: b.jump_steps?.some((j) => j.from === x.from && j.to === x.to) ? "#f85149" : "inherit", marginRight: 8 }}>{x.from}→{x.to}: {f2(x.kwh)}</span>)}</span></>}
               </div>
             </div>))}
           {a.findings?.length > 0 && (

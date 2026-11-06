@@ -1,3 +1,12 @@
+## v1.9.2 — Pravidlo „SoC skok“: kapacita článků vs. okno BMS
+- Per blok kWh na každých 10 % SoC (BMS) v obou směrech (`soc_steps`); kroky s < 50 % mediánu zdravých kroků = skok (`jump_steps`).
+- `capacity_linear_kwh` = medián zdravých kroků × 10 (co články mají); `window_ratio` = využitelná ÷ lineární; 🟡 < 0,85, 🔴 < 0,7 s textem „okno zavírají jednotlivé články, po výměně/vyvážení lze čekat návrat k ≈ X kWh“ a zónami skoku s vedoucím článkem.
+- UI/DOCX/XLSX: sloupec „články (lin.) kWh“, kroky po 10 % (skok červeně), list „Kroky SoC“.
+
+## v1.9.1 — Účinnost bloku jen při uzavřeném cyklu
+- Per blok: `efficiency_pct` jen když SoC bloku na začátku nabíjení ≈ na konci vybíjení (±2 %) a výsledek ≤ 100 %; jinak `balance_pct` (vybito ÷ nabito) a při > 100 % nález 🟡 „SoC bloku z BMS není konzistentní“ (B1 test #1: 11,00 in / 12,17 out).
+- Report DOCX/XLSX a UI ukazují „— (bilance X %)“ místo nesmyslné účinnosti.
+
 ## v1.9.0 — Bateriové bloky, vyhodnocení testu po blocích a článcích, report DOCX/XLSX
 - **Bloky** (`battery_blocks`, Moduly → Solis hybrid → 🔋 Bateriové bloky): B1…Bn = bateriové vstupy měniče; název, počet modulů × model × kWh/modul (nebo kapacita přímo), články/modul, instalace, poznámka. Součet se propíše do `planner_config.capacity_kwh`. Bez bloků se kapacita dělí rovnoměrně podle počtu packů.
 - Test ukládá bloky do `params.blocks` (historie zůstává přesná); výsledek nese `blocks[]` (SoH per blok) a `assess`.

@@ -153,9 +153,12 @@ def build_docx(ctx: dict) -> bytes:
     rows = []
     for b in a["blocks"]:
         rows.append([b["name"], _f(b.get("nominal_kwh"), 2), _f(b.get("e_chg_kwh"), 2), _f(b.get("e_dis_kwh"), 2),
-                     f"{_f(b.get('soc_dis_from'), 0)} → {_f(b.get('soc_dis_to'), 0)}", _f(b.get("capacity_est_kwh"), 2),
-                     _f(b.get("soh_pct"), 1), _f(b.get("efficiency_pct"), 1), (LEVEL_TXT[b["level"]], b["level"])])
-    table(rows, header=["blok", "jmen. kWh", "nabito kWh", "vybito kWh", "SoC vybíjení %", "využitelná kWh", "SoH %", "účinnost %", "hodnocení"], size=8.5)
+                     f"{_f(b.get('soc_dis_from'), 0)} → {_f(b.get('soc_dis_to'), 0)}", _f(b.get("capacity_est_kwh"), 2), _f(b.get("capacity_linear_kwh"), 2),
+                     _f(b.get("soh_pct"), 1), _f(b.get("efficiency_pct"), 1) if b.get("efficiency_pct") is not None else f"— (bilance {_f(b.get('balance_pct'), 1)} %)",
+                     (LEVEL_TXT[b["level"]], b["level"])])
+    table(rows, header=["blok", "jmen. kWh", "nabito kWh", "vybito kWh", "SoC vybíjení %", "využitelná kWh", "články (lin.) kWh", "SoH %", "účinnost %", "hodnocení"], size=8.5)
+    doc.add_paragraph("„Články (lin.)“ = kapacita z lineární části škály SoC (medián zdravých kroků po 10 % × 10): co články mají; „využitelná“ = co z nich BMS pustí. "
+                      "Účinnost bloku se uvádí jen při uzavřeném cyklu (SoC bloku na začátku nabíjení ≈ na konci vybíjení) a ≤ 100 %; jinak je uvedena bilance vybito ÷ nabito.").runs[0].font.size = Pt(8)
     for b in a["blocks"]:
         doc.add_heading(f"{b['name']} — {LEVEL_TXT[b['level']]}", level=2)
         meta = _block_label({**b, "capacity_kwh": b.get("nominal_kwh")})
@@ -180,6 +183,12 @@ def build_docx(ctx: dict) -> bytes:
             ["Δ na plató (30–80 %) nabíjení / vybíjení", f"medián {b['delta']['plateau_charge'].get('median_mv', '—')} / {b['delta']['plateau_discharge'].get('median_mv', '—')} mV"],
             ["Δ v klidu", f"medián {b['delta']['rest'].get('median_mv', '—')} mV, max {b['delta']['rest'].get('max_mv', '—')} mV"],
         ], widths=[70, 100], size=8.5)
+        ss = b.get("soc_steps") or {}
+        if ss.get("charge") or ss.get("discharge"):
+            doc.add_paragraph("kWh na každých 10 % SoC bloku (BMS) — nabíjení, pak vybíjení:").runs[0].font.size = Pt(8.5)
+            steps_rows = [[f"{x['from']}→{x['to']} %", _f(x["kwh"]), x["minutes"], (f"čl. {x['cell']}" if x.get("cell") is not None else "—")] for x in ss.get("charge", [])]
+            steps_rows += [[f"{x['from']}→{x['to']} %", _f(x["kwh"]), x["minutes"], (f"čl. {x['cell']}" if x.get("cell") is not None else "—")] for x in ss.get("discharge", [])]
+            table(steps_rows, header=["krok SoC", "kWh", "min", "extrémní článek"], widths=[30, 25, 20, 40], size=8)
     if a.get("findings"):
         doc.add_heading("Celek", level=2)
         for f in a["findings"]:
@@ -282,12 +291,16 @@ def build_xlsx(ctx: dict) -> bytes:
             c.alignment = Alignment(wrap_text=True, vertical="top")
 
     sheet("Bloky", ["blok", "jmenovitá kWh", "moduly", "model", "instalace", "nabito kWh", "dobito ve výdrži kWh", "vybito kWh", "SoC vybíjení od", "SoC vybíjení do",
-                    "využitelná kWh", "SoH %", "kapacita z nabíjení kWh", "účinnost %", "Δ nahoře max mV", "Δ dole max mV", "Δ plató nab. med mV", "Δ plató vyb. med mV", "Δ klid med mV", "hodnocení", "nálezy"],
+                    "využitelná kWh", "články (lin.) kWh", "SoH %", "kapacita z nabíjení kWh", "účinnost %", "bilance vybito/nabito %", "Δ nahoře max mV", "Δ dole max mV", "Δ plató nab. med mV", "Δ plató vyb. med mV", "Δ klid med mV", "hodnocení", "nálezy"],
           [[b["name"], b.get("nominal_kwh"), b.get("modules_count"), b.get("module_model"), b.get("installed"), b.get("e_chg_kwh"), b.get("e_hold_kwh"), b.get("e_dis_kwh"),
-            b.get("soc_dis_from"), b.get("soc_dis_to"), b.get("capacity_est_kwh"), b.get("soh_pct"), b.get("capacity_from_charge_kwh"), b.get("efficiency_pct"),
+            b.get("soc_dis_from"), b.get("soc_dis_to"), b.get("capacity_est_kwh"), b.get("capacity_linear_kwh"), b.get("soh_pct"), b.get("capacity_from_charge_kwh"), b.get("efficiency_pct"), b.get("balance_pct"),
             b["delta"]["knee_top"].get("max_mv"), b["delta"]["knee_bottom"].get("max_mv"), b["delta"]["plateau_charge"].get("median_mv"),
             b["delta"]["plateau_discharge"].get("median_mv"), b["delta"]["rest"].get("median_mv"), LEVEL_TXT[b["level"]], "\n".join(f["text"] for f in b["findings"])]
-           for b in a["blocks"]], widths=[8, 12, 8, 20, 12, 11, 11, 11, 10, 10, 12, 8, 12, 10, 10, 10, 10, 10, 10, 20, 90])
+           for b in a["blocks"]], widths=[8, 12, 8, 20, 12, 11, 11, 11, 10, 10, 12, 12, 8, 12, 10, 10, 10, 10, 10, 10, 10, 20, 90])
+
+    sheet("Kroky SoC", ["blok", "směr", "krok SoC", "kWh", "min", "od", "do", "extrémní článek"],
+          [[b["name"], d, f"{x['from']}→{x['to']} %", x["kwh"], x["minutes"], _dt(x["t_from"]), _dt(x["t_to"]), x.get("cell")] for b in a["blocks"]
+           for d, key in (("nabíjení", "charge"), ("vybíjení", "discharge")) for x in (b.get("soc_steps") or {}).get(key, [])], widths=[8, 10, 12, 8, 6, 16, 16, 12])
 
     sheet("Články", ["blok", "role", "článek", "pozice", "podíl minut %", "počet minut"],
           [[b["name"], role, x["cell"], x["txt"], x["share_pct"], x["count"]] for b in a["blocks"]

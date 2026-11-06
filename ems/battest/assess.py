@@ -24,6 +24,8 @@ THRESHOLDS = {
     "rest_settle_min": 20,                              # klid = bez proudu aspoň N minut (relaxace napětí)
     "knee_bot_amber": 60, "knee_bot_red": 100,          # Δ mV dole pod zátěží
     "eff_amber": 90.0,                                  # účinnost celku %
+    "jump_ratio": 0.5,                                  # krok 10 % SoC s < 50 % mediánu kWh zdravých kroků = skok SoC BMS
+    "window_amber": 0.85, "window_red": 0.7,            # využitelná ÷ kapacita lineární části
     "p_active_w": 500, "p_rest_w": 100,                 # kdy je blok „pod zátěží“ / „v klidu“
     "p_stopped_w": 150, "p_other_w": 1000,              # blok zastavil × druhý jede
 }
@@ -101,6 +103,26 @@ def _share(rows: list[dict], key_n: str, cpm) -> list[dict]:
     return [{"cell": cell, "txt": cell_txt(cell, cpm), "count": cnt, "share_pct": round(cnt / n * 100, 1)} for cell, cnt in c.most_common(3)]
 
 
+def _soc_steps(rows: list[dict], k: int, sign: int) -> list[dict]:
+    """kWh za každý 10% krok SoC bloku (podle BMS) v daném směru; cell = extrémní článek na konci kroku."""
+    kp, ks = f"battery_power_{k}", f"battery_soc_{k}"
+    out = []; last = None; e = 0.0; e0 = 0.0; t0 = None
+    key_n = f"battery_cell_nmax_{k}" if sign > 0 else f"battery_cell_nmin_{k}"
+    for r in rows:
+        if r.get(ks) is None:
+            continue
+        e += max(0.0, sign * (r.get(kp) or 0)) / 60.0 / 1000.0
+        s = int(r[ks] // 10) * 10
+        if last is None:
+            last, e0, t0 = s, e, r["ts"]; continue
+        if s != last:
+            cell = r.get(key_n)
+            out.append({"from": last, "to": s, "kwh": round(e - e0, 2), "t_from": t0.isoformat(), "t_to": r["ts"].isoformat(),
+                        "minutes": round((r["ts"] - t0).total_seconds() / 60), "cell": int(round(cell)) if cell is not None else None})
+            last, e0, t0 = s, e, r["ts"]
+    return [x for x in out if abs(x["to"] - x["from"]) == 10]
+
+
 def _delta_stats(rows: list[dict], k: int, pred) -> dict:
     d = [(r[f"battery_cell_vmax_{k}"] - r[f"battery_cell_vmin_{k}"]) * 1000 for r in rows
          if r.get(f"battery_cell_vmax_{k}") is not None and r.get(f"battery_cell_vmin_{k}") is not None and pred(r)]
@@ -156,9 +178,50 @@ async def assess(t: dict, result: dict | None = None) -> dict:
                 res["level"] = _worse(res["level"], lvl)
         if res["e_chg_kwh"] > 0 and s0c is not None and s1c is not None and s1c - s0c >= 20:
             res["capacity_from_charge_kwh"] = round(res["e_chg_kwh"] / ((s1c - s0c) / 100.0), 2)
-        if res["e_dis_kwh"] > 0 and (res["e_chg_kwh"] + res["e_hold_kwh"]) > 0:
-            res["efficiency_pct"] = round(res["e_dis_kwh"] / (res["e_chg_kwh"] + res["e_hold_kwh"]) * 100, 1)
-        # 2. asymetrie: blok zastavil, druhý jede
+        # účinnost bloku jen při uzavřeném cyklu (SoC na začátku nabíjení ≈ SoC na konci vybíjení) a fyzikálně možná (≤ 100 %);
+        # jinak jde o bilanci — a bilance „vybito > nabito“ je sama o sobě nález: BMS SoC bloku není konzistentní.
+        e_in = res["e_chg_kwh"] + res["e_hold_kwh"]
+        res["balance_pct"] = round(res["e_dis_kwh"] / e_in * 100, 1) if res["e_dis_kwh"] > 0 and e_in > 0 else None
+        closed = s0c is not None and s1d is not None and abs(s0c - s1d) <= 2
+        if res["balance_pct"] is not None and closed and res["balance_pct"] <= 100:
+            res["efficiency_pct"] = res["balance_pct"]
+        elif res["balance_pct"] is not None and res["balance_pct"] > 100:
+            res["findings"].append({"level": "amber", "rule": "balance",
+                "text": f"Bilance bloku: nabito {e_in:.2f} kWh, vybito {res['e_dis_kwh']:.2f} kWh — vybito více než nabito, což nejde; "
+                        f"SoC bloku z BMS tedy není konzistentní (na začátku „{s0c:.0f} %“ bylo v bloku reálně víc energie než na konci „{s1d:.0f} %“). "
+                        f"Typický projev BMS, které SoC koriguje podle napětí slabého článku. Využitelná kapacita bloku je proto odhad: "
+                        f"{min(e_in, res['e_dis_kwh']):.2f}–{max(e_in, res['e_dis_kwh']):.2f} kWh (nabito / vybito) přes ~{(s0d - s1d) if s0d is not None and s1d is not None else 0:.0f} % SoC."})
+            res["level"] = _worse(res["level"], "amber")
+        # 1b. SoC skok: kroky po 10 % s výrazně menší energií než zdravé kroky → BMS SoC bloku „přeskakuje“ (pinned na extrémní článek);
+        #     kapacita lineární části = medián zdravých kroků × 10 (co články mají), využitelná = co z nich pustí BMS.
+        st_c = _soc_steps(r_chg, k, +1); st_d = _soc_steps(r_dis, k, -1)
+        res["soc_steps"] = {"charge": st_c, "discharge": st_d}
+        allsteps = [x for x in st_c + st_d if x["kwh"] > 0]
+        if len(allsteps) >= 4:
+            top = sorted(x["kwh"] for x in allsteps)[-max(3, len(allsteps) // 2):]
+            healthy_med = statistics.median(top)
+            jumps = [x for x in allsteps if x["kwh"] < T["jump_ratio"] * healthy_med]
+            res["capacity_linear_kwh"] = round(healthy_med * 10, 2)
+            res["jump_steps"] = jumps
+            if jumps and res.get("capacity_est_kwh"):
+                ratio = res["capacity_est_kwh"] / res["capacity_linear_kwh"]
+                res["window_ratio"] = round(ratio, 3)
+                lvl = "red" if ratio < T["window_red"] else "amber" if ratio < T["window_amber"] else "green"
+                def zone(steps, lbl):
+                    z = [x for x in jumps if x in steps]
+                    if not z:
+                        return None
+                    lo, hi = min(min(x["from"], x["to"]) for x in z), max(max(x["from"], x["to"]) for x in z)
+                    cells = Counter(x["cell"] for x in z if x["cell"] is not None)
+                    c = cells.most_common(1)[0][0] if cells else None
+                    return f"{lbl} {lo}–{hi} % ({sum(x['kwh'] for x in z):.2f} kWh na {len(z) * 10} % škály" + (f", vede {cell_txt(c, cpm)}" if c is not None else "") + ")"
+                zones = [z for z in (zone(st_c, "nabíjení"), zone(st_d, "vybíjení")) if z]
+                res["findings"].append({"level": lvl, "rule": "soc_jump",
+                    "text": f"SoC bloku z BMS skáče: {'; '.join(zones)}. V lineární části škály dává blok {healthy_med:.2f} kWh na 10 % → "
+                            f"články mají ≈ {res['capacity_linear_kwh']:.2f} kWh, ale BMS z nich pustí jen {res['capacity_est_kwh']:.2f} kWh ({ratio * 100:.0f} %). "
+                            f"Okno zavírají jednotlivé články (viz omezující články), ne stárnutí všech — po výměně/vyvážení viníků lze čekat návrat k ≈ {res['capacity_linear_kwh']:.2f} kWh."})
+                res["level"] = _worse(res["level"], lvl)
+        # 2. asymetrie: blok zastaví, druhý jede
         others = [o for o in present if o != k]
         for direction, rws, sign, key_n, lbl in (("charge", r_chg, +1, f"battery_cell_nmax_{k}", "nabíjení"),
                                                  ("discharge", r_dis, -1, f"battery_cell_nmin_{k}", "vybíjení")):
