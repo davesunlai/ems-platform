@@ -72,6 +72,7 @@ export function BatteryTestDialog({ locId, onClose }) {
   const [cur, setCur] = useState(null);
   const [hist, setHist] = useState([]);
   const [sel, setSel] = useState(null);       // detail historického testu
+  const [rep, setRep] = useState(null);       // report / vyhodnocení testu
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [ack, setAck] = useState(false);
@@ -121,10 +122,15 @@ export function BatteryTestDialog({ locId, onClose }) {
               <label>výdrž na stropu min<br /><input style={FLD} type="number" value={p.hold_min} onChange={num("hold_min")} /></label>
               <label>dno %<br /><input style={FLD} type="number" value={p.floor_pct} onChange={num("floor_pct")} /></label>
               <label>strop %<br /><input style={FLD} type="number" value={p.ceil_pct} onChange={num("ceil_pct")} /></label>
-              <label>kapacita kWh<br /><input style={FLD} type="number" step="0.1" value={p.capacity_kwh} onChange={num("capacity_kwh")} /></label>
+              <label>kapacita kWh<br /><input style={FLD} type="number" step="0.01" value={p.capacity_kwh} onChange={num("capacity_kwh")} readOnly={!!defs?.blocks?.[mod]?.length} title={defs?.blocks?.[mod]?.length ? "součet bateriových bloků (Moduly → měnič → Bateriové bloky)" : ""} /></label>
               <button className="btn" disabled={busy || !mod} onClick={precheck}>🔎 Zkontrolovat a odhadnout</button>
             </div>
             <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>Výchozí výkony = 10 % kapacity (0,1 C). Strop exportu distributora má přednost — vybíjení se při slunci ořeže.</p>
+            {defs?.blocks?.[mod]?.length ? (
+              <p className="muted" style={{ fontSize: 11.5, margin: "2px 0 0" }}>
+                Bloky: {defs.blocks[mod].map((b) => `${b.name} ${Number(b.capacity_kwh).toFixed(2)} kWh${b.module_model ? ` (${b.modules_count ? b.modules_count + "× " : ""}${b.module_model})` : ""}`).join(" · ")} — SoH se vyhodnotí pro každý blok zvlášť.
+              </p>) : (
+              <p className="muted" style={{ fontSize: 11.5, margin: "2px 0 0" }}>Bloky nejsou zadané — kapacita se rozdělí rovnoměrně podle počtu baterií měniče. Zadat je lze v Moduly → měnič → Bateriové bloky.</p>)}
 
             {pre && (
               <div style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
@@ -156,16 +162,18 @@ export function BatteryTestDialog({ locId, onClose }) {
                 <tr key={t.id}><td>{t.id}</td><td>{dt(t.started_at)}</td><td>{dt(t.ended_at)}</td><td>{PHASE[t.status] || t.status}</td>
                   <td>{t.result?.e_charge_kwh ?? "—"}</td><td>{t.result?.e_discharge_kwh ?? "—"}</td><td>{t.result?.capacity_est_kwh != null ? `${t.result.capacity_est_kwh} kWh` : "—"}</td>
                   <td>{t.result?.soh_pct != null ? `${t.result.soh_pct} %` : "—"}</td><td>{t.result?.efficiency_pct != null ? `${t.result.efficiency_pct} %` : "—"}</td>
-                  <td><button className="btn" style={{ padding: "1px 8px" }} onClick={async () => setSel(await api.btGet(t.id))}>detail</button></td></tr>))}
+                  <td style={{ whiteSpace: "nowrap" }}><button className="btn" style={{ padding: "1px 8px" }} onClick={async () => setSel(await api.btGet(t.id))}>detail</button>{" "}
+                    {(t.status === "done" || t.status === "aborted") && <button className="btn" style={{ padding: "1px 8px" }} onClick={() => setRep(t)}>📄 report</button>}</td></tr>))}
               </tbody></table>
           </div>)}
-        {sel && <div style={{ marginTop: 10 }}><TestProgress t={sel} onClose={() => setSel(null)} /></div>}
+        {sel && <div style={{ marginTop: 10 }}><TestProgress t={sel} onClose={() => setSel(null)} onReport={() => setRep(sel)} /></div>}
+        {rep && <ReportView t={rep} onClose={() => setRep(null)} />}
       </div>
     </div>
   );
 }
 
-export function TestProgress({ t, onAbort, busy, onClose }) {
+export function TestProgress({ t, onAbort, busy, onClose, onReport }) {
   const running = ["preparing", "discharge0", "charge", "hold", "discharge"].includes(t.status);
   const snaps = (t.snapshots || []).filter((s) => s.phase === "charge" || s.phase === "discharge");
   const r = t.result || {};
@@ -176,12 +184,18 @@ export function TestProgress({ t, onAbort, busy, onClose }) {
         <span className="muted">start {dt(t.started_at)}{t.ended_at ? ` · konec ${dt(t.ended_at)}` : ""}</span>
         {t.abort_reason && <span style={{ color: "#f85149" }}>{t.abort_reason}</span>}
         {running && onAbort && <button className="btn" style={{ marginLeft: "auto", borderColor: "#f85149" }} disabled={busy} onClick={onAbort}>⛔ Přerušit test</button>}
-        {onClose && <button className="btn" style={{ marginLeft: "auto", padding: "1px 8px" }} onClick={onClose}>✕</button>}
+        {onReport && !running && <button className="btn" style={{ marginLeft: "auto", padding: "1px 10px" }} onClick={onReport}>📄 Report a vyhodnocení</button>}
+        {onClose && <button className="btn" style={{ marginLeft: onReport && !running ? 0 : "auto", padding: "1px 8px" }} onClick={onClose}>✕</button>}
       </div>
       <div style={{ margin: "8px 0 4px" }}><StepBar status={t.status} /></div>
       <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
         nabíjení {t.params?.p_chg_kw} kW · vybíjení {t.params?.p_dis_kw} kW · výdrž {t.params?.hold_min} min · {t.params?.floor_pct}–{t.params?.ceil_pct} % · jmenovitě {t.params?.capacity_kwh} kWh
+        {t.params?.blocks?.length ? <> · {t.params.blocks.map((b) => `${b.name} ${Number(b.capacity_kwh).toFixed(2)} kWh`).join(" · ")}</> : null}
       </div>
+      {r.blocks?.length > 0 && (
+        <div style={{ margin: "6px 0", display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {r.blocks.map((b) => <Stat key={b.idx} l={`${b.name} · SoH`} v={<span style={{ color: LVL_COLOR[b.level] }}>{b.soh_pct ?? "—"} % · {b.capacity_est_kwh ?? "—"} kWh</span>} big />)}
+        </div>)}
       {t.live && (
         <div style={{ margin: "6px 0", display: "flex", gap: 16, flexWrap: "wrap" }}>
           <Stat l="SoC teď" v={`${t.live.soc != null ? Math.round(t.live.soc) : "?"} %`} big />
@@ -436,6 +450,79 @@ function cellCol(s, p) {
       <div><span style={{ color: "var(--green)" }}>max {Number(vmax).toFixed(3)} V</span>{nmax && <span className="muted"> · {nmax}</span>}</div>
       {vmax != null && <div style={{ color: "var(--amber)" }}>Δ {Math.round((Number(vmax) - Number(vmin)) * 1000)} mV</div>}
     </div>);
+}
+
+const LVL_COLOR = { green: "var(--green)", amber: "var(--amber)", red: "#f85149" };
+const LVL_TXT = { green: "🟢 v pořádku", amber: "🟡 sledovat", red: "🔴 pozornost / výměna" };
+
+/** Vyhodnocení po blocích a článcích + stažení DOCX / XLSX. */
+export function ReportView({ t, onClose }) {
+  const [a, setA] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState("");
+  const load = (re) => { setErr(""); api.btAssess(t.id, re).then(setA).catch((e) => setErr(e.message)); };
+  useEffect(() => { load(false); /* eslint-disable-next-line */ }, [t.id]);
+  const dl = async (ext) => { setBusy(ext); setErr(""); try { await api.btReport(t.id, ext); } catch (e) { setErr(e.message); } setBusy(""); };
+  const f2 = (v) => (v == null ? "—" : Number(v).toFixed(2));
+  const top = (lst) => (lst?.length ? lst.slice(0, 2).map((x) => `${x.txt} ${Math.round(x.share_pct)} %`).join(", ") : "—");
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 97, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: 980, maxWidth: "98vw", maxHeight: "94vh", overflow: "auto", padding: 14, fontSize: 13 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <b style={{ fontSize: 15 }}>📄 Report testu #{t.id}</b>
+          <span className="muted">{dt(t.started_at)} → {dt(t.ended_at)}</span>
+          {a && <b style={{ color: LVL_COLOR[a.level] }}>{LVL_TXT[a.level]}</b>}
+          <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            <button className="btn" disabled={!!busy} onClick={() => dl("docx")}>{busy === "docx" ? "…" : "⬇ DOCX"}</button>
+            <button className="btn" disabled={!!busy} onClick={() => dl("xlsx")}>{busy === "xlsx" ? "…" : "⬇ XLSX"}</button>
+            <button className="btn" title="přepočítat vyhodnocení podle aktuálních pravidel" onClick={() => { setA(null); load(true); }}>↻</button>
+            <button className="btn" style={{ padding: "1px 8px" }} onClick={onClose}>✕</button>
+          </span>
+        </div>
+        {err && <p style={{ color: "#f85149" }}>{err}</p>}
+        {!a && !err && <p className="muted">Počítám vyhodnocení…</p>}
+        {a && (<>
+          {t.result && (
+            <div style={{ margin: "8px 0", display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <Stat l="nabito" v={`${f2(t.result.e_charge_kwh)} kWh`} /><Stat l="vybito" v={`${f2(t.result.e_discharge_kwh)} kWh`} />
+              <Stat l="kapacita celku" v={`${f2(t.result.capacity_est_kwh)} kWh`} big /><Stat l="SoH celku" v={`${t.result.soh_pct ?? "—"} %`} big />
+              <Stat l="účinnost" v={`${t.result.efficiency_pct ?? "—"} %`} /><Stat l="jmenovitě" v={`${f2(a.nominal_total_kwh)} kWh`} />
+            </div>)}
+          <table style={{ width: "100%", fontSize: 12.5 }}>
+            <thead><tr><th>blok</th><th>jmen. kWh</th><th>nabito kWh</th><th>vybito kWh</th><th>SoC vybíjení</th><th>využitelná kWh</th><th>SoH</th><th>účinnost</th><th>hodnocení</th></tr></thead>
+            <tbody>{a.blocks.map((b) => (
+              <tr key={b.idx}><td><b>{b.name}</b>{b.module_model ? <span className="muted"> {b.modules_count ? `${b.modules_count}× ` : ""}{b.module_model}{b.installed ? `, ${b.installed}` : ""}</span> : null}</td>
+                <td>{f2(b.nominal_kwh)}</td><td>{f2(b.e_chg_kwh)}</td><td>{f2(b.e_dis_kwh)}</td>
+                <td>{b.soc_dis_from != null ? `${Math.round(b.soc_dis_from)} → ${Math.round(b.soc_dis_to)} %` : "—"}</td>
+                <td><b>{f2(b.capacity_est_kwh)}</b></td><td><b style={{ color: LVL_COLOR[b.level] }}>{b.soh_pct ?? "—"} %</b></td><td>{b.efficiency_pct ?? "—"} %</td>
+                <td style={{ color: LVL_COLOR[b.level], fontWeight: 600 }}>{LVL_TXT[b.level]}</td></tr>))}
+            </tbody></table>
+          {a.blocks.map((b) => (
+            <div key={b.idx} style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
+              <div style={{ fontWeight: 600, color: LVL_COLOR[b.level] }}>{b.name} — {LVL_TXT[b.level]}</div>
+              <ul style={{ margin: "4px 0 6px 18px", padding: 0, lineHeight: 1.45 }}>
+                {b.findings.map((f, i) => <li key={i} style={{ color: f.level === "green" ? "var(--muted)" : "inherit" }}><span style={{ color: LVL_COLOR[f.level] }}>●</span> {f.text}</li>)}
+              </ul>
+              <div className="muted" style={{ fontSize: 11.5, display: "grid", gridTemplateColumns: "auto 1fr", gap: "1px 10px" }}>
+                <span>nejvyšší při nabíjení</span><span>{top(b.cells?.max_charge)}</span>
+                <span>nejnižší při vybíjení</span><span>{top(b.cells?.min_discharge)}</span>
+                <span>nejnižší / nejvyšší v klidu</span><span>{top(b.cells?.min_rest)} / {top(b.cells?.max_rest)}</span>
+                <span>Δ nahoře (SoC ≥ 85 %) / dole (≤ 20 %) pod zátěží</span><span>max {b.delta?.knee_top?.max_mv ?? "—"} / {b.delta?.knee_bottom?.max_mv ?? "—"} mV</span>
+                <span>Δ na plató nabíjení / vybíjení · v klidu</span><span>medián {b.delta?.plateau_charge?.median_mv ?? "—"} / {b.delta?.plateau_discharge?.median_mv ?? "—"} · {b.delta?.rest?.median_mv ?? "—"} mV</span>
+              </div>
+            </div>))}
+          {a.findings?.length > 0 && (
+            <ul style={{ margin: "10px 0 0 18px", padding: 0, lineHeight: 1.45 }}>
+              {a.findings.map((f, i) => <li key={i}><span style={{ color: LVL_COLOR[f.level] }}>●</span> {f.text}</li>)}
+            </ul>)}
+          <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
+            Pořadí pravidel: 1 využitelná energie bloku vs. jmenovitá → 2 blok zastaví dřív než druhý (omezuje systém) → 3 omezující / stále extrémní článek → 4 rozptyl v kolenech pod zátěží → 5 plató a klid jen informativně (LFP plató rozdíly maskuje).
+            Prahy: SoH 🟡 &lt; {a.thresholds?.soh_amber} % 🔴 &lt; {a.thresholds?.soh_red} % · asymetrie 🟡 ≥ {a.thresholds?.asym_amber} % 🔴 ≥ {a.thresholds?.asym_red} % · stálost 🟡 ≥ {a.thresholds?.share_amber} % 🔴 ≥ {a.thresholds?.share_red} % minut · Δ nahoře 🟡 ≥ {a.thresholds?.knee_top_amber} 🔴 ≥ {a.thresholds?.knee_top_red} mV · Δ dole 🟡 ≥ {a.thresholds?.knee_bot_amber} 🔴 ≥ {a.thresholds?.knee_bot_red} mV.
+          </p>
+        </>)}
+      </div>
+    </div>
+  );
 }
 
 function Stat({ l, v, big }) {

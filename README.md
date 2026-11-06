@@ -1,3 +1,10 @@
+## v1.9.0 — Bateriové bloky, vyhodnocení testu po blocích a článcích, report DOCX/XLSX
+- **Bloky** (`battery_blocks`, Moduly → Solis hybrid → 🔋 Bateriové bloky): B1…Bn = bateriové vstupy měniče; název, počet modulů × model × kWh/modul (nebo kapacita přímo), články/modul, instalace, poznámka. Součet se propíše do `planner_config.capacity_kwh`. Bez bloků se kapacita dělí rovnoměrně podle počtu packů.
+- Test ukládá bloky do `params.blocks` (historie zůstává přesná); výsledek nese `blocks[]` (SoH per blok) a `assess`.
+- **Vyhodnocení** (`ems/battest/assess.py`, prahy v `THRESHOLDS`): 1 využitelná kWh bloku vs. jmenovitá (SoH) → 2 asymetrie bloků (blok zastaví, druhý jede) → 3 omezující / stále extrémní článek (číslo, modul, pozice) → 4 Δ v kolenech pod zátěží → 5 plató a klid informativně. Klid = ≥ 20 min bez proudu. Semafor 🟢🟡🔴 per blok i celek, texty nálezů.
+- `GET /api/battery-test/test/{id}/assess[?recompute=1]` (uloží do result u ukončených testů), `/report.docx`, `/report.xlsx` (python-docx, openpyxl, matplotlib — nové závislosti v image).
+- UI: 📄 report v historii i detailu → vyhodnocení po blocích, tabulka článků/Δ, stažení DOCX/XLSX, ↻ přepočet. Dialog testu ukazuje bloky, kapacita je při zadaných blocích jen pro čtení. Výsledky celku na 2 desetinná místa.
+
 ## v1.8.34 — Graf testu: karty kroků s rekapitulací
 - API `steps`: za každý krok t_from/t_to, minuty, SoC od → do, příjem/výdej celkem a B1/B2 (kWh, z battery_power/_1/_2).
 - Graf: popisky kroků místo textů v ploše jako karty nad grafem (kaskádově při kolizi, vodicí čárka k začátku kroku): název · čas · délka · SoC, příjem/výdej celkem, B1 · B2.

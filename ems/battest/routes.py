@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from ems.auth.deps import get_current_user, require_permission
 from ems.auth import roles as _roles
-from . import db, engine
+from . import db, engine, blocks as blocks_mod
 
 router = APIRouter(prefix="/api/battery-test", tags=["battery-test"])
 read = require_permission("read")
@@ -55,7 +55,119 @@ async def defaults(locality_id: int, _: dict = Depends(read)):
     from ems.planner import db as planner_db
     cfg = await planner_db.get_config(locality_id) or {}
     cap = float(cfg.get("capacity_kwh") or 52.8)
-    return {"modules": await _solis_modules(locality_id), "params": engine.default_params(cap)}
+    mods = await _solis_modules(locality_id)
+    blocks = {}
+    for m in mods:
+        bl = await blocks_mod.list_blocks(m)
+        if bl:
+            blocks[m] = bl
+            cap_b = sum(float(b["capacity_kwh"]) for b in bl)
+            if cap_b > 0:
+                cap = cap_b
+    return {"modules": mods, "params": engine.default_params(cap), "blocks": blocks}
+
+
+# ---------- bateriové bloky ----------
+class BlockIn(BaseModel):
+    name: str | None = None
+    capacity_kwh: float | None = None
+    modules_count: int | None = None
+    module_model: str | None = None
+    module_kwh: float | None = None
+    cells_per_module: int | None = None
+    installed: str | None = None
+    note: str | None = None
+
+
+@router.get("/blocks/{module_id}")
+async def get_blocks(module_id: str, _: dict = Depends(read)):
+    return await blocks_mod.list_blocks(module_id)
+
+
+@router.put("/blocks/{module_id}")
+async def put_blocks(module_id: str, body: list[BlockIn], user: dict = Depends(get_current_user)):
+    if "admin" not in user["permissions"] and "control" not in user["permissions"]:
+        raise HTTPException(status_code=403, detail="Chybí právo měnit nastavení bloků.")
+    for b in body:
+        if (b.capacity_kwh or 0) <= 0 and not (b.modules_count and b.module_kwh):
+            raise HTTPException(status_code=400, detail="U každého bloku zadej kapacitu kWh, nebo počet modulů × kWh modulu.")
+    return await blocks_mod.save_blocks(module_id, [b.model_dump() for b in body])
+
+
+# ---------- vyhodnocení a export ----------
+async def _report_ctx(test_id: int, user: dict | None = None, with_chart: bool = True) -> dict:
+    from ems import __version__
+    from ems.localities import db as loc_db
+    from . import assess as assess_mod, report
+    t = await db.get(test_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Test nenalezen")
+    t = await _with_live(t)
+    a = (t.get("result") or {}).get("assess")
+    if not a or not a.get("blocks"):
+        a = await assess_mod.assess(t, t.get("result"))
+    loc = await loc_db.get(int(t["locality_id"])) if t.get("locality_id") else None
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        mrow = await conn.fetchrow("SELECT id, name, adapter, device_type FROM modules WHERE id=$1", t["module_id"])
+    mod = dict(mrow) if mrow else {"id": t["module_id"]}
+    from datetime import datetime, timezone
+    t0 = datetime.fromisoformat(t["started_at"]); t1 = datetime.fromisoformat(t["ended_at"]) if t.get("ended_at") else datetime.now(timezone.utc)
+    packs = [int(b["idx"]) for b in (t["params"].get("blocks") or [])] or [1, 2]
+    cell_rows = await assess_mod.series_cells(t["module_id"], t0, t1, packs)
+    ctx = {"test": t, "assess": a, "locality": loc, "module": mod, "version": __version__, "user": (user or {}).get("username"),
+           "log": t.get("log") or [], "cell_rows": cell_rows}
+    if with_chart:
+        try:
+            ctx["chart"] = report.chart_png(t, cell_rows)
+        except Exception as exc:   # graf není důvod report nevydat
+            import logging; logging.getLogger("ems.battest").warning("report chart: %s", exc)
+    return ctx
+
+
+@router.get("/test/{test_id}/assess")
+async def get_assess(test_id: int, recompute: bool = False, _: dict = Depends(read)):
+    from . import assess as assess_mod
+    t = await db.get(test_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Test nenalezen")
+    a = (t.get("result") or {}).get("assess")
+    if recompute or not a or not a.get("blocks"):
+        t = await _with_live(t)
+        a = await assess_mod.assess(t, t.get("result"))
+        if t["status"] in ("done", "aborted"):
+            res = dict(t.get("result") or {}); res["assess"] = a
+            res["blocks"] = [{k: b.get(k) for k in ("idx", "name", "nominal_kwh", "e_chg_kwh", "e_hold_kwh", "e_dis_kwh", "capacity_est_kwh", "soh_pct", "efficiency_pct", "level")}
+                             for b in a["blocks"]]
+            await db.update(test_id, result=res)
+    return a
+
+
+def _fname(t: dict, ext: str) -> str:
+    from datetime import datetime
+    d = datetime.fromisoformat(t["started_at"]).strftime("%Y-%m-%d")
+    return f"test-baterie-{t['id']}-{d}.{ext}"
+
+
+@router.get("/test/{test_id}/report.docx")
+async def report_docx(test_id: int, user: dict = Depends(read)):
+    from fastapi.responses import Response
+    from . import report
+    ctx = await _report_ctx(test_id, user)
+    data = report.build_docx(ctx)
+    return Response(content=data, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    headers={"Content-Disposition": f'attachment; filename="{_fname(ctx["test"], "docx")}"'})
+
+
+@router.get("/test/{test_id}/report.xlsx")
+async def report_xlsx(test_id: int, user: dict = Depends(read)):
+    from fastapi.responses import Response
+    from . import report
+    ctx = await _report_ctx(test_id, user, with_chart=False)
+    data = report.build_xlsx(ctx)
+    return Response(content=data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{_fname(ctx["test"], "xlsx")}"'})
 
 
 @router.post("/{locality_id}/precheck")

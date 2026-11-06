@@ -148,6 +148,10 @@ async def start(locality_id: int, module_id: str, params: dict, username: str | 
     if not pc["ok"]:
         raise ValueError(" ".join(pc["blockers"]))
     saved = {"soc_now": pc["soc_now"], "estimate": pc["estimate"]}
+    from . import blocks as blocks_mod
+    m0 = await db.latest_metrics(module_id, ["battery_soc_1", "battery_soc_2"], 600)
+    packs = sum(1 for k in ("battery_soc_1", "battery_soc_2") if k in m0) or 1
+    params = {**params, "blocks": await blocks_mod.blocks_for_test(module_id, float(params["capacity_kwh"]), packs)}
     t = await db.create(locality_id, module_id, params, saved, username)
     await db.log(t["id"], f"Test založen uživatelem {username or '?'}: {params}")
     await _event(t, "spuštěn", f"{username or '?'} · nabíjení {params['p_chg_kw']} kW, vybíjení {params['p_dis_kw']} kW, výdrž {params['hold_min']} min, "
@@ -218,18 +222,27 @@ async def compute_result(t: dict) -> dict:
            "e_discharge_kwh": round(e_dis, 2) if e_dis is not None else None}
     e_in = (e_chg or 0) + (e_hold or 0)
     if e_dis:
-        out["capacity_est_kwh"] = round(e_dis / span, 1)
+        out["capacity_est_kwh"] = round(e_dis / span, 2)
         out["soh_pct"] = round(e_dis / span / cap * 100, 1)
     if e_dis and e_in:
         out["efficiency_pct"] = round(e_dis / e_in * 100, 1)
     if e_chg:
-        out["capacity_from_charge_kwh"] = round(e_chg / span, 1)
+        out["capacity_from_charge_kwh"] = round(e_chg / span, 2)
     out["segments"] = [{"phase": s["phase"], "step": s["soc_step"], "kwh": s.get("e_step_kwh"), "minutes": s.get("minutes_step"),
                         "kw": round(float(s["e_step_kwh"]) / (float(s["minutes_step"]) / 60), 2) if s.get("e_step_kwh") and s.get("minutes_step") else None}
                        for s in snaps if s["phase"] in ("charge", "discharge")]
     s1 = [x for x in snaps if x.get("soc1") is not None and x.get("soc2") is not None]
     if s1:
         out["pack_drift_pct_max"] = round(max(abs(float(x["soc1"]) - float(x["soc2"])) for x in s1), 1)
+    # vyhodnocení po blocích a článcích (assess.py); při chybě výsledek nesmí spadnout
+    try:
+        from . import assess as assess_mod
+        tt = {**t, "phase_marks": await db.phase_marks(t["id"]), "ended_at": t.get("ended_at") or datetime.now(timezone.utc).isoformat()}
+        out["assess"] = await assess_mod.assess(tt, out)
+        out["blocks"] = [{k: b.get(k) for k in ("idx", "name", "nominal_kwh", "e_chg_kwh", "e_hold_kwh", "e_dis_kwh", "capacity_est_kwh", "soh_pct", "efficiency_pct", "level")}
+                         for b in out["assess"]["blocks"]]
+    except Exception as exc:
+        logger.warning("battest assess #%s: %s", t.get("id"), exc)
     return out
 
 

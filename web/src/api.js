@@ -8,6 +8,19 @@ export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 let onUnauthorized = () => {};
 export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn; };
 
+/** Stáhne soubor z API s Bearer tokenem (Content-Disposition → název souboru). */
+export async function download(path) {
+  const headers = {}; const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(path, { headers });
+  if (res.status === 401) { clearToken(); onUnauthorized(); throw new Error("Neautorizováno"); }
+  if (!res.ok) { let d = res.statusText; try { d = (await res.json()).detail || d; } catch (e) {} throw new Error(typeof d === "string" ? d : JSON.stringify(d)); }
+  const cd = res.headers.get("Content-Disposition") || ""; const m = /filename="?([^";]+)"?/.exec(cd);
+  const blob = await res.blob(); const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = m ? m[1] : "soubor"; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 async function request(path, { method = "GET", body } = {}) {
   const headers = { "Content-Type": "application/json" };
   const token = getToken();
@@ -92,6 +105,10 @@ export const api = {
   btCurrent: (loc) => request(`/api/battery-test/${loc}/current`),
   btList: (loc) => request(`/api/battery-test/${loc}/list`),
   btGet: (id) => request(`/api/battery-test/test/${id}`),
+  btAssess: (id, recompute) => request(`/api/battery-test/test/${id}/assess${recompute ? "?recompute=1" : ""}`),
+  btBlocks: (mod) => request(`/api/battery-test/blocks/${encodeURIComponent(mod)}`),
+  btBlocksSave: (mod, blocks) => request(`/api/battery-test/blocks/${encodeURIComponent(mod)}`, { method: "PUT", body: blocks }),
+  btReport: (id, ext) => download(`/api/battery-test/test/${id}/report.${ext}`),
   carsMonth: (loc, month) => request(`/api/cars/month?month=${month}${loc ? `&locality_id=${loc}` : ""}`),
   carsSessions: (loc, q) => request(`/api/cars/sessions?${loc ? `locality_id=${loc}&` : ""}${q}`),
   carsRoles: () => request("/api/cars/roles"),

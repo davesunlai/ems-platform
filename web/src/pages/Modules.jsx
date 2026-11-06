@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import Icon from "../components/Icon";
+import BatteryBlocks from "../components/BatteryBlocks";
 import { MAX_TRACKED, METRIC_LABEL, iconFor, groupMetrics, metricsFor, controlFor, countsToLimit, DIAG_METRICS, MPPT_ADAPTERS, DIAG_HOURS } from "../metrics";
 
 // 🔬 Diagnostika MPPT: ukládání veličin MPPT 1–4 na omezenou dobu (params.mppt_diag_until).
@@ -364,6 +365,7 @@ export default function Modules() {
               <input value={f.battery_capacity_kwh} onChange={(e) => setF({ ...f, battery_capacity_kwh: e.target.value })} />
             </div>
           </>)}
+          {editing && f.adapter === "solis" && f.device_type === "hybrid" && <BatteryBlocks moduleId={editing} packs={f.battery_packs !== "auto" ? f.battery_packs : null} />}
           {editing && (() => {
             const shown = metricsFor(f.adapter, f.device_type, avail).filter((k) => !DIAG_METRICS.has(k));
             const checked = shown.filter((k) => !f.hidden.includes(k) && countsToLimit(k)).length;
