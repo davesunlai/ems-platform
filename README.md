@@ -1,3 +1,6 @@
+## v1.9.6 — Články baterie: ovládání okna v jednom řádku
+- Šipky ◀ ▶, „teď“ a rozsah přesunuty z hlavičky do řádku „Období: 6 h … 30 dní“ vpravo (jako u MPPT); −/+ zrušeno (duplikovalo tlačítka období).
+
 ## v1.9.5 — Šipky ◀ ▶ u všech grafů s historií
 - `components/NavArrows.jsx` (◀ ▶ + popisek rozsahu). Nově: teploty aku (posun o zvolené okno, `aggregate offset`), spotová křivka (`/market/spot-curve?offset_days`), tepelné čerpadlo (`/heat-pump/series?offset_h`), detail dne wallboxu (den zpět/vpřed, ▶ zakázáno u dneška). Změna okna vrací na „teď“.
 - Dashboard (modul, přehled, články, MPPT) a měsíc wallboxu šipky už měly. Předpověď a test baterie bez posunu (nemají historii, resp. mají vlastní osu).

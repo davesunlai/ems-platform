@@ -1561,15 +1561,6 @@ function CellsBlock({ deviceIds, devs, localityId }) {
         <h3 style={{ margin: 0 }}>🔋 Články baterie (BMS)</h3>
         <span className="muted" style={{ fontSize: 12 }}>· {id}{age ? ` · ${age}` : ""}</span>
         {localityId && <BatteryTestButton locId={localityId} compact />}
-        <span style={{ flex: 1 }} />
-        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
-        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
-        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
-        <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1, marginLeft: 6 }}
-                onClick={() => { setWin((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={win === 0}>−</button>
-        <span className="muted" style={{ minWidth: 50, textAlign: "center" }}>{WIN[win].label}</span>
-        <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
-                onClick={() => { setWin((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={win === WIN.length - 1}>+</button>
       </div>
       {weakest && (
         <div style={{ fontSize: 13, marginBottom: 8, padding: "6px 10px", borderRadius: 8, background: "var(--bg2, #161b22)" }}>
@@ -1617,7 +1608,11 @@ function CellsBlock({ deviceIds, devs, localityId }) {
           <button key={w.min} className="btn" onClick={() => { setWin(i); setOffset(0); }}
                   style={{ padding: "2px 9px", fontSize: 12, fontWeight: i === win ? 700 : 400,
                            outline: i === win ? "1.5px solid var(--blue, #58a6ff)" : "none" }}>{w.label}</button>))}
-        <span className="muted" style={{ marginLeft: 8 }}>{rangeLabel(WIN[win].min, offset)}</span>
+        <span style={{ flex: 1 }} />
+        {offset > 0 && <button className="btn" style={{ padding: "2px 9px" }} onClick={() => setOffset(0)} title="zpět na teď">teď</button>}
+        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(1)} title="o úsek zpět">◀</button>
+        <button className="btn" style={{ padding: "2px 10px", fontSize: 13, lineHeight: 1 }} onClick={() => step(-1)} disabled={offset === 0} title="o úsek vpřed">▶</button>
+        <span className="muted" style={{ marginLeft: 6 }}>{rangeLabel(WIN[win].min, offset)}</span>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: 12, marginBottom: 4 }}>
         <span className="muted">V grafu:</span>
