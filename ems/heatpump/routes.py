@@ -48,8 +48,8 @@ async def hp_runs(locality_id: int, limit: int = 50, _: dict = Depends(read)) ->
 
 
 @router.get("/{locality_id}/heat-pump/series")
-async def hp_series(locality_id: int, hours: int = 48, _: dict = Depends(read)) -> list[dict]:
+async def hp_series(locality_id: int, hours: int = 48, offset_h: int = 0, _: dict = Depends(read)) -> list[dict]:
     mods = await _hp_modules(locality_id)
     if not mods:
         raise HTTPException(status_code=404, detail="lokalita nemá modul heat_pump")
-    return await hp_db.series(mods, hours)
+    return await hp_db.series(mods, hours, max(0, int(offset_h)))

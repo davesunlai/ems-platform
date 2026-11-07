@@ -105,7 +105,7 @@ async def upsert_slots(slots: list[dict]) -> None:
         )
 
 
-async def history_window(days: int = 1, target_points: int = 400) -> list[dict]:
+async def history_window(days: int = 1, target_points: int = 400, offset_days: int = 0) -> list[dict]:
     """Sloty od (dnešek - (days-1)) do konce zítřka, agregované na ~target bodů.
 
     days=1 => dnešek+zítřek v 15min; delší okna se zhrubnou (time_bucket).
@@ -117,12 +117,12 @@ async def history_window(days: int = 1, target_points: int = 400) -> list[dict]:
             """
             SELECT time_bucket(($1 || ' seconds')::interval, slot) AS b, avg(price) AS price
             FROM spot_history
-            WHERE slot >= date_trunc('day', now()) - ($2 || ' days')::interval
-              AND slot <  date_trunc('day', now()) + interval '2 days'
+            WHERE slot >= date_trunc('day', now()) - ($2 || ' days')::interval - ($3 || ' days')::interval
+              AND slot <  date_trunc('day', now()) + interval '2 days' - ($3 || ' days')::interval
             GROUP BY b
             ORDER BY b
             """,
-            str(bucket_seconds), str(max(0, days - 1)),
+            str(bucket_seconds), str(max(0, days - 1)), str(max(0, offset_days)),
         )
     return [{"start": r["b"].isoformat(), "price": float(r["price"])}
             for r in rows if r["price"] is not None]

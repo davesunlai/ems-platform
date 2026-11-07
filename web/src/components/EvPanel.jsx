@@ -171,7 +171,7 @@ export function MiniMap({ lat, lon, w = 230, h = 130, zoom = 15 }) {
   );
 }
 
-function DayDetail({ locId, date, wbName, onClose }) {
+function DayDetail({ locId, date, wbName, onClose, onShift }) {
   const { has } = useAuth();
   const [d, setD] = useState(null);
   const namePlace = async (c) => {        // ✏ ruční pojmenování nabíječky (OSM/OCM ji neznají)
@@ -252,7 +252,9 @@ function DayDetail({ locId, date, wbName, onClose }) {
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, margin: "4px 0 12px", position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {onShift && <button className="btn" style={{ padding: "1px 8px" }} onClick={() => onShift(-1)} title="předchozí den">◀</button>}
         <b style={{ fontSize: 13 }}>📅 {new Date(date).toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" })}</b>
+        {onShift && <button className="btn" style={{ padding: "1px 8px" }} onClick={() => onShift(1)} disabled={date >= new Date().toISOString().slice(0, 10)} title="další den">▶</button>}
         {d && <span className="muted" style={{ fontSize: 12 }}>úseků nabíjení: {d.runs.length} · celkem {d.kwh_runs ?? 0} kWh</span>}
         <button className="btn" style={{ marginLeft: "auto", padding: "1px 8px" }} onClick={onClose}>✕</button>
       </div>
@@ -394,7 +396,8 @@ export function EvPanel({ locId, mod, onClose }) {
           <span className="muted" style={{ fontSize: 11.5 }}>světlý sloupec = celkem za den (kWh) · tenké sloupečky od nuly = jednotlivé úseky nabíjení (pauza = nový úsek) · klik na den = detail</span>
         </div>
         <MonthChart month={month} daily={daily} runs={runs} onDay={setDay} />
-        {day && <DayDetail locId={locId} date={day} wbName={mod?.name || mod?.id || "wallbox"} onClose={() => setDay(null)} />}
+        {day && <DayDetail locId={locId} date={day} wbName={mod?.name || mod?.id || "wallbox"} onClose={() => setDay(null)}
+                           onShift={(d) => { const x = new Date(`${day}T12:00:00`); x.setDate(x.getDate() + d); setDay(x.toISOString().slice(0, 10)); }} />}
 
         <b style={{ fontSize: 13 }}>Historie relací</b>
         {sessions.length ? (

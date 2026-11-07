@@ -21,9 +21,9 @@ async def spot(_: dict = Depends(require_permission("read"))):
 
 
 @router.get("/market/spot-curve")
-async def spot_curve(days: int = 1, _: dict = Depends(require_permission("read"))):
-    days = max(1, min(days, 30))
-    return {"days": days, "slots": await db.history_window(days)}
+async def spot_curve(days: int = 1, offset_days: int = 0, _: dict = Depends(require_permission("read"))):
+    days = max(1, min(days, 30)); offset_days = max(0, min(int(offset_days), 3650))
+    return {"days": days, "offset_days": offset_days, "slots": await db.history_window(days, offset_days=offset_days)}
 
 
 @router.post("/admin/market/manual")

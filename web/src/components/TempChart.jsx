@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import NavArrows, { rangeLabel } from "./NavArrows";
 import CursorBox, { cursorPos, CURSOR_LINE } from "./CursorBox";
 import { api } from "../api";
 import ExportBtn from "./ExportBtn";
@@ -19,16 +20,17 @@ const RANGES = [{ l: "12 h", m: 720 }, { l: "24 h", m: 1440 }, { l: "3 dny", m: 
 export default function TempChart({ localityId, deviceIds }) {
   const [data, setData] = useState(null);
   const [minutes, setMinutes] = useState(1440);
+  const [offset, setOffset] = useState(0);        // posun okna (v úsecích)
   const [hov, setHov] = useState(null);
 
   useEffect(() => {
     if (!localityId || !deviceIds?.length) return;
     let alive = true;
-    const load = () => api.aggregate(deviceIds, ALL, minutes).then((r) => alive && setData(r.metrics || {})).catch(() => {});
+    const load = () => api.aggregate(deviceIds, ALL, minutes, offset * minutes).then((r) => alive && setData(r.metrics || {})).catch(() => {});
     load();
     const t = setInterval(load, 60000);
     return () => { alive = false; clearInterval(t); };
-  }, [localityId, (deviceIds || []).join(","), minutes]);
+  }, [localityId, (deviceIds || []).join(","), minutes, offset]);
 
   const series = useMemo(() => {
     if (!data) return null;
@@ -90,9 +92,10 @@ export default function TempChart({ localityId, deviceIds }) {
           ))}
           <span style={{ color: AMBIENT.color }}>┄ {AMBIENT.label}{last(AMBIENT.k) != null && ` ${last(AMBIENT.k).toFixed(1)}°`}</span>
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <NavArrows offset={offset} onStep={(d) => setOffset((o) => Math.max(0, o + d))} label={offset ? rangeLabel(minutes, offset * minutes) : null} size={11} />
           {RANGES.map((r) => (
-            <button key={r.m} className="btn" onClick={() => setMinutes(r.m)}
+            <button key={r.m} className="btn" onClick={() => { setMinutes(r.m); setOffset(0); }}
                     style={{ padding: "2px 8px", fontSize: 11, opacity: minutes === r.m ? 1 : 0.55 }}>{r.l}</button>
           ))}
         </div>

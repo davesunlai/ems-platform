@@ -1,3 +1,7 @@
+## v1.9.5 — Šipky ◀ ▶ u všech grafů s historií
+- `components/NavArrows.jsx` (◀ ▶ + popisek rozsahu). Nově: teploty aku (posun o zvolené okno, `aggregate offset`), spotová křivka (`/market/spot-curve?offset_days`), tepelné čerpadlo (`/heat-pump/series?offset_h`), detail dne wallboxu (den zpět/vpřed, ▶ zakázáno u dneška). Změna okna vrací na „teď“.
+- Dashboard (modul, přehled, články, MPPT) a měsíc wallboxu šipky už měly. Předpověď a test baterie bez posunu (nemají historii, resp. mají vlastní osu).
+
 ## v1.9.4 — Jednotný kurzor všech grafů + výchozí okno 24 h
 - `components/CursorBox.jsx`: společný box u křížového kurzoru (pravidlo jako u testu baterie — ~48 px vedle kurzoru, u pravého okraje vlevo, svisle u kurzoru a uvnitř grafu, nikdy pod kurzorem) + jednotná svislá čára (`CURSOR_LINE`).
 - Použito v TimeChart (graf modulu), MultiChart (přehled, články, MPPT), SpotCurve, TempChart (teploty — dřív řádek pod grafem), ForecastChart (dřív řádek pod grafem), HeatPump (dřív roh), EvPanel detail dne (dřív roh).

@@ -153,7 +153,7 @@ async def runs(module_ids: list[str], limit: int = 50) -> list[dict]:
     return out
 
 
-async def series(module_ids: list[str], hours: int = 48) -> list[dict]:
+async def series(module_ids: list[str], hours: int = 48, offset_h: int = 0) -> list[dict]:
     """Řada pro graf: 5min buckety teplot + stav kompresoru (max v bucketu)."""
     if not module_ids:
         return []
@@ -166,9 +166,10 @@ async def series(module_ids: list[str], hours: int = 48) -> list[dict]:
                    avg(t_buffer) AS t_buffer, avg(t_buffer_set) AS t_buffer_set,
                    max(CASE WHEN compressor_on THEN 1 ELSE 0 END) AS comp
             FROM hp_telemetry
-            WHERE module_id = ANY($1::text[]) AND ts > now() - ($2 || ' hours')::interval
+            WHERE module_id = ANY($1::text[]) AND ts > now() - ($2 || ' hours')::interval - ($3 || ' hours')::interval
+              AND ts <= now() - ($3 || ' hours')::interval
             GROUP BY 1 ORDER BY 1
-            """, module_ids, str(max(1, min(hours, 24 * 62))))
+            """, module_ids, str(max(1, min(hours, 24 * 62))), str(max(0, offset_h)))
     return [{"ts": r["b"].isoformat(),
              "t_outdoor": round(r["t_outdoor"], 1) if r["t_outdoor"] is not None else None,
              "t_tank": round(r["t_tank"], 1) if r["t_tank"] is not None else None,

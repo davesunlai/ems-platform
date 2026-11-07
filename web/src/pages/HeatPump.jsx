@@ -1,5 +1,6 @@
 // 🌀 Stránka Tepelné čerpadlo: graf teplot s podbarvením běhů, denní sloupce el+COP, historie spínání.
 import { useEffect, useMemo, useState } from "react";
+import NavArrows, { rangeLabel } from "../components/NavArrows";
 import CursorBox, { cursorPos, CURSOR_LINE } from "../components/CursorBox";
 import { api } from "../api";
 import ExportBtn from "./../components/ExportBtn";
@@ -125,6 +126,7 @@ export default function HeatPump() {
   const [locs, setLocs] = useState([]);
   const [locId, setLocId] = useState(null);
   const [range, setRange] = useState("24h");
+  const [offset, setOffset] = useState(0);
   const [series, setSeries] = useState([]);
   const [runs, setRuns] = useState([]);
   const [days, setDays] = useState([]);
@@ -142,14 +144,14 @@ export default function HeatPump() {
     if (!locId) return;
     let alive = true;
     const load = () => {
-      api.hpSeries(locId, RANGES[range]).then((r) => alive && setSeries(r)).catch(() => {});
+      api.hpSeries(locId, RANGES[range], offset * RANGES[range]).then((r) => alive && setSeries(r)).catch(() => {});
       api.hpRuns(locId, 100).then((r) => alive && setRuns(r)).catch(() => {});
       api.hpDaily(locId, 31).then((r) => alive && setDays(r)).catch(() => {});
     };
     load();
     const t = setInterval(load, 60000);
     return () => { alive = false; clearInterval(t); };
-  }, [locId, range]);
+  }, [locId, range, offset]);
   const dur = (r) => {
     const a = new Date(r.started_at), b = r.ended_at ? new Date(r.ended_at) : new Date();
     const m = Math.round((b - a) / 60000);
@@ -164,10 +166,11 @@ export default function HeatPump() {
           <select value={locId ?? ""} onChange={(e) => setLocId(Number(e.target.value))}>
             {locs.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>)}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+          <NavArrows offset={offset} onStep={(d) => setOffset((o) => Math.max(0, o + d))} label={offset ? rangeLabel(RANGES[range] * 60, offset * RANGES[range] * 60) : null} />
           {Object.keys(RANGES).map((k) => (
             <button key={k} className={`btn${range === k ? " primary" : ""}`} style={{ padding: "3px 10px", fontSize: 12 }}
-                    onClick={() => setRange(k)}>{k}</button>))}
+                    onClick={() => { setRange(k); setOffset(0); }}>{k}</button>))}
         </div>
       </div>
       {err && <p className="muted">{err}</p>}

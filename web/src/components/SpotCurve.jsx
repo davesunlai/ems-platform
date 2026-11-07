@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import NavArrows from "./NavArrows";
 import CursorBox, { cursorPos, CURSOR_LINE } from "./CursorBox";
 import { api } from "../api";
 import ExportBtn from "./ExportBtn";
@@ -13,26 +14,28 @@ const WIN = [
 
 export default function SpotCurve({ rules = [] }) {
   const [wi, setWi] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [slots, setSlots] = useState(null);
   const [hov, setHov] = useState(null);
   const [pos, setPos] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    const load = () => api.spotCurve(WIN[wi].days).then((r) => alive && setSlots(r.slots)).catch(() => {});
+    const load = () => api.spotCurve(WIN[wi].days, offset * WIN[wi].days).then((r) => alive && setSlots(r.slots)).catch(() => {});
     load();
     const t = setInterval(load, 60000);
     return () => { alive = false; clearInterval(t); };
-  }, [wi]);
+  }, [wi, offset]);
 
   const controls = (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <NavArrows offset={offset} onStep={(d) => setOffset((o) => Math.max(0, o + d))} label={offset ? `${offset * WIN[wi].days} ${offset * WIN[wi].days === 1 ? "den" : offset * WIN[wi].days < 5 ? "dny" : "dní"} zpět` : null} />
       <span style={{ flex: 1 }} />
       <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
-              onClick={() => setWi((w) => Math.max(0, w - 1))} disabled={wi === 0} title="kratší">−</button>
+              onClick={() => { setWi((w) => Math.max(0, w - 1)); setOffset(0); }} disabled={wi === 0} title="kratší">−</button>
       <span className="muted" style={{ minWidth: 50, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{WIN[wi].label}</span>
       <button className="btn" style={{ padding: "2px 11px", fontSize: 16, lineHeight: 1 }}
-              onClick={() => setWi((w) => Math.min(WIN.length - 1, w + 1))} disabled={wi === WIN.length - 1} title="delší (až 30 dní)">+</button>
+              onClick={() => { setWi((w) => Math.min(WIN.length - 1, w + 1)); setOffset(0); }} disabled={wi === WIN.length - 1} title="delší (až 30 dní)">+</button>
     </div>
   );
 
