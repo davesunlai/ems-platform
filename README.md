@@ -1,3 +1,12 @@
+## v1.9.4 — Jednotný kurzor všech grafů + výchozí okno 24 h
+- `components/CursorBox.jsx`: společný box u křížového kurzoru (pravidlo jako u testu baterie — ~48 px vedle kurzoru, u pravého okraje vlevo, svisle u kurzoru a uvnitř grafu, nikdy pod kurzorem) + jednotná svislá čára (`CURSOR_LINE`).
+- Použito v TimeChart (graf modulu), MultiChart (přehled, články, MPPT), SpotCurve, TempChart (teploty — dřív řádek pod grafem), ForecastChart (dřív řádek pod grafem), HeatPump (dřív roh), EvPanel detail dne (dřív roh).
+- Výchozí okno 24 h: graf modulu na dashboardu (dřív 6 h), tepelné čerpadlo (dřív 48 h). Ostatní už 24 h; test baterie beze změny.
+
+## v1.9.3 — Opravy vyhodnocení
+- Test bez bloků v parametrech (starší) → při vyhodnocení aktuální bloky modulu, jinak jmenovitá ÷ počet packů (jmen. kWh a SoH bloku už nejsou „—“).
+- Kroky po 10 % jen ve směru kroku (žádné „100→90: 0,00“ u nabíjení); číslo článku 0 = BMS nehlásí → ignorováno; oddělovače mezi kroky v UI.
+
 ## v1.9.2 — Pravidlo „SoC skok“: kapacita článků vs. okno BMS
 - Per blok kWh na každých 10 % SoC (BMS) v obou směrech (`soc_steps`); kroky s < 50 % mediánu zdravých kroků = skok (`jump_steps`).
 - `capacity_linear_kwh` = medián zdravých kroků × 10 (co články mají); `window_ratio` = využitelná ÷ lineární; 🟡 < 0,85, 🔴 < 0,7 s textem „okno zavírají jednotlivé články, po výměně/vyvážení lze čekat návrat k ≈ X kWh“ a zónami skoku s vedoucím článkem.

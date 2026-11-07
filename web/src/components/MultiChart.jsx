@@ -6,13 +6,14 @@
 // Hover: svislá čára u kurzoru + bublina s hodnotou viditelných řad.
 // Klik na popisek v legendě řadu skryje/zobrazí (přepočte i osu Y).
 import { useState } from "react";
+import CursorBox, { cursorPos, CURSOR_LINE } from "./CursorBox";
 import ExportBtn from "./ExportBtn";
 import { exportRowsXlsx, mergeSeriesRows } from "../utils/exportXlsx";
 
 // yRange: [lo, hi] = výchozí rozsah levé osy (rozšíří se, když data přesahují); bez něj osa začíná na 0.
 export default function MultiChart({ series, height = 240, name = "graf", yRange = null }) {
   const [hovT, setHovT] = useState(null);
-  const [hovY, setHovY] = useState(0.15);
+  const [pos, setPos] = useState(null);
   const [hidden, setHidden] = useState(() => new Set());
   const valid = (series || []).filter((s) => s.points && s.points.length >= 2);
   if (!valid.length)
@@ -93,7 +94,7 @@ export default function MultiChart({ series, height = 240, name = "graf", yRange
     const vbX = ((e.clientX - rect.left) / rect.width) * W;
     if (vbX < padL || vbX > W - padR) { setHovT(null); return; }
     setHovT(t0 + ((vbX - padL) / plotW) * tspan);
-    setHovY((e.clientY - rect.top) / rect.height);     // 0..1 svislá poloha kurzoru
+    setPos(cursorPos(e));
   };
 
   const hx = hovT != null ? X(hovT) : 0;
@@ -148,7 +149,7 @@ export default function MultiChart({ series, height = 240, name = "graf", yRange
 
           {hovT != null && shown.length > 0 && (
             <g>
-              <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} stroke="var(--muted)" strokeWidth="0.8" strokeDasharray="3 3" />
+              <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} {...CURSOR_LINE} />
               {hoverRows.map((r, i) => (
                 <circle key={i} cx={hx} cy={Ys(r.s, r.p)} r="3" fill={r.color} stroke="var(--panel, #161b22)" strokeWidth="1.3" />
               ))}
@@ -157,11 +158,7 @@ export default function MultiChart({ series, height = 240, name = "graf", yRange
         </svg>
 
         {hovT != null && shown.length > 0 && (
-          <div style={{
-            position: "absolute", top: `${Math.max(2, Math.min(58, hovY * 100 - 10))}%`, left: `${(hx / W) * 100}%`, transform: "translateX(-50%)",
-            background: "var(--panel, #161b22)", border: "1px solid var(--border, #30363d)", borderRadius: 7,
-            padding: "6px 10px", fontSize: 12, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 5,
-            boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
+          <CursorBox pos={pos} width={240} height={40 + 18 * hoverRows.length}>
             <div className="muted" style={{ fontSize: 11, marginBottom: 3 }}>{fmtFull(hovT)}</div>
             {hoverRows.map((r, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -170,7 +167,7 @@ export default function MultiChart({ series, height = 240, name = "graf", yRange
                 <strong style={{ marginLeft: "auto", paddingLeft: 10 }}>{isPct(r.s) ? `${Math.round(r.p.value)} %` : `${fmtY(dispS(r.s, r.p.value))} ${unitOf(r.s)}`}</strong>
               </div>
             ))}
-          </div>
+          </CursorBox>
         )}
       </div>
 

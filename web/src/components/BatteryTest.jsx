@@ -510,8 +510,8 @@ export function ReportView({ t, onClose }) {
                 <span>nejnižší / nejvyšší v klidu</span><span>{top(b.cells?.min_rest)} / {top(b.cells?.max_rest)}</span>
                 <span>Δ nahoře (SoC ≥ 85 %) / dole (≤ 20 %) pod zátěží</span><span>max {b.delta?.knee_top?.max_mv ?? "—"} / {b.delta?.knee_bottom?.max_mv ?? "—"} mV</span>
                 <span>Δ na plató nabíjení / vybíjení · v klidu</span><span>medián {b.delta?.plateau_charge?.median_mv ?? "—"} / {b.delta?.plateau_discharge?.median_mv ?? "—"} · {b.delta?.rest?.median_mv ?? "—"} mV</span>
-                {b.soc_steps?.charge?.length > 0 && <><span>kWh / 10 % nabíjení</span><span>{b.soc_steps.charge.map((x) => <span key={x.from} style={{ color: b.jump_steps?.some((j) => j.from === x.from && j.to === x.to) ? "#f85149" : "inherit", marginRight: 8 }}>{x.from}→{x.to}: {f2(x.kwh)}</span>)}</span></>}
-                {b.soc_steps?.discharge?.length > 0 && <><span>kWh / 10 % vybíjení</span><span>{b.soc_steps.discharge.map((x) => <span key={x.from} style={{ color: b.jump_steps?.some((j) => j.from === x.from && j.to === x.to) ? "#f85149" : "inherit", marginRight: 8 }}>{x.from}→{x.to}: {f2(x.kwh)}</span>)}</span></>}
+                {b.soc_steps?.charge?.length > 0 && <><span>kWh / 10 % nabíjení</span><span>{b.soc_steps.charge.map((x) => <span key={x.from} style={{ color: b.jump_steps?.some((j) => j.from === x.from && j.to === x.to) ? "#f85149" : "inherit", marginRight: 8 }}>{x.from}→{x.to}: {f2(x.kwh)}{" · "}</span>)}</span></>}
+                {b.soc_steps?.discharge?.length > 0 && <><span>kWh / 10 % vybíjení</span><span>{b.soc_steps.discharge.map((x) => <span key={x.from} style={{ color: b.jump_steps?.some((j) => j.from === x.from && j.to === x.to) ? "#f85149" : "inherit", marginRight: 8 }}>{x.from}→{x.to}: {f2(x.kwh)}{" · "}</span>)}</span></>}
               </div>
             </div>))}
           {a.findings?.length > 0 && (

@@ -1,5 +1,6 @@
 // 🌀 Stránka Tepelné čerpadlo: graf teplot s podbarvením běhů, denní sloupce el+COP, historie spínání.
 import { useEffect, useMemo, useState } from "react";
+import CursorBox, { cursorPos, CURSOR_LINE } from "../components/CursorBox";
 import { api } from "../api";
 import ExportBtn from "./../components/ExportBtn";
 import { exportRowsXlsx } from "../utils/exportXlsx";
@@ -12,6 +13,7 @@ function TempChart({ rows, runs }) {
   const W = 760, H = 300, padL = 40, padR = 40, padT = 10, padB = 22;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const [hov, setHov] = useState(null);
+  const [pos, setPos] = useState(null);
   if (!rows.length) return <p className="muted">Zatím žádná data (telemetrie se sbírá po 30 s).</p>;
   const t0 = new Date(rows[0].ts).getTime(), t1 = new Date(rows[rows.length - 1].ts).getTime() || t0 + 1;
   const X = (t) => padL + plotW * (t - t0) / Math.max(1, t1 - t0);
@@ -34,7 +36,7 @@ function TempChart({ rows, runs }) {
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}
            onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect();
              const fx = (e.clientX - r.left) / r.width * W;
-             setHov(fx >= padL && fx <= W - padR ? t0 + (fx - padL) / plotW * (t1 - t0) : null); }}
+             setHov(fx >= padL && fx <= W - padR ? t0 + (fx - padL) / plotW * (t1 - t0) : null); setPos(cursorPos(e)); }}
            onMouseLeave={() => setHov(null)}>
         {/* podbarvení běhů */}
         {runs.map((run) => {
@@ -61,15 +63,14 @@ function TempChart({ rows, runs }) {
         {rows.length > 1 && [0, 0.25, 0.5, 0.75, 1].map((f) => { const t = t0 + (t1 - t0) * f; return (
           <text key={f} x={X(t)} y={H - 6} textAnchor="middle" fontSize="9.5" fill="var(--muted)">{fmtT(new Date(t).toISOString())}</text>); })}
         {nearest && <line x1={X(new Date(nearest.ts).getTime())} x2={X(new Date(nearest.ts).getTime())}
-                          y1={padT} y2={padT + plotH} stroke="var(--muted)" strokeWidth="0.7" />}
+                          y1={padT} y2={padT + plotH} {...CURSOR_LINE} />}
       </svg>
       {nearest && (
-        <div style={{ position: "absolute", top: 6, right: 46, background: "var(--panel)", border: "1px solid var(--border)",
-                      borderRadius: 8, padding: "5px 9px", fontSize: 11.5, pointerEvents: "none" }}>
+        <CursorBox pos={pos} width={300} height={70} style={{ fontSize: 11.5 }}>
           <b>{fmtT(nearest.ts)}</b>
           <div>🟡 aku {nearest.t_tank ?? "—"} °C · 🟢 buffer {nearest.t_buffer ?? "—"}/{nearest.t_buffer_set ?? "—"} °C</div>
           <div>venku {nearest.t_outdoor ?? "—"} °C · kompresor {nearest.comp ? "běží" : "stojí"}</div>
-        </div>
+        </CursorBox>
       )}
       <div className="muted" style={{ fontSize: 11.5, display: "flex", gap: 14, flexWrap: "wrap", marginTop: 4 }}>
         <span>🟡 aku (508)</span><span>🟢 buffer (517, ┄ set)</span><span style={{ color: "#8b949e" }}>┄ venku (pravá osa)</span>
@@ -123,7 +124,7 @@ function DailyBars({ days }) {
 export default function HeatPump() {
   const [locs, setLocs] = useState([]);
   const [locId, setLocId] = useState(null);
-  const [range, setRange] = useState("48h");
+  const [range, setRange] = useState("24h");
   const [series, setSeries] = useState([]);
   const [runs, setRuns] = useState([]);
   const [days, setDays] = useState([]);

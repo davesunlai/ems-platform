@@ -2,6 +2,7 @@
 // Bez externích knihoven. Hodnoty ve W se zobrazují jako kW.
 // Hover: svislá čára u kurzoru + bublina s časem a hodnotou.
 import { useState } from "react";
+import CursorBox, { cursorPos, CURSOR_LINE } from "./CursorBox";
 import ExportBtn from "./ExportBtn";
 import { exportRowsXlsx } from "../utils/exportXlsx";
 
@@ -60,11 +61,12 @@ export default function TimeChart({ points, color = "#3fb950", unit = "", height
     const tH = t0 + ((vbX - padL) / plotW) * tspan;
     let best = 0, bd = Infinity;
     for (let i = 0; i < ts.length; i++) { const dd = Math.abs(ts[i] - tH); if (dd < bd) { bd = dd; best = i; } }
-    setHov(best);
+    setHov(best); setPos(cursorPos(e));
   };
 
   const hx = hov != null ? X(ts[hov]) : 0;
   const hy = hov != null ? Y(disp(points[hov].value)) : 0;
+  const [pos, setPos] = useState(null);
 
   return (
     <div style={{ position: "relative" }} onMouseMove={onMove} onMouseLeave={() => setHov(null)}>
@@ -102,21 +104,17 @@ export default function TimeChart({ points, color = "#3fb950", unit = "", height
 
         {hov != null && (
           <g>
-            <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} stroke="var(--muted)" strokeWidth="0.8" strokeDasharray="3 3" />
+            <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} {...CURSOR_LINE} />
             <circle cx={hx} cy={hy} r="3.2" fill={color} stroke="var(--panel, #161b22)" strokeWidth="1.5" />
           </g>
         )}
       </svg>
 
       {hov != null && (
-        <div style={{
-          position: "absolute", top: 4, left: `${(hx / W) * 100}%`, transform: "translateX(-50%)",
-          background: "var(--panel, #161b22)", border: "1px solid var(--border, #30363d)", borderRadius: 7,
-          padding: "5px 9px", fontSize: 12, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 5,
-          boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
+        <CursorBox pos={pos} width={150} height={60}>
           <div className="muted" style={{ fontSize: 11 }}>{fmtFull(ts[hov])}</div>
           <div><strong>{fmtY(disp(points[hov].value))}</strong> {dispUnit}</div>
-        </div>
+        </CursorBox>
       )}
     </div>
   );

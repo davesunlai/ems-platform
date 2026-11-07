@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import CursorBox, { cursorPos, CURSOR_LINE } from "./CursorBox";
 import { api } from "../api";
 import ExportBtn from "./ExportBtn";
 import { exportRowsXlsx, mergeSeriesRows } from "../utils/exportXlsx";
@@ -80,7 +81,7 @@ export default function ForecastChart({ localityId }) {
     const t = geom.t0 + ((x - padL) / geom.plotW) * geom.tspan;
     if (t < geom.t0 || t > geom.t1) { setHov(null); return; }
     const near = (arr) => arr.reduce((b, p) => Math.abs(ms(p.ts) - t) < Math.abs(ms(b.ts) - t) ? p : b, arr[0]);
-    setHov({ t, pv: avg.length ? near(avg) : null, load: loadS.length ? near(loadS) : null, price: rightS.length ? near(rightS) : null });
+    setHov({ t, pv: avg.length ? near(avg) : null, load: loadS.length ? near(loadS) : null, price: rightS.length ? near(rightS) : null, pos: cursorPos(e) });
   };
 
   return (
@@ -161,17 +162,17 @@ export default function ForecastChart({ localityId }) {
         ))}
 
         {/* hover */}
-        {hov && <line x1={X(hov.t)} y1={padT} x2={X(hov.t)} y2={padT + plotH} stroke="#fff" strokeWidth="0.5" opacity="0.4" />}
+        {hov && <line x1={X(hov.t)} y1={padT} x2={X(hov.t)} y2={padT + plotH} {...CURSOR_LINE} />}
       </svg>
-      </div>
       {hov && (
-        <div className="muted" style={{ fontSize: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <span>{new Date(hov.t).toLocaleString("cs-CZ", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>
-          {hov.pv && <span style={{ color: PV }}>výroba {(hov.pv.pv_w / 1000).toFixed(1)} kW</span>}
-          {hov.load && <span style={{ color: LOAD }}>spotřeba {(hov.load.load_w / 1000).toFixed(1)} kW</span>}
-          {hov.price && <span style={{ color: SPOT }}>nákup {hov.price.v.toFixed(2)} Kč/kWh</span>}
-        </div>
+        <CursorBox pos={hov.pos} width={210} height={90}>
+          <div className="muted" style={{ fontSize: 11 }}>{new Date(hov.t).toLocaleString("cs-CZ", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</div>
+          {hov.pv && <div style={{ display: "flex", gap: 8 }}><span style={{ color: PV }}>výroba</span><b style={{ marginLeft: "auto" }}>{(hov.pv.pv_w / 1000).toFixed(1)} kW</b></div>}
+          {hov.load && <div style={{ display: "flex", gap: 8 }}><span style={{ color: LOAD }}>spotřeba</span><b style={{ marginLeft: "auto" }}>{(hov.load.load_w / 1000).toFixed(1)} kW</b></div>}
+          {hov.price && <div style={{ display: "flex", gap: 8 }}><span style={{ color: SPOT }}>nákup</span><b style={{ marginLeft: "auto" }}>{hov.price.v.toFixed(2)} Kč/kWh</b></div>}
+        </CursorBox>
       )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 // 🚗 Wallbox — panel po kliknutí na uzel ve schématu (Dashboard) a karta v Ovládání (sdílené).
 // Živý stav, historie relací, kWh po dnech; řízení jen s právem control; nastavení modulu jen admin.
 import { useEffect, useState } from "react";
+import CursorBox, { cursorPos, CURSOR_LINE } from "./CursorBox";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -208,7 +209,7 @@ function DayDetail({ locId, date, wbName, onClose }) {
     const p = ser[best];
     const run = (d.runs || []).find((r) => new Date(r.start) <= t && new Date(r.end) >= t);
     const car = run ? carAny(run) : carS.find((c) => overlaps(c, t.toISOString(), t.toISOString()));
-    setCur({ x: e.clientX - b.left, y: e.clientY - b.top, w: b.width, p, t, run, car, far: bd > 15 * 60000 });
+    setCur({ x: e.clientX - b.left, y: e.clientY - b.top + e.currentTarget.offsetTop, w: b.width, h: b.height + e.currentTarget.offsetTop, p, t, run, car, far: bd > 15 * 60000 });
   };
   const W = 1400, L = 44, B = 26, R = 8;
   const ser = d?.series || [];
@@ -293,8 +294,7 @@ function DayDetail({ locId, date, wbName, onClose }) {
           const cs = carS.find((c) => overlaps(c, cur.t.toISOString(), cur.t.toISOString()));   // relace auta (CarData) v tom čase
           const loc = cur.run ? carFor(cur.run) : cs;
           return (
-          <div style={{ position: "absolute", ...(cur.x > (cur.w || 1200) / 2 ? { left: 56 } : { right: 12 }), top: 44, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8,
-                        padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.4)", minWidth: 230 }}>
+          <CursorBox pos={cur} width={330} height={200} style={{ fontSize: 12 }}>
             <div><b>{tm(cur.p.ts)}</b> · <b style={{ color: "var(--green)" }}>{((cur.p.power_w || 0) / 1000).toFixed(2)} kW</b>{cur.p.amp_set != null ? ` · ${cur.p.amp_set} A` : ""}{cur.run?.phases ? ` · ${cur.run.phases}f` : ""}</div>
             {cur.car && <div>🚘 <b>{cur.car.name}</b>{cs?.soc_from != null ? ` · ${Math.round(cs.soc_from)} → ${cs.soc_to != null ? Math.round(cs.soc_to) : "?"} %` : ""}{cs?.kwh != null ? ` · ≈ ${cs.kwh} kWh` : ""}</div>}
             {cur.run && <div className="muted">🏠 {wbName} {tm(cur.run.start)}–{tm(cur.run.end)} · {cur.run.kwh.toFixed(2)} kWh · max {cur.run.max_kw} kW</div>}
@@ -303,7 +303,7 @@ function DayDetail({ locId, date, wbName, onClose }) {
             {(cur.run || cs) && <div className="muted">{loc?.lat != null ? "📍 klikni pro velkou mapu" : cur.run ? "📍 doma (wallbox)" : "📍 poloha nepřišla"}{!cur.car && cur.run ? " · auto neurčeno" : ""}</div>}
             {loc?.lat != null && <div style={{ marginTop: 5 }}><MiniMap lat={Number(loc.lat)} lon={Number(loc.lon)} /></div>}
             {!cur.run && cs && !cs.operator && has("admin") && <div style={{ color: "var(--amber)", marginTop: 3 }}>✏ provozovatel neznámý — klikni na popisek úseku a pojmenuj ho</div>}
-          </div>); })()}
+          </CursorBox>); })()}
         {map && <MapModal {...map} onClose={() => setMap(null)} />}
         <table style={{ fontSize: 12, width: "100%" }}>
           <thead><tr><th>#</th><th>Auto</th><th>Od</th><th>Do</th><th>Trvání</th><th>kWh</th><th>Ø kW</th><th>max kW</th><th>fáze</th></tr></thead>

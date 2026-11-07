@@ -264,7 +264,7 @@ function DevicePanel({ id, locality, lastSeen, hidden = [], adapter, control = [
   const [latest, setLatest] = useState(null);
   const [hist, setHist] = useState([]);
   const [chartMetric, setChartMetric] = useState("pv_power");
-  const [win, setWin] = useState(0);
+  const [win, setWin] = useState(2);   // výchozí 24 h (jednotně se všemi grafy)
   const [offset, setOffset] = useState(0);
   const err = useRef(false);
   const picked = useRef(false);

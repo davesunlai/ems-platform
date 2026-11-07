@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import CursorBox, { cursorPos, CURSOR_LINE } from "./CursorBox";
 import { api } from "../api";
 import ExportBtn from "./ExportBtn";
 import { exportRowsXlsx, mergeSeriesRows } from "../utils/exportXlsx";
@@ -76,7 +77,7 @@ export default function TempChart({ localityId, deviceIds }) {
     if (t < t0 || t > t1) { setHov(null); return; }
     const near = (arr) => arr.length ? arr.reduce((b, p) => Math.abs(p.t - t) < Math.abs(b.t - t) ? p : b, arr[0]) : null;
     const vals = {}; for (const k of ALL) vals[k] = near(series[k] || []);
-    setHov({ t, vals });
+    setHov({ t, vals, pos: cursorPos(e) });
   };
 
   return (
@@ -121,16 +122,16 @@ export default function TempChart({ localityId, deviceIds }) {
         )}
 
         {ticks.map((t, i) => <text key={i} x={X(t)} y={H - 8} textAnchor="middle" fontSize="9" fill="var(--muted,#8b949e)">{fmtX(t)}</text>)}
-        {hov && <line x1={X(hov.t)} y1={padT} x2={X(hov.t)} y2={padT + plotH} stroke="#fff" strokeWidth="0.5" opacity="0.4" />}
+        {hov && <line x1={X(hov.t)} y1={padT} x2={X(hov.t)} y2={padT + plotH} {...CURSOR_LINE} />}
       </svg>
-      </div>
       {hov && (
-        <div className="muted" style={{ fontSize: 11.5, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <span>{new Date(hov.t).toLocaleString("cs-CZ", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>
-          {TANKS.map((t) => hov.vals[t.k] && <span key={t.k} style={{ color: t.color }}>{hov.vals[t.k].v.toFixed(1)}°</span>)}
-          {hov.vals[AMBIENT.k] && <span style={{ color: AMBIENT.color }}>okolí {hov.vals[AMBIENT.k].v.toFixed(1)}°</span>}
-        </div>
+        <CursorBox pos={hov.pos} width={190} height={40 + 16 * (TANKS.length + 1)}>
+          <div className="muted" style={{ fontSize: 11 }}>{new Date(hov.t).toLocaleString("cs-CZ", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</div>
+          {TANKS.map((t) => hov.vals[t.k] && <div key={t.k} style={{ display: "flex", gap: 8 }}><span style={{ color: t.color }}>{t.label}</span><b style={{ marginLeft: "auto" }}>{hov.vals[t.k].v.toFixed(1)} °C</b></div>)}
+          {hov.vals[AMBIENT.k] && <div style={{ display: "flex", gap: 8 }}><span style={{ color: AMBIENT.color }}>okolí</span><b style={{ marginLeft: "auto" }}>{hov.vals[AMBIENT.k].v.toFixed(1)} °C</b></div>}
+        </CursorBox>
       )}
+      </div>
     </div>
   );
 }

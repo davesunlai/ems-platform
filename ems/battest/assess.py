@@ -98,7 +98,7 @@ def _soc_bounds(rows: list[dict], k: int, key_p: str, sign: int) -> tuple[float 
 
 
 def _share(rows: list[dict], key_n: str, cpm) -> list[dict]:
-    c = Counter(int(round(r[key_n])) for r in rows if r.get(key_n) is not None)
+    c = Counter(int(round(r[key_n])) for r in rows if r.get(key_n) is not None and r[key_n] >= 0.5)   # 0 = BMS nehlásí
     n = sum(c.values()) or 1
     return [{"cell": cell, "txt": cell_txt(cell, cpm), "count": cnt, "share_pct": round(cnt / n * 100, 1)} for cell, cnt in c.most_common(3)]
 
@@ -118,9 +118,9 @@ def _soc_steps(rows: list[dict], k: int, sign: int) -> list[dict]:
         if s != last:
             cell = r.get(key_n)
             out.append({"from": last, "to": s, "kwh": round(e - e0, 2), "t_from": t0.isoformat(), "t_to": r["ts"].isoformat(),
-                        "minutes": round((r["ts"] - t0).total_seconds() / 60), "cell": int(round(cell)) if cell is not None else None})
+                        "minutes": round((r["ts"] - t0).total_seconds() / 60), "cell": int(round(cell)) if cell is not None and cell >= 0.5 else None})
             last, e0, t0 = s, e, r["ts"]
-    return [x for x in out if abs(x["to"] - x["from"]) == 10]
+    return [x for x in out if (x["to"] - x["from"]) == 10 * sign]
 
 
 def _delta_stats(rows: list[dict], k: int, pred) -> dict:
@@ -141,6 +141,10 @@ async def assess(t: dict, result: dict | None = None) -> dict:
     packs = [int(b["idx"]) for b in blocks] or [1, 2]
     rows = await series_cells(t["module_id"], t0, t1, packs)
     present = [k for k in packs if any(r.get(f"battery_soc_{k}") is not None for r in rows)]
+    if not blocks:   # starší test bez bloků v parametrech → aktuální bloky modulu, jinak jmenovitá ÷ počet packů
+        from . import blocks as blocks_mod
+        blocks = await blocks_mod.blocks_for_test(t["module_id"], float(p.get("capacity_kwh") or 0), len(present) or 1)
+        blocks = [b for b in blocks if int(b["idx"]) in present] or blocks
     w_chg = _window(marks, "charge", t1); w_hold = _window(marks, "hold", t1); w_dis = _window(marks, "discharge", t1)
     def rows_in(w):
         return [r for r in rows if w and w[0] <= r["ts"] <= w[1]] if w else []
@@ -242,6 +246,8 @@ async def assess(t: dict, result: dict | None = None) -> dict:
                 diff = max(abs(s_k - s) for s in s_o)
                 lvl = "red" if diff >= T["asym_red"] else "amber" if diff >= T["asym_amber"] else "green"
                 cell = r.get(key_n)
+                if cell is not None and cell < 0.5:
+                    cell = None
                 res["limits"].append({"direction": direction, "ts": r["ts"].isoformat(), "soc": round(s_k, 1), "other_soc": round(s_o[0], 1),
                                       "diff_pct": round(diff, 1), "cell": int(round(cell)) if cell is not None else None,
                                       "cell_txt": cell_txt(cell, cpm) if cell is not None else None, "level": lvl,

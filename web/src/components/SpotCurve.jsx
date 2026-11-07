@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import CursorBox, { cursorPos, CURSOR_LINE } from "./CursorBox";
 import { api } from "../api";
 import ExportBtn from "./ExportBtn";
 import { exportRowsXlsx } from "../utils/exportXlsx";
@@ -14,6 +15,7 @@ export default function SpotCurve({ rules = [] }) {
   const [wi, setWi] = useState(0);
   const [slots, setSlots] = useState(null);
   const [hov, setHov] = useState(null);
+  const [pos, setPos] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -84,7 +86,7 @@ export default function SpotCurve({ rules = [] }) {
     const vbX = ((e.clientX - rect.left) / rect.width) * W;
     if (vbX < padL || vbX > W - padR) { setHov(null); return; }
     const i = Math.floor((vbX - padL) / bw);
-    setHov(i >= 0 && i < n ? i : null);
+    setHov(i >= 0 && i < n ? i : null); setPos(cursorPos(e));
   };
   const hx = hov != null ? padL + (hov + 0.5) * bw : 0;
   const fmtFull = (t) => new Date(t).toLocaleString("cs-CZ",
@@ -139,19 +141,15 @@ export default function SpotCurve({ rules = [] }) {
         ))}
 
         {hov != null && (
-          <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} stroke="var(--fg)" strokeWidth="0.9" strokeDasharray="3 3" opacity="0.8" />
+          <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} {...CURSOR_LINE} />
         )}
       </svg>
 
       {hov != null && (
-        <div style={{
-          position: "absolute", top: 4, left: `${(hx / W) * 100}%`, transform: "translateX(-50%)",
-          background: "var(--panel, #161b22)", border: "1px solid var(--border, #30363d)", borderRadius: 7,
-          padding: "5px 9px", fontSize: 12, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 5,
-          boxShadow: "0 4px 14px rgba(0,0,0,.4)" }}>
+        <CursorBox pos={pos} width={150} height={60}>
           <div className="muted" style={{ fontSize: 11 }}>{fmtFull(slots[hov].start)}</div>
           <div><strong>{Math.round(slots[hov].price)}</strong> Kč/MWh</div>
-        </div>
+        </CursorBox>
       )}
       </div>
       <div style={{ display: "flex", gap: 18, fontSize: 12, color: "var(--muted)", marginTop: 4, flexWrap: "wrap" }}>
