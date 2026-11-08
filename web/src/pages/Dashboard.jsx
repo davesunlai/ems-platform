@@ -692,7 +692,21 @@ function PvNode({ x, y, w, h, m = 1, ic, d, pvKw, onAudit, onClick }) {
 }
 
 // 🔎 Detail uzlu schématu: související hodnoty + nastavení/akce (ruční ovládání baterie je tady, ne pod schématem).
-function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose }) {
+/** ⚡ využitelná energie po blocích podle křivky z testu baterie (null = křivka není aplikovaná) */
+function useBatteryEnergy(locId) {
+  const [en, setEn] = useState(null);
+  useEffect(() => {
+    if (!locId) return;
+    let alive = true;
+    const load = () => api.btEnergy(locId).then((r) => alive && setEn(r)).catch(() => {});
+    load(); const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [locId]);
+  return en;
+}
+const kwhOf = (en, idx) => en?.blocks?.find((b) => b.idx === idx)?.kwh_usable;
+
+function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
   const { has } = useAuth();
   const [spot, setSpot] = useState(null);
   useEffect(() => { if (kind === "grid") api.spot().then(setSpot).catch(() => {}); }, [kind]);
@@ -738,10 +752,12 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose }) {
     body = <>
       <Row l="nabití celkem" v={`${d.soc != null ? Math.round(d.soc) : "?"} %`} />
       <Row l={bw >= 0 ? "nabíjení" : "vybíjení"} v={Math.abs(bw) > 50 ? kw(bw) : "klid"} />
-      {d.battery_soc_1 != null && <Row l="baterie 1" v={`${Math.round(d.battery_soc_1)} % · ${kw(d.battery_w_1)}`} />}
-      {d.battery_soc_2 != null && <Row l="baterie 2" v={`${Math.round(d.battery_soc_2)} % · ${kw(d.battery_w_2)}`} />}
+      {d.battery_soc_1 != null && <Row l="baterie 1" v={`${Math.round(d.battery_soc_1)} % · ${kw(d.battery_w_1)}${kwhOf(en, 1) != null ? ` · ${kwhOf(en, 1).toFixed(1)} kWh` : ""}`} />}
+      {d.battery_soc_2 != null && <Row l="baterie 2" v={`${Math.round(d.battery_soc_2)} % · ${kw(d.battery_w_2)}${kwhOf(en, 2) != null ? ` · ${kwhOf(en, 2).toFixed(1)} kWh` : ""}`} />}
       {d.xcheck?.battery_power_inv != null && <Row l="výkon dle měniče (33149)" v={kw(d.xcheck.battery_power_inv)} />}
-      {cfg.capacity_kwh != null && <Row l="kapacita" v={`${cfg.capacity_kwh} kWh`} />}
+      {en && <Row l={`⚡ využitelné teď (test #${en.test_id})`} v={`${en.total_usable_kwh.toFixed(1)} kWh`} />}
+      {en && <Row l="využitelná kapacita celkem (do 100 %)" v={`${en.total_full_kwh.toFixed(1)} kWh z ${en.total_nominal_kwh.toFixed(1)} jmenovitých`} />}
+      {cfg.capacity_kwh != null && <Row l={en ? "kapacita jmenovitá (plánovač)" : "kapacita"} v={`${cfg.capacity_kwh} kWh`} />}
       {cfg.soc_min_pct != null && <Row l="bezpečnostní podlaha SoC" v={`${cfg.soc_min_pct} %`} />}
       {pl?.current && <Row l="🧠 plánovač teď" v={ACT_CZ[pl.current.action] || pl.current.action} />}
       {d.control_module && (
@@ -894,6 +910,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
     catch (e) { setSnap("Chyba: " + e.message); }
   };
   const [d, setD] = useState(null);
+  const en = useBatteryEnergy(locId);           // ⚡ kWh po blocích z testu
   const [pl, setPl] = useState(null);
   const [outs, setOuts] = useState([]);
   const [hp, setHp] = useState(null);
@@ -1066,7 +1083,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 : <text x={125} y={388} textAnchor="middle" fontSize="30">{ic.bat}</text>}
               <text x={125} y={410} textAnchor="middle" fontSize="15" fill="var(--muted)">Baterie celkem</text>
               <text x={125} y={434} textAnchor="middle" fontSize="19" fontWeight="700" fill="#a371f7" onMouseEnter={(e) => onAudit("battery_w", e)} onMouseLeave={() => onAudit(null)} style={d?.audit_mode ? { cursor: "help", textDecoration: "underline dotted" } : undefined}>
-                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}
+                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}{en && <tspan fontSize="12" fontWeight="400" fill="var(--muted)"> · {en.total_usable_kwh.toFixed(1)} kWh</tspan>}
               </text>
               {d.xcheck?.battery_power_inv != null && <text x={125} y={452} textAnchor="middle" fontSize="10" fill="var(--amber)">měnič (33149): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
               {d.soc != null && (
@@ -1079,7 +1096,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                     <g key={b.n}>
                       <rect x={x0} y={456} width={bw} height={64} rx="10" fill="none" stroke="var(--border)" strokeWidth="1.5" />
                       <text x={x0 + bw / 2} y={478} textAnchor="middle" fontSize="13" fill="var(--muted)">B{b.n}</text>
-                      <text x={x0 + bw / 2} y={498} textAnchor="middle" fontSize="17" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %</text>
+                      <text x={x0 + bw / 2} y={498} textAnchor="middle" fontSize="17" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %{kwhOf(en, b.n) != null && <tspan fontSize="11" fontWeight="400" fill="var(--muted)"> {kwhOf(en, b.n).toFixed(1)} kWh</tspan>}</text>
                       <text x={x0 + bw / 2} y={514} textAnchor="middle" fontSize="12" fill="var(--muted)">
                         {Math.abs(bkw) > 0.05 ? `${bkw > 0 ? "▲" : "▼"} ${Math.abs(bkw).toFixed(1)} kW` : "klid"}
                       </text>
@@ -1165,7 +1182,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 : <text x={145} y={352} textAnchor="middle" fontSize="20">{ic.bat}</text>}
               <text x={145} y={368} textAnchor="middle" fontSize="11" fill="var(--muted)">Baterie celkem</text>
               <text x={145} y={386} textAnchor="middle" fontSize="14" fontWeight="700" fill="#a371f7" onMouseEnter={(e) => onAudit("battery_w", e)} onMouseLeave={() => onAudit(null)} style={d?.audit_mode ? { cursor: "help", textDecoration: "underline dotted" } : undefined}>
-                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}
+                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}{en && <tspan fontSize="9.5" fontWeight="400" fill="var(--muted)"> · {en.total_usable_kwh.toFixed(1)} kWh</tspan>}
               </text>
               {d.xcheck?.battery_power_inv != null && <text x={145} y={400} textAnchor="middle" fontSize="9.5" fill="var(--amber)">měnič (33149): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
               {d.soc != null && (
@@ -1178,7 +1195,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                     <g key={b.n}>
                       <rect x={x0} y={402} width={bw} height={44} rx="8" fill="none" stroke="var(--border)" />
                       <text x={x0 + bw / 2} y={418} textAnchor="middle" fontSize="10" fill="var(--muted)">B{b.n}</text>
-                      <text x={x0 + bw / 2} y={432} textAnchor="middle" fontSize="12" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %</text>
+                      <text x={x0 + bw / 2} y={432} textAnchor="middle" fontSize="12" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %{kwhOf(en, b.n) != null && <tspan fontSize="9" fontWeight="400" fill="var(--muted)"> {kwhOf(en, b.n).toFixed(1)} kWh</tspan>}</text>
                       <text x={x0 + bw / 2} y={443} textAnchor="middle" fontSize="9" fill="var(--muted)">
                         {Math.abs(bkw) > 0.05 ? `${bkw > 0 ? "▲" : "▼"} ${Math.abs(bkw).toFixed(1)} kW` : "klid"}
                       </text>
@@ -1214,7 +1231,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             ))}
           </svg>
         )}
-        {node && d && <NodeDetail kind={node} d={d} pl={pl} hp={hp} outs={outs} ewDev={ewDev} locId={locId} onClose={() => setNode(null)} />}
+        {node && d && <NodeDetail kind={node} d={d} pl={pl} hp={hp} outs={outs} ewDev={ewDev} locId={locId} en={en} onClose={() => setNode(null)} />}
         {tip && d?.audit?.[tip.key] && (() => { const a = d.audit[tip.key]; return (
           <div style={{ position: "fixed", left: Math.min(tip.x + 12, window.innerWidth - 420), top: Math.min(tip.y + 12, window.innerHeight - 260),
                         zIndex: 90, width: 400, maxHeight: 250, overflow: "auto", background: "var(--panel)", border: "1px solid var(--border)",

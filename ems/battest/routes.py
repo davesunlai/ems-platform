@@ -94,6 +94,37 @@ async def put_blocks(module_id: str, body: list[BlockIn], user: dict = Depends(g
     return await blocks_mod.save_blocks(module_id, [b.model_dump() for b in body])
 
 
+@router.post("/test/{test_id}/apply")
+async def apply_test(test_id: int, user: dict = Depends(tester)):
+    """⚡ Aplikuje změřenou křivku SoC → využitelné kWh z testu do bloků modulu (dashboard pak ukazuje skutečné kWh)."""
+    t = await db.get(test_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Test nenalezen")
+    if t["status"] not in ("done", "aborted"):
+        raise HTTPException(status_code=409, detail="Test ještě běží.")
+    try:
+        bl = await blocks_mod.apply_test(t, await db.phase_marks(test_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    await db.log(test_id, f"Křivka SoC → kWh aplikována do bloků modulu uživatelem {user.get('username')}.")
+    return bl
+
+
+@router.delete("/blocks/{module_id}/curve")
+async def clear_curve(module_id: str, _: dict = Depends(tester)):
+    return await blocks_mod.clear_curves(module_id)
+
+
+@router.get("/{locality_id}/energy")
+async def energy(locality_id: int, _: dict = Depends(read)):
+    """Využitelná energie po blocích podle aplikované křivky z testu; null, když křivka není."""
+    for m in await _solis_modules(locality_id):
+        e = await blocks_mod.energy_now(m)
+        if e:
+            return e
+    return None
+
+
 # ---------- vyhodnocení a export ----------
 async def _report_ctx(test_id: int, user: dict | None = None, with_chart: bool = True) -> dict:
     from ems import __version__

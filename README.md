@@ -1,3 +1,9 @@
+## v1.9.7 — ⚡ Změřené kWh bloků na dashboardu
+- `battery_blocks` += `curve` ([[SoC, využitelné kWh do dna testu]] po 1 %), `curve_test_id`, `curve_applied_at`, `curve_floor_pct`. Křivka z vybíjecího kroku testu (kumulativní energie vs. SoC bloku, extrapolace nad začátek vybíjení); přežije editaci bloků.
+- `POST /api/battery-test/test/{id}/apply` (právo control) — aplikuje křivku do bloků (bloky založí, když nejsou); `DELETE /blocks/{module}/curve`; `GET /{locality}/energy` → per blok SoC, kWh využitelných, kWh do 100 %, jmenovitě; celkem.
+- Test baterie: v historii u dokončeného testu ⚡ použít / ⚡ použito, řádek „dashboard počítá kWh bloků podle testu #N · zrušit“.
+- Dashboard: v boxu baterie a podboxech B1/B2 vedle % malé „x.x kWh“ (využitelné do dna), v detailu baterie řádky „⚡ využitelné teď“, „využitelná kapacita celkem (do 100 %) z jmenovitých“; plánovač dál na jmenovité.
+
 ## v1.9.6 — Články baterie: ovládání okna v jednom řádku
 - Šipky ◀ ▶, „teď“ a rozsah přesunuty z hlavičky do řádku „Období: 6 h … 30 dní“ vpravo (jako u MPPT); −/+ zrušeno (duplikovalo tlačítka období).
 
