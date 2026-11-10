@@ -1,3 +1,10 @@
+## v1.9.9 — Box baterie: využitelná energie explicitně
+- Při aplikované křivce je box vyšší: řádek „využitelné do 10 %: 3,2 z 36,9 kWh“ pod hlavní hodnotou; v podboxech B1/B2 samostatný řádek „1,1 z 12,7 kWh“ (využitelné teď / plná baterie). Desktop i mobil, viewBox se zvětší.
+- Detail baterie: řádky per blok „B1: 38 % → využitelné / plná“, „využitelná kapacita plné baterie (100 → dno)“, „jmenovitě by teď bylo nad dnem“.
+
+## v1.9.8 — ⚡ použito · vrátit jmenovité
+- U aktivního testu je „⚡ použito · vrátit jmenovité“ tlačítko (po výměně článků bez čekání na nový test); ⚡ použít u jiného testu nahradí aktivní (potvrzení to říká).
+
 ## v1.9.7 — ⚡ Změřené kWh bloků na dashboardu
 - `battery_blocks` += `curve` ([[SoC, využitelné kWh do dna testu]] po 1 %), `curve_test_id`, `curve_applied_at`, `curve_floor_pct`. Křivka z vybíjecího kroku testu (kumulativní energie vs. SoC bloku, extrapolace nad začátek vybíjení); přežije editaci bloků.
 - `POST /api/battery-test/test/{id}/apply` (právo control) — aplikuje křivku do bloků (bloky založí, když nejsou); `DELETE /blocks/{module}/curve`; `GET /{locality}/energy` → per blok SoC, kWh využitelných, kWh do 100 %, jmenovitě; celkem.

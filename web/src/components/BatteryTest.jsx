@@ -77,13 +77,13 @@ export function BatteryTestDialog({ locId, onClose }) {
   const canTest = has("control");
   const appliedId = (() => { const bl = Object.values(defs?.blocks || {}).flat(); const b = bl.find((x) => x.curve_test_id); return b ? b.curve_test_id : null; })();
   const apply = async (t) => {
-    if (!window.confirm(`Použít změřenou křivku SoC → kWh z testu #${t.id} do zobrazení kapacity na dashboardu? Plánovač zůstává na jmenovité kapacitě.`)) return;
+    if (!window.confirm(`Použít změřenou křivku SoC → kWh z testu #${t.id} do zobrazení kapacity na dashboardu?${appliedId ? ` Nahradí aktivní test #${appliedId}.` : ""} Plánovač zůstává na jmenovité kapacitě.`)) return;
     setBusy(true); setMsg("");
     try { await api.btApply(t.id); const d = await api.btDefaults(locId); setDefs(d); setMsg(`Křivka z testu #${t.id} aplikována — dashboard ukazuje využitelné kWh po blocích.`); } catch (e) { setMsg(e.message); }
     setBusy(false);
   };
   const unapply = async () => {
-    if (!window.confirm("Zrušit aplikovanou křivku? Dashboard bude kWh počítat z jmenovité kapacity.")) return;
+    if (!window.confirm("Vrátit jmenovité hodnoty? Dashboard přestane ukazovat změřené kWh bloků (použij např. po výměně článků, než proběhne nový test).")) return;
     setBusy(true); try { await api.btCurveClear(mod); setDefs(await api.btDefaults(locId)); } catch (e) { setMsg(e.message); } setBusy(false);
   };
   const [busy, setBusy] = useState(false);
@@ -179,8 +179,8 @@ export function BatteryTestDialog({ locId, onClose }) {
                   <td style={{ whiteSpace: "nowrap" }}><button className="btn" style={{ padding: "1px 8px" }} onClick={async () => setSel(await api.btGet(t.id))}>detail</button>{" "}
                     {(t.status === "done" || t.status === "aborted") && <button className="btn" style={{ padding: "1px 8px" }} onClick={() => setRep(t)}>📄 report</button>}{" "}
                     {(t.status === "done" || t.status === "aborted") && canTest && (appliedId === t.id
-                      ? <span title="dashboard ukazuje kWh podle tohoto testu" style={{ color: "var(--green)", fontSize: 12 }}>⚡ použito</span>
-                      : <button className="btn" style={{ padding: "1px 8px" }} title="použít změřené kWh bloků do zobrazení na dashboardu" onClick={() => apply(t)}>⚡ použít</button>)}</td></tr>))}
+                      ? <button className="btn" style={{ padding: "1px 8px", color: "var(--green)", borderColor: "var(--green)" }} title="dashboard ukazuje kWh podle tohoto testu — klik vrátí jmenovité hodnoty (např. po výměně článků)" onClick={unapply}>⚡ použito · vrátit jmenovité</button>
+                      : <button className="btn" style={{ padding: "1px 8px" }} title={appliedId ? `nahradí aktivní test #${appliedId}` : "použít změřené kWh bloků do zobrazení na dashboardu"} onClick={() => apply(t)}>⚡ použít</button>)}</td></tr>))}
               </tbody></table>
           </div>)}
         {sel && <div style={{ marginTop: 10 }}><TestProgress t={sel} onClose={() => setSel(null)} onReport={() => setRep(sel)} /></div>}

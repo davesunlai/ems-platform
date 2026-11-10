@@ -705,6 +705,7 @@ function useBatteryEnergy(locId) {
   return en;
 }
 const kwhOf = (en, idx) => en?.blocks?.find((b) => b.idx === idx)?.kwh_usable;
+const fullOf = (en, idx) => en?.blocks?.find((b) => b.idx === idx)?.kwh_full ?? 0;
 
 function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
   const { has } = useAuth();
@@ -755,8 +756,10 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
       {d.battery_soc_1 != null && <Row l="baterie 1" v={`${Math.round(d.battery_soc_1)} % · ${kw(d.battery_w_1)}${kwhOf(en, 1) != null ? ` · ${kwhOf(en, 1).toFixed(1)} kWh` : ""}`} />}
       {d.battery_soc_2 != null && <Row l="baterie 2" v={`${Math.round(d.battery_soc_2)} % · ${kw(d.battery_w_2)}${kwhOf(en, 2) != null ? ` · ${kwhOf(en, 2).toFixed(1)} kWh` : ""}`} />}
       {d.xcheck?.battery_power_inv != null && <Row l="výkon dle měniče (33149)" v={kw(d.xcheck.battery_power_inv)} />}
-      {en && <Row l={`⚡ využitelné teď (test #${en.test_id})`} v={`${en.total_usable_kwh.toFixed(1)} kWh`} />}
-      {en && <Row l="využitelná kapacita celkem (do 100 %)" v={`${en.total_full_kwh.toFixed(1)} kWh z ${en.total_nominal_kwh.toFixed(1)} jmenovitých`} />}
+      {en && <Row l={`⚡ využitelné teď do ${en.floor_pct ?? 10} % (test #${en.test_id})`} v={`${en.total_usable_kwh.toFixed(2)} kWh`} />}
+      {en && en.blocks.map((b) => <Row key={b.idx} l={`  ${b.name}: ${b.soc != null ? Math.round(b.soc) : "?"} % → využitelné / plná`} v={`${(b.kwh_usable ?? 0).toFixed(2)} / ${(b.kwh_full ?? 0).toFixed(2)} kWh`} />)}
+      {en && <Row l="využitelná kapacita plné baterie (100 → dno)" v={`${en.total_full_kwh.toFixed(2)} kWh z ${en.total_nominal_kwh.toFixed(1)} jmenovitých`} />}
+      {en && <Row l="jmenovitě by teď bylo nad dnem" v={`${en.total_nominal_linear_kwh.toFixed(2)} kWh`} />}
       {cfg.capacity_kwh != null && <Row l={en ? "kapacita jmenovitá (plánovač)" : "kapacita"} v={`${cfg.capacity_kwh} kWh`} />}
       {cfg.soc_min_pct != null && <Row l="bezpečnostní podlaha SoC" v={`${cfg.soc_min_pct} %`} />}
       {pl?.current && <Row l="🧠 plánovač teď" v={ACT_CZ[pl.current.action] || pl.current.action} />}
@@ -1028,6 +1031,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
 
         {!d ? <p className="muted" style={{ marginTop: 12 }}>Načítám…</p> : mob ? (
           <svg viewBox={`0 0 400 ${ev ? (carShown.length ? 700 + carShown.length * 118 : 840) : 700}`} style={{ width: "100%", marginTop: 8 }}>
+            {/* en = ⚡ využitelná energie z testu → box baterie je vyšší (EX) */}
             <defs>
               {COLORS.map((c) => (
                 <marker key={c} id={`efarr-${c}`} viewBox="0 0 16 10" refX="14" refY="5" markerUnits="userSpaceOnUse" markerWidth="19" markerHeight="12" orient="auto-start-reverse">
@@ -1077,15 +1081,16 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                       sub={d.xcheck?.house_load_inv != null ? `měnič (33147): ${(d.xcheck.house_load_inv / 1000).toFixed(2)} kW · dopočet vs měřeno` : "výkon / dnes celkem"} accent="var(--amber, #d29922)" />
             {/* baterie — velký box s pod-boxy (mobil) */}
             <g onClick={() => setNode("bat")} style={{ cursor: "pointer" }}>
-              <rect x={10} y={354} width={230} height={176} rx="14" fill="var(--bg)" stroke="#a371f7" strokeWidth="2" />
+              <rect x={10} y={354} width={230} height={en ? 194 : 176} rx="14" fill="var(--bg)" stroke="#a371f7" strokeWidth="2" />
               {ic.bat.startsWith("/")
                 ? <image href={ic.bat} x={106} y={362} width={38} height={38} />
                 : <text x={125} y={388} textAnchor="middle" fontSize="30">{ic.bat}</text>}
               <text x={125} y={410} textAnchor="middle" fontSize="15" fill="var(--muted)">Baterie celkem</text>
               <text x={125} y={434} textAnchor="middle" fontSize="19" fontWeight="700" fill="#a371f7" onMouseEnter={(e) => onAudit("battery_w", e)} onMouseLeave={() => onAudit(null)} style={d?.audit_mode ? { cursor: "help", textDecoration: "underline dotted" } : undefined}>
-                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}{en && <tspan fontSize="12" fontWeight="400" fill="var(--muted)"> · {en.total_usable_kwh.toFixed(1)} kWh</tspan>}
+                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}
               </text>
-              {d.xcheck?.battery_power_inv != null && <text x={125} y={452} textAnchor="middle" fontSize="10" fill="var(--amber)">měnič (33149): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
+              {en && <text x={125} y={453} textAnchor="middle" fontSize="11" fill="var(--fg)"><tspan fill="var(--muted)">využitelné do {en.floor_pct ?? 10} %: </tspan><tspan fontWeight="700">{en.total_usable_kwh.toFixed(1)}</tspan><tspan fill="var(--muted)"> z {en.total_full_kwh.toFixed(1)} kWh</tspan></text>}
+              {d.xcheck?.battery_power_inv != null && <text x={125} y={en ? 543 : 452} textAnchor="middle" fontSize="10" fill="var(--amber)">měnič (33149): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
               {d.soc != null && (
                 <rect x={25} y={442} width={200 * Math.max(0, Math.min(100, d.soc)) / 100} height={6} rx={3} fill="#a371f7" opacity="0.9" />)}
               {[{ n: 1, soc: d.battery_soc_1, w: d.battery_w_1 }, { n: 2, soc: d.battery_soc_2, w: d.battery_w_2 }]
@@ -1094,12 +1099,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                   const bkw = (b.w || 0) / 1000;
                   return (
                     <g key={b.n}>
-                      <rect x={x0} y={456} width={bw} height={64} rx="10" fill="none" stroke="var(--border)" strokeWidth="1.5" />
-                      <text x={x0 + bw / 2} y={478} textAnchor="middle" fontSize="13" fill="var(--muted)">B{b.n}</text>
-                      <text x={x0 + bw / 2} y={498} textAnchor="middle" fontSize="17" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %{kwhOf(en, b.n) != null && <tspan fontSize="11" fontWeight="400" fill="var(--muted)"> {kwhOf(en, b.n).toFixed(1)} kWh</tspan>}</text>
-                      <text x={x0 + bw / 2} y={514} textAnchor="middle" fontSize="12" fill="var(--muted)">
+                      <rect x={x0} y={458} width={bw} height={en ? 76 : 64} rx="10" fill="none" stroke="var(--border)" strokeWidth="1.5" />
+                      <text x={x0 + bw / 2} y={476} textAnchor="middle" fontSize="12" fill="var(--muted)">B{b.n}</text>
+                      <text x={x0 + bw / 2} y={495} textAnchor="middle" fontSize="17" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %</text>
+                      <text x={x0 + bw / 2} y={510} textAnchor="middle" fontSize="11.5" fill="var(--muted)">
                         {Math.abs(bkw) > 0.05 ? `${bkw > 0 ? "▲" : "▼"} ${Math.abs(bkw).toFixed(1)} kW` : "klid"}
                       </text>
+                      {kwhOf(en, b.n) != null && <text x={x0 + bw / 2} y={526} textAnchor="middle" fontSize="11" fill="var(--fg)"><tspan fontWeight="700">{kwhOf(en, b.n).toFixed(1)}</tspan><tspan fill="var(--muted)"> z {fullOf(en, b.n).toFixed(1)} kWh</tspan></text>}
                     </g>);
                 })}
             </g>
@@ -1128,7 +1134,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
               </g>))}
           </svg>
         ) : (
-          <svg viewBox={`0 0 760 ${carShown.length ? 508 : 470}`} style={{ width: "100%", marginTop: 8 }}>
+          <svg viewBox={`0 0 760 ${(carShown.length ? 508 : 470) + (en ? 30 : 0)}`} style={{ width: "100%", marginTop: 8 }}>
             <defs>
               {COLORS.map((c) => (
                 <marker key={c} id={`efarr-${c}`} viewBox="0 0 16 10" refX="14" refY="5" markerUnits="userSpaceOnUse" markerWidth="19" markerHeight="12" orient="auto-start-reverse">
@@ -1176,14 +1182,15 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
             <FlowNode shape="ellipse" x={295} y={188} w={170} icon={ic.home} title="Dům" auditKey="load_w" onAudit={onAudit} onClick={() => setNode("home")} value={`${f1(kw(d.load_w))} / ${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`}
                       sub={d.xcheck?.house_load_inv != null ? `měnič (33147): ${(d.xcheck.house_load_inv / 1000).toFixed(2)} kW · dopočet vs měřeno` : "výkon / dnes celkem"} accent="var(--amber, #d29922)" />
             <g onClick={() => setNode("bat")} style={{ cursor: "pointer" }}>
-              <rect x={45} y={330} width={200} height={124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
+              <rect x={45} y={330} width={200} height={en ? 154 : 124} rx="12" fill="var(--bg)" stroke="#a371f7" strokeWidth="1.4" />
               {ic.bat.startsWith("/")
                 ? <image href={ic.bat} x={132} y={334} width={26} height={26} />
                 : <text x={145} y={352} textAnchor="middle" fontSize="20">{ic.bat}</text>}
               <text x={145} y={368} textAnchor="middle" fontSize="11" fill="var(--muted)">Baterie celkem</text>
               <text x={145} y={386} textAnchor="middle" fontSize="14" fontWeight="700" fill="#a371f7" onMouseEnter={(e) => onAudit("battery_w", e)} onMouseLeave={() => onAudit(null)} style={d?.audit_mode ? { cursor: "help", textDecoration: "underline dotted" } : undefined}>
-                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}{en && <tspan fontSize="9.5" fontWeight="400" fill="var(--muted)"> · {en.total_usable_kwh.toFixed(1)} kWh</tspan>}
+                {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}
               </text>
+              {en && <text x={145} y={478} textAnchor="middle" fontSize="9.5" fill="var(--fg)"><tspan fill="var(--muted)">využitelné do {en.floor_pct ?? 10} %: </tspan><tspan fontWeight="700">{en.total_usable_kwh.toFixed(1)}</tspan><tspan fill="var(--muted)"> z {en.total_full_kwh.toFixed(1)} kWh</tspan></text>}
               {d.xcheck?.battery_power_inv != null && <text x={145} y={400} textAnchor="middle" fontSize="9.5" fill="var(--amber)">měnič (33149): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
               {d.soc != null && (
                 <rect x={60} y={392} width={170 * Math.max(0, Math.min(100, d.soc)) / 100} height={4} rx={2} fill="#a371f7" opacity="0.9" />)}
@@ -1193,12 +1200,13 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                   const bkw = (b.w || 0) / 1000;
                   return (
                     <g key={b.n}>
-                      <rect x={x0} y={402} width={bw} height={44} rx="8" fill="none" stroke="var(--border)" />
-                      <text x={x0 + bw / 2} y={418} textAnchor="middle" fontSize="10" fill="var(--muted)">B{b.n}</text>
-                      <text x={x0 + bw / 2} y={432} textAnchor="middle" fontSize="12" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %{kwhOf(en, b.n) != null && <tspan fontSize="9" fontWeight="400" fill="var(--muted)"> {kwhOf(en, b.n).toFixed(1)} kWh</tspan>}</text>
-                      <text x={x0 + bw / 2} y={443} textAnchor="middle" fontSize="9" fill="var(--muted)">
+                      <rect x={x0} y={402} width={bw} height={en ? 62 : 44} rx="8" fill="none" stroke="var(--border)" />
+                      <text x={x0 + bw / 2} y={416} textAnchor="middle" fontSize="10" fill="var(--muted)">B{b.n}</text>
+                      <text x={x0 + bw / 2} y={430} textAnchor="middle" fontSize="12" fontWeight="700" fill="#a371f7">{Math.round(b.soc)} %</text>
+                      <text x={x0 + bw / 2} y={442} textAnchor="middle" fontSize="9" fill="var(--muted)">
                         {Math.abs(bkw) > 0.05 ? `${bkw > 0 ? "▲" : "▼"} ${Math.abs(bkw).toFixed(1)} kW` : "klid"}
                       </text>
+                      {kwhOf(en, b.n) != null && <text x={x0 + bw / 2} y={457} textAnchor="middle" fontSize="9.5" fill="var(--fg)"><tspan fontWeight="700">{kwhOf(en, b.n).toFixed(1)}</tspan><tspan fill="var(--muted)"> z {fullOf(en, b.n).toFixed(1)} kWh</tspan></text>}
                     </g>);
                 })}
             </g>
