@@ -1,3 +1,6 @@
+## v1.9.10 — Ruční povel s cílem SoC drží do cíle
+- Plánovač přebíjel ruční force po 30 min (`MANUAL_OVERRIDE_SEC`) i když měl `target_soc` („nabít na 100 %“) — 10. 11. dvakrát zrušen před dosažením cíle. Teď: povel s cílem plánovač nechává, ukončí ho `tick_soc_targets` při dosažení cíle; pojistka `EMS_MANUAL_TARGET_MAX_SEC` (12 h). Ruční povel bez cíle dál 30 min.
+
 ## v1.9.9 — Box baterie: využitelná energie explicitně
 - Při aplikované křivce je box vyšší: řádek „využitelné do 10 %: 3,2 z 36,9 kWh“ pod hlavní hodnotou; v podboxech B1/B2 samostatný řádek „1,1 z 12,7 kWh“ (využitelné teď / plná baterie). Desktop i mobil, viewBox se zvětší.
 - Detail baterie: řádky per blok „B1: 38 % → využitelné / plná“, „využitelná kapacita plné baterie (100 → dno)“, „jmenovitě by teď bylo nad dnem“.

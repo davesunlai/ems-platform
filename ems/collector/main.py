@@ -46,6 +46,7 @@ logger = logging.getLogger("ems.collector")
 POLL_INTERVAL = float(os.getenv("EMS_POLL_INTERVAL", "10"))
 # Po ručním povelu (Stop / Nabíjet / Vybíjet) nech plánovač modul takto dlouho na pokoji:
 MANUAL_OVERRIDE_SEC = float(os.getenv("EMS_MANUAL_OVERRIDE_SEC", "1800"))
+MANUAL_TARGET_MAX_SEC = float(os.getenv("EMS_MANUAL_TARGET_MAX_SEC", str(12 * 3600)))   # ruční povel S CÍLEM SoC drží do cíle, nejdéle 12 h
 DEVICES_PATH = os.getenv("EMS_DEVICES", "devices.yaml")
 MARKET_REFRESH = float(os.getenv("EMS_MARKET_REFRESH", "300"))  # s
 
@@ -706,7 +707,19 @@ async def tick_planner(state: dict) -> None:
                     try:
                         from datetime import datetime, timezone
                         s = since if hasattr(since, "tzinfo") else datetime.fromisoformat(since)
-                        if (datetime.now(timezone.utc) - s).total_seconds() < MANUAL_OVERRIDE_SEC:
+                        age = (datetime.now(timezone.utc) - s).total_seconds()
+                        stp0 = st.get("params") or {}
+                        if isinstance(stp0, str):
+                            import json as _json
+                            try:
+                                stp0 = _json.loads(stp0)
+                            except Exception:
+                                stp0 = {}
+                        # povel s cílem SoC („nabít na 100 %“) plánovač nepřebíjí — ukončí ho tick_soc_targets při dosažení cíle
+                        # (lekce 10. 11.: dva ruční povely zrušené po 30 min ještě před dosažením cíle); pojistka 12 h
+                        if stp0.get("target_soc") is not None and age < MANUAL_TARGET_MAX_SEC:
+                            continue
+                        if age < MANUAL_OVERRIDE_SEC:
                             continue
                     except Exception:
                         pass
