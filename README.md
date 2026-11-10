@@ -1,3 +1,6 @@
+## v1.9.12 — EMSBOX localui: skutečný IP režim Wi-Fi
+- `/api/network` vrací `ipmode` (dhcp/static + adresa, brána, DNS z profilu NM); select a pole se předvyplní podle reality (dřív vždy „DHCP“, i když profil měl pevnou 192.168.6.110/24 — lekce 10. 11.: síť je /23, box přes bránu k 192.168.7.x nedosáhl na odpovědi). Nápověda u masky.
+
 ## v1.9.11 — Čtení zařízení: tvrdý timeout + automatický re-init po tichém záseku
 - Server (`poll_device`): `asyncio.wait_for(read, EMS_READ_TIMEOUT_S=45)`; `reinit_stale`: modul bez platného vzorku > `EMS_STALE_REINIT_S` (300 s) → adaptér zavřít a odebrat, reconcile ho vytvoří znovu. Nové záznamy mají `last_ok` od připojení.
 - EMSBOX agent: totéž v `poll_once` (timeout 45 s, bez vzorku 5 min → adaptér zahodit, `_reconcile` hned v dalším cyklu). Lekce 10. 11.: go-e na boxu po výpadku proudu 2 h bez vzorku a bez chyby, Solis na stejném boxu v pořádku.

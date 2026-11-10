@@ -156,7 +156,7 @@ function openNet(){
    <select id="ipmode" onchange="ipModeChg()" style="width:100%;font-size:17px;padding:10px;border-radius:10px;background:#0d1117;color:#e6edf3;border:1px solid #30363d">
      <option value="dhcp">DHCP (automaticky)</option><option value="static">Pevná IP</option></select>
    <div id="ipstatic" style="display:none">
-     <input id="ipaddr" placeholder="IP/maska, např. 192.168.1.50/24">
+     <input id="ipaddr" placeholder="IP/maska, např. 192.168.1.50/24 (maska musí odpovídat síti — /23 = 192.168.6.0–7.255)">
      <input id="ipgw" placeholder="brána, např. 192.168.1.1">
      <input id="ipdns" placeholder="DNS (volitelné, default 8.8.8.8)">
    </div>
@@ -173,6 +173,8 @@ async function loadNet(){
    +(n.wifi_psk?`<div class="row"><span>🔑 heslo Wi-Fi</span><span class="muted" style="font-family:monospace">${esc(n.wifi_psk)}</span></div>`:"")
    +(n.nm_available?"":'<div class="muted" style="margin-top:6px">Konfigurace sítě nedostupná (host nemá NetworkManager / chybí mount /run/dbus) — jen zobrazení.</div>');
   document.getElementById("netforms").style.display=n.nm_available?"block":"none";
+  if(n.ipmode){document.getElementById("ipmode").value=n.ipmode.mode;ipModeChg();
+   if(n.ipmode.mode==="static"){document.getElementById("ipaddr").value=n.ipmode.address||"";document.getElementById("ipgw").value=n.ipmode.gateway||"";document.getElementById("ipdns").value=n.ipmode.dns||"";}}
  }catch(e){}}
 async function wifiScan(){const el=document.getElementById("wlist");el.innerHTML='<div class="muted">Hledám sítě…</div>';
  try{const r=await j("/api/network/wifi-scan");
@@ -319,6 +321,7 @@ def create_app(state: dict) -> FastAPI:
             ifaces.append({"name": name, "wireless": wireless, "up": oper == "up",
                            "ssid": ssid, "ip": ip})
         psk = None
+        ipmode = None       # skutečný IP režim Wi-Fi profilu (lekce 10. 11.: UI ukazovalo „DHCP“, profil měl pevnou /24)
         if _nm_ok():
             con = await _active_wifi_con()
             if con:
@@ -326,7 +329,12 @@ def create_app(state: dict) -> FastAPI:
                                       "con", "show", con], 10)
                 if rc == 0 and out.strip():
                     psk = out.strip()
-        return {"interfaces": ifaces, "nm_available": _nm_ok(), "wifi_psk": psk}
+                rc, out = await _run(["nmcli", "-g", "ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns", "con", "show", con], 10)
+                if rc == 0:
+                    parts = (out.strip().split("\n") + ["", "", "", ""])[:4]
+                    ipmode = {"mode": "static" if parts[0].strip() == "manual" else "dhcp",
+                              "address": parts[1].strip().replace("\\,", ","), "gateway": parts[2].strip(), "dns": parts[3].strip()}
+        return {"interfaces": ifaces, "nm_available": _nm_ok(), "wifi_psk": psk, "ipmode": ipmode}
 
     @app.get("/api/network/wifi-scan")
     async def wifi_scan(_: None = Depends(require_auth)):
