@@ -77,6 +77,7 @@ class Agent:
         self.cfg: dict = _load_cached_config() or {"devices": [], "settings": {}}
         self.adapters: dict[str, object] = {}
         self.dev_state: dict[str, dict] = {}     # uid -> {last_read_ts, ok, error}
+        self._last_metrics_mono: dict[str, float] = {}
         self.started = time.monotonic()
         self.online = False
         self.last_sync_ts: str | None = None
@@ -121,20 +122,38 @@ class Agent:
                 logger.warning("připojení %s selhalo (retry za config tick): %s", uid, exc)
 
     # --- sběr --------------------------------------------------------------
+    READ_TIMEOUT_S = 45.0      # tvrdý strop jednoho čtení (zaseklý soket po výpadku proudu)
+    STALE_REINIT_S = 300.0     # bez vzorku tak dlouho → adaptér zahodit, _reconcile ho vytvoří znovu
+
     async def poll_once(self) -> None:
         cycle: list[tuple[str, str, dict]] = []
+        now = time.monotonic()
         for uid, a in list(self.adapters.items()):
             try:
                 async with self._io_lock:
-                    reading = await a.read()
+                    reading = await asyncio.wait_for(a.read(), timeout=self.READ_TIMEOUT_S)
                 metrics = {m.metric.value if hasattr(m.metric, "value") else str(m.metric): m.value
                            for m in (reading.measurements or [])}
                 if metrics:
                     ts = _now_iso()
                     cycle.append((uid, ts, metrics))
                     self.dev_state[uid] = {"last_read_ts": ts, "ok": True, "error": None}
+                    self._last_metrics_mono[uid] = now
+            except asyncio.TimeoutError:
+                self.dev_state[uid] = {**self.dev_state.get(uid, {}), "ok": False, "error": f"timeout {self.READ_TIMEOUT_S:.0f} s"}
+                logger.warning("čtení %s nedoběhlo do %.0f s — přeskočeno", uid, self.READ_TIMEOUT_S)
             except Exception as exc:
                 self.dev_state[uid] = {**self.dev_state.get(uid, {}), "ok": False, "error": str(exc)}
+            # tichý zásek (lekce 10. 11.: go-e po výpadku proudu 2 h bez vzorku a bez chyby) → adaptér znovu
+            first = self._last_metrics_mono.setdefault(uid, now)
+            if now - first > self.STALE_REINIT_S:
+                logger.warning("zařízení %s bez vzorku %d min → adaptér vytvořím znovu", uid, int((now - first) // 60))
+                try:
+                    await a.close()
+                except Exception:
+                    pass
+                self.adapters.pop(uid, None)
+                self._last_metrics_mono.pop(uid, None)
         # v1.3.0: monotonic + boot_id + stav hodin → po NTP skoku se časy opraví při odeslání
         self.buffer.add_cycle(cycle, mono=time.monotonic(), boot=_clock.boot_id(), synced=_clock.synced())
 
@@ -416,6 +435,8 @@ class Agent:
     async def poll_loop(self) -> None:
         while True:
             t0 = time.monotonic()
+            if any(d["device_uid"] not in self.adapters for d in self.cfg.get("devices", [])):
+                await self._reconcile()          # zahozený (zaseklý) adaptér hned znovu
             await self.poll_once()
             await asyncio.sleep(max(1.0, 30.0 - (time.monotonic() - t0)))
 

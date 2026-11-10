@@ -1,3 +1,8 @@
+## v1.9.11 — Čtení zařízení: tvrdý timeout + automatický re-init po tichém záseku
+- Server (`poll_device`): `asyncio.wait_for(read, EMS_READ_TIMEOUT_S=45)`; `reinit_stale`: modul bez platného vzorku > `EMS_STALE_REINIT_S` (300 s) → adaptér zavřít a odebrat, reconcile ho vytvoří znovu. Nové záznamy mají `last_ok` od připojení.
+- EMSBOX agent: totéž v `poll_once` (timeout 45 s, bez vzorku 5 min → adaptér zahodit, `_reconcile` hned v dalším cyklu). Lekce 10. 11.: go-e na boxu po výpadku proudu 2 h bez vzorku a bez chyby, Solis na stejném boxu v pořádku.
+- Na box se dostane přes Emsboxy → „aktualizovat agenta“ (git pull + rebuild) po pushi této verze.
+
 ## v1.9.10 — Ruční povel s cílem SoC drží do cíle
 - Plánovač přebíjel ruční force po 30 min (`MANUAL_OVERRIDE_SEC`) i když měl `target_soc` („nabít na 100 %“) — 10. 11. dvakrát zrušen před dosažením cíle. Teď: povel s cílem plánovač nechává, ukončí ho `tick_soc_targets` při dosažení cíle; pojistka `EMS_MANUAL_TARGET_MAX_SEC` (12 h). Ruční povel bez cíle dál 30 min.
 

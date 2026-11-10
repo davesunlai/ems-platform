@@ -62,9 +62,13 @@ def _module_sig(m) -> str:
     return json.dumps({"adapter": m.adapter, "params": m.params}, sort_keys=True, default=str)
 
 
+READ_TIMEOUT_S = float(os.getenv("EMS_READ_TIMEOUT_S", "45"))     # tvrdý strop jednoho čtení (zaseklý soket po výpadku)
+STALE_REINIT_S = float(os.getenv("EMS_STALE_REINIT_S", "300"))    # bez vzorku tak dlouho → adaptér znovu vytvořit
+
+
 async def poll_device(adapter, sink, params: dict | None = None, entry: dict | None = None) -> None:
     try:
-        reading = await adapter.read()
+        reading = await asyncio.wait_for(adapter.read(), timeout=READ_TIMEOUT_S)
         if entry is not None and reading.measurements:
             entry["last_ok"] = time.monotonic()
         samples = reading_to_samples(reading)
@@ -94,11 +98,36 @@ async def poll_device(adapter, sink, params: dict | None = None, entry: dict | N
                 await ev_service.on_snapshot(reading.device_id, snap, (entry or {}).get("locality_id"))
             except Exception as exc:
                 logger.debug("ev_telemetry insert: %s", exc)
+    except asyncio.TimeoutError:
+        logger.warning("Čtení '%s' nedoběhlo do %.0f s — přeskočeno", getattr(adapter, "device_id", "?"), READ_TIMEOUT_S)
+        if entry is not None:
+            entry["last_error"] = f"timeout {READ_TIMEOUT_S:.0f} s"
+            entry.setdefault("last_ok", time.monotonic() - 1)
     except Exception as exc:
         logger.warning("Čtení '%s' selhalo: %s", getattr(adapter, "device_id", "?"), exc)
         if entry is not None:
             entry["last_error"] = str(exc)
             entry.setdefault("last_ok", time.monotonic() - 1)
+
+
+async def reinit_stale(active: dict) -> None:
+    """Zařízení bez platného vzorku > STALE_REINIT_S (i bez chyby — tichý zásek po výpadku proudu, lekce 10. 11.:
+    go-e na boxu mlčel 2 h) → adaptér zavřít a odebrat; reconcile ho v dalším cyklu vytvoří znovu."""
+    now = time.monotonic()
+    for mid, e in list(active.items()):
+        if e.get("control_only"):
+            continue
+        ad = e.get("adapter")
+        last_ok = getattr(ad, "last_ok", None) or e.get("last_ok")
+        if last_ok is None:
+            continue
+        if now - last_ok > STALE_REINIT_S and now - e.get("_reinit_at", 0) > STALE_REINIT_S:
+            logger.warning("Modul %s bez vzorku %d min → adaptér znovu vytvořím", mid, int((now - last_ok) // 60))
+            try:
+                await ad.close()
+            except Exception:
+                pass
+            del active[mid]
 
 
 DEVICE_OFFLINE_MIN = 15
@@ -333,7 +362,8 @@ async def reconcile(active: dict, sink) -> None:
             try:
                 active[mid] = {"adapter": await _connect_module(m), "sig": sig,
                                "control_only": mid in control_only_ids, "params": dict(m.params or {}),
-                               "locality_id": getattr(m, "locality_id", None), "name": getattr(m, "name", mid)}
+                               "locality_id": getattr(m, "locality_id", None), "name": getattr(m, "name", mid),
+                               "last_ok": time.monotonic(), "_reinit_at": time.monotonic()}
                 logger.info("Modul připojen: %s (adaptér=%s%s)", mid, m.adapter,
                             ", jen povely — čte EMSBOX" if mid in control_only_ids else "")
             except Exception as exc:
@@ -420,6 +450,7 @@ async def run() -> None:
             if active:
                 await asyncio.gather(*(poll_device(e["adapter"], sink, e.get("params"), e)
                                        for e in active.values() if not e.get("control_only")))
+                await reinit_stale(active)
                 await process_queue(active)
             await tick_market_and_automation(state)
             try:
