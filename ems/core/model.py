@@ -106,6 +106,20 @@ class Metric(str, Enum):
     BACKUP_CURRENT_L2 = "backup_current_l2"
     BACKUP_VOLTAGE_L3 = "backup_voltage_l3"
     BACKUP_CURRENT_L3 = "backup_current_l3"
+    # ⚡ Elektroměr (CT) po fázích (33251–33282, sken 13. 11. 2026) — 1×/min
+    METER_VOLTAGE_L1 = "meter_voltage_l1"
+    METER_VOLTAGE_L2 = "meter_voltage_l2"
+    METER_VOLTAGE_L3 = "meter_voltage_l3"
+    METER_CURRENT_L1 = "meter_current_l1"
+    METER_CURRENT_L2 = "meter_current_l2"
+    METER_CURRENT_L3 = "meter_current_l3"
+    METER_POWER_L1 = "meter_power_l1"
+    METER_POWER_L2 = "meter_power_l2"
+    METER_POWER_L3 = "meter_power_l3"
+    METER_APPARENT_L1 = "meter_apparent_l1"
+    METER_APPARENT_L2 = "meter_apparent_l2"
+    METER_APPARENT_L3 = "meter_apparent_l3"
+    METER_FREQUENCY = "meter_frequency"
     # Energetické čítače měniče (33161–33180): dnes / celkem — křížová kontrola dopočtů. 1×/min.
     INVERTER_AC_POWER = "inverter_ac_power"    # AC výkon měniče
     INVERTER_CURRENT_L1 = "inverter_current_l1"
@@ -192,6 +206,10 @@ UNIT_OF: dict[Metric, str] = {
     Metric.PV_VOLTAGE_2: "V", Metric.PV_CURRENT_2: "A", Metric.PV_POWER_2: "W",
     Metric.PV_VOLTAGE_3: "V", Metric.PV_CURRENT_3: "A", Metric.PV_POWER_3: "W",
     Metric.PV_VOLTAGE_4: "V", Metric.PV_CURRENT_4: "A", Metric.PV_POWER_4: "W",
+    Metric.METER_VOLTAGE_L1: "V", Metric.METER_VOLTAGE_L2: "V", Metric.METER_VOLTAGE_L3: "V",
+    Metric.METER_CURRENT_L1: "A", Metric.METER_CURRENT_L2: "A", Metric.METER_CURRENT_L3: "A",
+    Metric.METER_POWER_L1: "W", Metric.METER_POWER_L2: "W", Metric.METER_POWER_L3: "W",
+    Metric.METER_APPARENT_L1: "VA", Metric.METER_APPARENT_L2: "VA", Metric.METER_APPARENT_L3: "VA", Metric.METER_FREQUENCY: "Hz",
     Metric.BACKUP_LOAD_POWER: "W", Metric.BACKUP_VOLTAGE_L1: "V", Metric.BACKUP_CURRENT_L1: "A",
     Metric.BACKUP_VOLTAGE_L2: "V", Metric.BACKUP_CURRENT_L2: "A", Metric.BACKUP_VOLTAGE_L3: "V", Metric.BACKUP_CURRENT_L3: "A",
     Metric.BATTERY_CELL_VMIN_1: "V",

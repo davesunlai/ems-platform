@@ -1,0 +1,4 @@
+revize.5g4.cz {
+        encode gzip
+        reverse_proxy revize_app:3000
+}

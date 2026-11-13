@@ -24,8 +24,11 @@ export const METRIC_LABEL = {
   battery_cell_vmin_2: "B2 článek min U", battery_cell_vmax_2: "B2 článek max U", battery_cell_tmin_2: "B2 článek min T", battery_cell_tmax_2: "B2 článek max T",
   battery_cell_nmin_2: "B2 č. článku min", battery_cell_nmax_2: "B2 č. článku max", battery_bms_current_2: "B2 proud BMS", battery_cycles_2: "B2 cykly",
   battery_bms_modules_2: "B2 modulů", battery_bms_cells_per_module_2: "B2 článků/modul",
-  backup_load_power: "Zátěž na záloze (backup)", backup_voltage_l1: "Backup napětí L1", backup_current_l1: "Backup proud L1",
-  backup_voltage_l2: "Backup napětí L2", backup_current_l2: "Backup proud L2", backup_voltage_l3: "Backup napětí L3", backup_current_l3: "Backup proud L3",
+  backup_load_power: "Zátěž na záloze (backup)",
+  meter_voltage_l1: "Elektroměr napětí L1", meter_voltage_l2: "Elektroměr napětí L2", meter_voltage_l3: "Elektroměr napětí L3",
+  meter_current_l1: "Elektroměr proud L1", meter_current_l2: "Elektroměr proud L2", meter_current_l3: "Elektroměr proud L3",
+  meter_power_l1: "Elektroměr výkon L1", meter_power_l2: "Elektroměr výkon L2", meter_power_l3: "Elektroměr výkon L3",
+  meter_apparent_l1: "Elektroměr zdánlivý L1", meter_apparent_l2: "Elektroměr zdánlivý L2", meter_apparent_l3: "Elektroměr zdánlivý L3", meter_frequency: "Elektroměr frekvence",
   energy_bat_charge_today: "Nabito dnes (měnič)", energy_bat_discharge_today: "Vybito dnes (měnič)", energy_import_today: "Odběr dnes (měnič)",
   energy_export_today: "Dodávka dnes (měnič)", energy_load_today: "Spotřeba dnes (měnič)", energy_bat_charge_total: "Nabito celkem (měnič)",
   energy_bat_discharge_total: "Vybito celkem (měnič)", energy_import_total: "Odběr celkem (měnič)", energy_export_total: "Dodávka celkem (měnič)", energy_load_total: "Spotřeba celkem (měnič)",
@@ -87,8 +90,10 @@ export const METRIC_GROUPS = [
     "ev_current_l1", "ev_current_l2", "ev_current_l3", "ev_voltage_l1", "ev_voltage_l2", "ev_voltage_l3", "ev_temp", "ev_cable_limit"] },
   { id: "tech", label: "Technické / křížové kontroly", icon: "sliders", metrics: [
     "inverter_state", "inverter_fault", "inverter_ac_power", "inverter_current_l1", "inverter_current_l2", "inverter_current_l3",
-    "house_load_inv", "battery_power_inv", "backup_load_power", "backup_voltage_l1", "backup_current_l1",
-    "backup_voltage_l2", "backup_current_l2", "backup_voltage_l3", "backup_current_l3"] },
+    "house_load_inv", "battery_power_inv", "backup_load_power"] },
+  { id: "meter", label: "⚡ Elektroměr (CT) po fázích", icon: "tower", metrics: [
+    "meter_voltage_l1", "meter_voltage_l2", "meter_voltage_l3", "meter_current_l1", "meter_current_l2", "meter_current_l3",
+    "meter_power_l1", "meter_power_l2", "meter_power_l3", "meter_apparent_l1", "meter_apparent_l2", "meter_apparent_l3", "meter_frequency"] },
 ];
 
 // Veličiny, které se NEPOČÍTAJÍ do limitu sledovaných (diagnostika a technické křížové kontroly —

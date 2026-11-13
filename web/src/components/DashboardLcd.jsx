@@ -330,24 +330,31 @@ function BattTab({ d, v, blocks, en, locId, has, push }) {
 
 // ---------- GRID ----------
 function GridTab({ d, v, cfg, push }) {
+  // jako displej: sloupce Měnič L1–L3 a CT (elektroměr) L1–L3; řádky napětí, proud, činný výkon, celkem, frekvence
   const L = [1, 2, 3];
   const u = (i) => v(`grid_voltage_l${i}`), a = (i) => v(`inverter_current_l${i}`);
+  const mu = (i) => v(`meter_voltage_l${i}`), mi = (i) => v(`meter_current_l${i}`), mp = (i) => v(`meter_power_l${i}`);
+  const ems = (w) => (w == null ? null : -w);   // Solis: + dodávka / − odběr → EMS: + odběr
+  const cell = (val, unit, dec = 1) => (val != null ? `${num(val, dec)} ${unit}` : "—");
   return (
     <div>
-      <div className="hdr">Nákup » dnes {kwh(v("energy_import_today") ?? d.import_kwh)} <span>/ celkem {kwh(v("energy_import_total"), 0)}</span>
-        &nbsp;&nbsp;&nbsp; Prodej » dnes {kwh(v("energy_export_today") ?? d.export_kwh)} <span>/ celkem {kwh(v("energy_export_total"), 0)}</span></div>
-      <table>
-        <thead><tr><th></th><th colSpan={3} style={{ textAlign: "center" }}>Měnič</th><th style={{ textAlign: "center" }}>Elektroměr</th></tr>
-          <tr><th></th>{L.map((i) => <th key={i}>L{i}</th>)}<th>celkem</th></tr></thead>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "0 10px 10px 0" }}>
+        <span>Nákup » dnes <b>{kwh(v("energy_import_today") ?? d.import_kwh)}</b> / celkem <b>{kwh(v("energy_import_total"), 0)}</b></span>
+        <span>Prodej » dnes <b>{kwh(v("energy_export_today") ?? d.export_kwh)}</b> / celkem <b>{kwh(v("energy_export_total"), 0)}</b></span>
+      </div>
+      <table style={{ fontSize: 15 }}>
+        <thead><tr><th></th><th colSpan={3} style={{ textAlign: "center" }}>Měnič</th><th colSpan={3} style={{ textAlign: "center" }}>CT (elektroměr)</th></tr>
+          <tr><th></th>{L.map((i) => <th key={i}>L{i}</th>)}{L.map((i) => <th key={i}>L{i}</th>)}</tr></thead>
         <tbody>
-          <tr><td className="l">Napětí</td>{L.map((i) => <td key={i} className="v">{u(i) != null ? `${num(u(i), 1)} V` : "—"}</td>)}<td></td></tr>
-          <tr><td className="l">Proud</td>{L.map((i) => <td key={i} className="v">{a(i) != null ? `${num(a(i), 1)} A` : "—"}</td>)}<td></td></tr>
-          <tr><td className="l">Zdánlivý výkon</td>{L.map((i) => <td key={i} className="v">{u(i) != null && a(i) != null ? `${Math.round(u(i) * a(i))} VA` : "—"}</td>)}<td className="v">{d.grid_w != null ? `${d.grid_w > 0 ? "+" : ""}${Math.round(d.grid_w)} W` : "—"}</td></tr>
-          <tr><td className="l">Činný výkon měniče</td><td className="v" colSpan={3}>{v("inverter_ac_power") != null ? `${Math.round(v("inverter_ac_power"))} W` : "—"}</td><td className="v">{d.grid_w != null ? (d.grid_w > 50 ? "odběr" : d.grid_w < -50 ? "dodávka" : "vyrovnáno") : ""}</td></tr>
-          <tr><td className="l">Strop exportu (TERA)</td><td className="v" colSpan={4}>{cfg?.grid_export_limit_kw != null ? `${num(cfg.grid_export_limit_kw, 1)} kW` : "—"}</td></tr>
+          <tr><td className="l">Napětí</td>{L.map((i) => <td key={i} className="v">{cell(u(i), "V")}</td>)}{L.map((i) => <td key={`m${i}`} className="v">{cell(mu(i), "V")}</td>)}</tr>
+          <tr><td className="l">Proud</td>{L.map((i) => <td key={i} className="v">{cell(a(i), "A")}</td>)}{L.map((i) => <td key={`m${i}`} className="v">{cell(mi(i), "A", 2)}</td>)}</tr>
+          <tr><td className="l">Činný výkon</td>{L.map((i) => <td key={i} className="v">{u(i) != null && a(i) != null ? `${Math.round(u(i) * a(i))} W` : "—"}</td>)}{L.map((i) => <td key={`m${i}`} className="v">{mp(i) != null ? `${Math.round(ems(mp(i)))} W` : "—"}</td>)}</tr>
+          <tr><td className="l">Celkový výkon</td><td className="v" colSpan={3}>{v("inverter_ac_power") != null ? `${Math.round(v("inverter_ac_power"))} W` : "—"}</td><td className="v" colSpan={3}>{d.grid_w != null ? `${Math.round(d.grid_w)} W ${d.grid_w > 50 ? "(odběr)" : d.grid_w < -50 ? "(dodávka)" : ""}` : "—"}</td></tr>
+          <tr><td className="l">Frekvence</td><td className="v" colSpan={3}>{v("frequency") != null ? `${num(v("frequency"), 2)} Hz` : "—"}</td><td className="v" colSpan={3}>{v("meter_frequency") != null ? `${num(v("meter_frequency"), 2)} Hz` : "—"}</td></tr>
+          <tr><td className="l">Strop exportu (TERA)</td><td className="v" colSpan={6}>{cfg?.grid_export_limit_kw != null ? `${num(cfg.grid_export_limit_kw, 1)} kW` : "—"}</td></tr>
         </tbody>
       </table>
-      <p style={{ fontSize: 12, color: "#44556a", marginTop: 10 }}>Znaménko elektroměru: + odběr ze sítě, − dodávka do sítě.</p>
+      <p style={{ fontSize: 12, color: "#44556a", marginTop: 8 }}>Výkon: + odběr ze sítě, − dodávka do sítě. CT hodnoty 1×/min.</p>
       <Foot><HistBtn kind="grid" push={push} label="Historie nákupu a prodeje" /></Foot>
     </div>
   );
@@ -355,18 +362,33 @@ function GridTab({ d, v, cfg, push }) {
 
 // ---------- LOAD ----------
 function LoadTab({ d, v, push }) {
+  // 1:1 jako displej: sloupce Síť (grid load) · Záloha (backup) · Smart load; řádky Energie (dnes/celkem), Napětí, Proud, Činný a Zdánlivý výkon po fázích
   const L = [1, 2, 3];
+  const bU = (i) => v(`backup_voltage_l${i}`), bI = (i) => v(`backup_current_l${i}`), bP = (i) => v(`backup_power_l${i}`), bS = (i) => v(`backup_apparent_l${i}`);
+  const gU = (i) => v(`grid_voltage_l${i}`), gP = (i) => (v(`meter_power_l${i}`) != null ? -v(`meter_power_l${i}`) : null), gS = (i) => v(`meter_apparent_l${i}`);
+  const c = (val, unit, dec = 1) => (val != null ? `${num(val, dec)} ${unit}` : "—");
+  const w = (val) => (val != null ? `${Math.round(val)} W` : "—");
+  const bkToday = v("energy_backup_today"), bkTotal = v("energy_backup_total");
+  const loadToday = v("energy_load_today") ?? d.cons_today_kwh, loadTotal = v("energy_load_total");
+  const Row3 = ({ label, g, b }) => L.map((i, k) => (
+    <tr key={`${label}${i}`}>{k === 0 && <td className="l" rowSpan={3}>{label}</td>}<td className="l" style={{ paddingRight: 4 }}>L{i}</td><td className="v">{g(i)}</td><td className="v">{b(i)}</td><td className="v">—</td></tr>));
   return (
     <div>
-      <div className="hdr">Spotřeba dnes {kwh(d.cons_today_kwh)} <span>/ celkem (měnič) {kwh(v("energy_load_total"), 0)}</span></div>
-      <table>
-        <thead><tr><th></th><th>Dům (bilance)</th><th>Dům dle měniče</th><th>Záloha (backup)</th></tr></thead>
+      <table style={{ fontSize: 14.5 }}>
+        <thead><tr><th></th><th></th><th>Síť (grid load)</th><th>Záloha (backup)</th><th>Smart load</th></tr></thead>
         <tbody>
-          <tr><td className="l">Výkon</td><td className="v">{Math.round(d.load_w || 0)} W</td><td className="v">{v("house_load") != null ? `${Math.round(v("house_load"))} W` : "—"}</td><td className="v">{v("backup_load_power") != null ? `${Math.round(v("backup_load_power"))} W` : "—"}</td></tr>
-          {L.map((i) => <tr key={i}><td className="l">Záloha L{i}</td><td></td><td></td><td className="v">{v(`backup_voltage_l${i}`) != null ? `${num(v(`backup_voltage_l${i}`), 1)} V · ${num(v(`backup_current_l${i}`), 1)} A` : "—"}</td></tr>)}
+          <tr><td className="l" rowSpan={2}>Energie</td><td className="l">dnes</td><td className="v">{loadToday != null && bkToday != null ? kwh(Math.max(0, loadToday - bkToday)) : kwh(loadToday)}</td><td className="v">{kwh(bkToday)}</td><td className="v">—</td></tr>
+          <tr><td className="l">celkem</td><td className="v">{loadTotal != null && bkTotal != null ? kwh(loadTotal - bkTotal, 0) : kwh(loadTotal, 0)}</td><td className="v">{kwh(bkTotal, 0)}</td><td className="v">—</td></tr>
+          <Row3 label="Napětí" g={(i) => c(gU(i), "V")} b={(i) => c(bU(i), "V")} />
+          <Row3 label="Proud" g={() => "—"} b={(i) => c(bI(i), "A")} />
+          <Row3 label="Činný výkon" g={(i) => w(gP(i))} b={(i) => w(bP(i))} />
+          <Row3 label="Zdánlivý výkon" g={(i) => (gS(i) != null ? `${num(gS(i), 1)} VA` : "—")} b={(i) => (bS(i) != null ? `${num(bS(i), 1)} VA` : "—")} />
         </tbody>
       </table>
-      <p style={{ fontSize: 12, color: "#44556a", marginTop: 10 }}>Dům (bilance) = FVE + síť − baterie; spotřeba není měřena přímo.</p>
+      <p style={{ fontSize: 12, color: "#44556a", marginTop: 6 }}>
+        Dům celkem (bilance TERA): <b>{Math.round(d.load_w || 0)} W</b>{v("backup_load_power") != null ? ` · záloha dle měniče ${Math.round(v("backup_load_power"))} W` : ""}
+        {bU(1) == null ? " · fáze zálohy: blok registrů se dohledává (sken)" : ""}
+      </p>
       <Foot><HistBtn kind="load" push={push} label="Historie spotřeby" /></Foot>
     </div>
   );

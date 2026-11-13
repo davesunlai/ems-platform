@@ -77,9 +77,21 @@ REG_E_LOAD_TOTAL = (33177, "u32", 1.0)            # spotřeba domu
 REG_E_LOAD_TODAY = (33179, "u16", 0.1)
 # Zálohovaný výstup (backup/EPS) — sken 16. 10. 2026: 33153/55/57 = 239,7/240,6/223,0 V, proudy 0 (bez zátěže)
 REG_BACKUP_LOAD = (33148, "u16", 1.0)       # W — zátěž na backup výstupu
+# POZOR (sken 13. 11. 2026): 33153–33158 NEJSOU záloha (displej: záloha 246 V na všech fázích, registr 33157 = 22 V;
+# tvar hodnot kopíruje proudy měniče L1>L2>L3=0). Skutečný blok 3f zálohy se hledá (není v 33100–33400). Mapa ponechána
+# jen pro sken/audit, do metrik backup_* se už nepublikuje.
 REG_BACKUP = {1: ((33153, "u16", 0.1), (33154, "u16", 0.1)),
               2: ((33155, "u16", 0.1), (33156, "u16", 0.1)),
               3: ((33157, "u16", 0.1), (33158, "u16", 0.1))}
+# ⚡ Elektroměr (CT) po fázích — sken 13. 11. 2026: 33251/53/55 U (×0.1 V), 33252/54/56 I (×0.01 A),
+# 33257–33262 P s32 (W, + dodávka / − odběr dle Solisu), 33263 P celkem s32, 33265–33270 Q s32 (var), 33273–33278 S s32 (VA),
+# 33279 S celkem, 33282 f (×0.01 Hz). Čte se jedním blokem 33251..33282.
+BLOCK_METER = (33251, 32)
+REG_METER = {n: {"v": (33251 + 2 * (n - 1), "u16", 0.1), "i": (33252 + 2 * (n - 1), "u16", 0.01),
+                 "p": (33257 + 2 * (n - 1), "s32", 1.0), "q": (33265 + 2 * (n - 1), "s32", 1.0), "s": (33273 + 2 * (n - 1), "s32", 1.0)} for n in (1, 2, 3)}
+REG_METER_P_TOTAL = (33263, "s32", 1.0)
+REG_METER_S_TOTAL = (33279, "s32", 1.0)
+REG_METER_FREQ = (33282, "u16", 0.01)
 # 🔋 BMS články (sken 16. 10. 2026): dva shodné bloky po 25 reg.; značka 0xAA55 jen na 34345 (a 34414), 34370 = 0.
 # pack A = 34345, pack B = 34370. Offsety: +1 konst. 4785, +3 Umin článku (mV), +4 Umax (mV),
 # +5 Tmin (×0.1 °C), +6 Tmax, +7 číslo článku s Umin, +9 číslo článku s Umax, +13 proud BMS (×0.1 A),

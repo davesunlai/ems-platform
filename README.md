@@ -1,3 +1,8 @@
+## v1.10.3 — Elektroměr po fázích, LCD GRID/LOAD jako displej, oprava „zálohy“
+- Sken 13. 11.: 33153–33158 NEJSOU záloha (22 V při 246 V na displeji; tvar kopíruje proudy měniče) → metriky backup_voltage/current_l* se už nepublikují; `backup_load_power` (33148) zůstává. Skutečný 3f blok zálohy se hledá (není v 33100–33400).
+- Nový blok **33251..33282 = elektroměr (CT)**: `meter_voltage_l1..3` (×0,1 V), `meter_current_l1..3` (×0,01 A), `meter_power_l1..3` (s32 W), `meter_apparent_l1..3` (s32 VA), `meter_frequency`; 1×/min; skupina „⚡ Elektroměr (CT) po fázích“ v Modulech; audit registrů aktualizován.
+- LCD GRID: sloupce Měnič L1–L3 a CT L1–L3 (napětí, proud, činný výkon, celkem, frekvence) jako displej. LCD LOAD: Síť · Záloha · Smart load × Energie (dnes/celkem) · Napětí · Proud · Činný · Zdánlivý výkon po fázích; záloha se doplní po nalezení bloku (`backup_*_l*`, `energy_backup_today/total`).
+
 ## v1.10.2 — LCD PV jako na displeji; MPPT trvale 1×/min
 - PV obrazovka: řádek „Výkon FVE · Výroba dnes · Výroba celkem“, pod ním vždy MPPT1–4 (napětí, proud, výkon).
 - `keep_metric`: MPPT veličiny mimo diagnostické okno se už nezahazují, ale ukládají jako pomalé (1×/min, server i EMSBOX ingest); v okně dál plné rozlišení.

@@ -35,7 +35,8 @@ SLOW_METRICS = frozenset(
     [f"battery_{k}_{n}" for n in (1, 2) for k in ("cell_vmin", "cell_vmax", "cell_tmin", "cell_tmax", "cell_nmin",
                                                    "cell_nmax", "bms_current", "cycles", "bms_modules", "bms_cells_per_module")]
     + [f"energy_{k}_{p}" for k in ("bat_charge", "bat_discharge", "import", "export", "load") for p in ("today", "total")]
-    + [f"backup_{k}_l{n}" for k in ("voltage", "current") for n in (1, 2, 3)])
+    + [f"backup_{k}_l{n}" for k in ("voltage", "current") for n in (1, 2, 3)]
+    + [f"meter_{k}_l{n}" for k in ("voltage", "current", "power", "apparent") for n in (1, 2, 3)] + ["meter_frequency"])
 SLOW_INTERVAL_S = 60
 _last_slow: dict[tuple[str, str], float] = {}
 
