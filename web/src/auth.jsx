@@ -21,13 +21,16 @@ export function AuthProvider({ children }) {
     const res = await api.login(username, password);
     setToken(res.access_token);
     setUser({ username, role: res.role, permissions: res.permissions, hidden: res.hidden || [] });
+    // plný profil (motiv, rozhraní dashboardu podle role) hned po přihlášení — ne až po F5
+    api.me().then((u) => { if (u) { setUser(u); applyTheme(u.theme, u.theme_custom, u.theme_saved); } }).catch(() => {});
   };
+  const refreshUser = () => api.me().then((u) => { if (u) setUser(u); return u; }).catch(() => null);
 
   const has = (perm) => !!user && user.permissions.includes(perm);
   const vis = (key) => !user || !(user.hidden || []).includes(key);   // viditelnost prvku UI dle role
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, logout, has, vis }}>
+    <AuthCtx.Provider value={{ user, loading, login, logout, has, vis, refreshUser }}>
       {children}
     </AuthCtx.Provider>
   );

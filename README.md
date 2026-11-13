@@ -1,3 +1,9 @@
+## v1.10.0 — Rozhraní dashboardu podle role: „Panel měniče (LCD)“
+- Nová vrstva **rozhraní dashboardu** (`flow` = schéma TERA, `lcd` = panel měniče), nezávislá na barevném motivu. Výchozí podle role (`custom_roles.dashboard_layout`, Uživatelé → Role → „rozhraní dashboardu“), vlastní volba uživatele ve Vzhled → 📟 Rozhraní dashboardu (`ui_prefs.dashboard_layout`, „podle role“ = reset). `/auth/me` vrací `dashboard_layout` a `dashboard_layout_role`; po přihlášení se profil načte hned (ne až po F5).
+- Role **LCD** (viewer, rozhraní lcd) se založí automaticky.
+- `components/DashboardLcd.jsx`: modrá lišta se stavem měniče a časem, záložky STAV (schéma toku ve stylu displeje: FVE → měnič → dům/záloha/síť, baterie B1/B2 s SoC, napětím a využitelnými kWh, souhrn dne) · PV (výkon, dnes/celkem, MPPT U/I/P je-li diagnostika) · BATT (nabito/vybito dnes/celkem, Baterie 1/2: model z bloků, U, I, P, SoC, SoH, teplota, články, jmenovitá, využitelné z testu; 🧪 test) · GRID (nákup/prodej, měnič L1–L3 U/I/S, elektroměr, strop exportu) · LOAD (dům bilance/měnič, záloha L1–L3) · MORE (modul, stav, porucha, teplota, poslední vzorek, kdo čte) · ENERGIE (čítače dnes/celkem; grafy měsíc/rok/celkem v dalším kroku).
+- Virtuální plocha 960×540 škálovaná na šířku kontejneru (ResizeObserver, reaguje na otočení telefonu). Ostatní stránky beze změny; název zůstává TERA EMS.
+
 ## v1.9.12 — EMSBOX localui: skutečný IP režim Wi-Fi
 - `/api/network` vrací `ipmode` (dhcp/static + adresa, brána, DNS z profilu NM); select a pole se předvyplní podle reality (dřív vždy „DHCP“, i když profil měl pevnou 192.168.6.110/24 — lekce 10. 11.: síť je /23, box přes bránu k 192.168.7.x nedosáhl na odpovědi). Nápověda u masky.
 

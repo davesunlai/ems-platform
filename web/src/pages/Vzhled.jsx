@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DashboardLayoutPicker from "../components/DashboardLayoutPicker";
 import { useAuth } from "../auth";
 import { api } from "../api";
 import { PRESETS, VAR_LABELS, resolveVars, applyTheme, applyUiStyle, currentUiStyle } from "../theme";
@@ -76,6 +77,8 @@ export default function Vzhled() {
           </button>
         </div>
       )}
+
+      <DashboardLayoutPicker />
 
       <div className="panel" style={{ marginBottom: 18 }}>
         <h3 style={{ marginTop: 0 }}>Styl rozhraní</h3>

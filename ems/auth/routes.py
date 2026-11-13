@@ -60,6 +60,9 @@ async def me(user: dict = Depends(get_current_user)):
         "theme_saved": _parse_custom(full.get("theme_saved") if full else None) or [],
         "notify_email": bool(full.get("notify_email")) if full else True,
         "notify_browser": bool(full.get("notify_browser")) if full else True,
+        # rozhraní dashboardu: vlastní volba uživatele (ui_prefs.dashboard_layout) > výchozí role
+        "dashboard_layout_role": _roles.layout_for(user["role"]),
+        "dashboard_layout": ((_parse_custom(full.get("ui_prefs")) if full else None) or {}).get("dashboard_layout") or _roles.layout_for(user["role"]),
     }
 
 
@@ -287,18 +290,19 @@ class RoleIn(BaseModel):
     name: str
     base: str = "viewer"
     hidden: list[str] = []
+    dashboard_layout: str = "flow"
 
 
 @router.get("/admin/roles")
 async def list_custom_roles(_: dict = Depends(require_permission("admin"))):
-    return {"builtin": [{"name": n, "base": n, "hidden": [], "custom": False} for n in ROLE_PERMISSIONS],
-            "custom": _roles.list_roles()}
+    return {"builtin": [{"name": n, "base": n, "hidden": [], "dashboard_layout": "flow", "custom": False} for n in ROLE_PERMISSIONS],
+            "custom": _roles.list_roles(), "layouts": list(_roles.LAYOUTS)}
 
 
 @router.post("/admin/roles", status_code=201)
 async def create_custom_role(body: RoleIn, _: dict = Depends(require_permission("admin"))):
     try:
-        return await _roles.upsert(body.name, body.base, body.hidden)
+        return await _roles.upsert(body.name, body.base, body.hidden, body.dashboard_layout)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -306,7 +310,7 @@ async def create_custom_role(body: RoleIn, _: dict = Depends(require_permission(
 @router.put("/admin/roles/{name}")
 async def update_custom_role(name: str, body: RoleIn, _: dict = Depends(require_permission("admin"))):
     try:
-        return await _roles.upsert(name, body.base, body.hidden)
+        return await _roles.upsert(name, body.base, body.hidden, body.dashboard_layout)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

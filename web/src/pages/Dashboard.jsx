@@ -7,6 +7,7 @@ import TimeChart from "../components/TimeChart";
 import MultiChart from "../components/MultiChart";
 import ForecastChart from "../components/ForecastChart";
 import TempChart from "../components/TempChart";
+import { LcdLocality } from "../components/DashboardLcd";
 import BillingTable from "../components/BillingTable";
 import Icon from "../components/Icon";
 import { METRIC_LABEL as LABELS, iconFor, groupMetrics } from "../metrics";
@@ -1702,6 +1703,7 @@ function LocalityChart({ deviceIds }) {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [devices, setDevices] = useState(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(() => localStorage.getItem("ems.dash.locality") || "");
@@ -1730,6 +1732,11 @@ export default function Dashboard() {
     localStorage.setItem("ems.dash.open", JSON.stringify(x));
     return x;
   });
+
+  // 📟 rozhraní „Panel měniče (LCD)“ — podle role / vlastní volby ve Vzhledu (v1.10.0)
+  if (user?.dashboard_layout === "lcd") {
+    return <main>{names.map((n) => <LcdLocality key={n} name={n} devs={groups[n]} />)}</main>;
+  }
 
   return (
     <main>

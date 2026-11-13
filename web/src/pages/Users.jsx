@@ -138,14 +138,14 @@ function RolesEditor({ roles, onChange }) {
   const [draft, setDraft] = useState(null);      // {name, base, hidden:Set}
   const [newName, setNewName] = useState("");
   const [msg, setMsg] = useState("");
-  const open = (r) => { setSel(r.name); setDraft({ name: r.name, base: r.base, hidden: new Set(r.hidden || []) }); setMsg(""); };
+  const open = (r) => { setSel(r.name); setDraft({ name: r.name, base: r.base, hidden: new Set(r.hidden || []), dashboard_layout: r.dashboard_layout || "flow" }); setMsg(""); };
   const create = async () => {
     const n = newName.trim(); if (!n) return;
     try { await api.createRole({ name: n, base: "viewer", hidden: [] }); setNewName(""); onChange(); setMsg(`Role ${n} založena — nastav viditelnost.`); }
     catch (e) { setMsg(e.message); }
   };
   const save = async () => {
-    try { await api.saveRole(draft.name, { name: draft.name, base: draft.base, hidden: [...draft.hidden] }); onChange(); setMsg("Uloženo. Uživatelé s touto rolí uvidí změnu po dalším přihlášení / obnovení stránky."); }
+    try { await api.saveRole(draft.name, { name: draft.name, base: draft.base, hidden: [...draft.hidden], dashboard_layout: draft.dashboard_layout || "flow" }); onChange(); setMsg("Uloženo. Uživatelé s touto rolí uvidí změnu po dalším přihlášení / obnovení stránky."); }
     catch (e) { setMsg(e.message); }
   };
   const del = async () => {
@@ -168,7 +168,7 @@ function RolesEditor({ roles, onChange }) {
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
         {roles.custom.map((r) => (
           <button key={r.name} className={"btn" + (sel === r.name ? " primary" : "")} onClick={() => open(r)}>
-            {r.name} <span className="muted" style={{ fontSize: 11 }}>({BASE_CZ[r.base] || r.base}{r.hidden?.length ? ` · skryto ${r.hidden.length}` : ""})</span>
+            {r.name} <span className="muted" style={{ fontSize: 11 }}>({BASE_CZ[r.base] || r.base}{r.hidden?.length ? ` · skryto ${r.hidden.length}` : ""}{r.dashboard_layout === "lcd" ? " · LCD" : ""})</span>
           </button>))}
         <input placeholder="nová role (např. user1)" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ width: 170 }} />
         <button className="btn" onClick={create} disabled={!newName.trim()}>+ založit</button>
@@ -180,6 +180,12 @@ function RolesEditor({ roles, onChange }) {
             <label style={{ fontSize: 13 }}>základní oprávnění:{" "}
               <select value={draft.base} onChange={(e) => setDraft({ ...draft, base: e.target.value })}>
                 {BUILTIN_ROLES.map((b) => <option key={b} value={b}>{b} — {BASE_CZ[b]}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 13 }} title="Jaký dashboard uživatel s touto rolí uvidí při prvním přihlášení (sám si ho může změnit ve Vzhledu)">rozhraní dashboardu:{" "}
+              <select value={draft.dashboard_layout || "flow"} onChange={(e) => setDraft({ ...draft, dashboard_layout: e.target.value })}>
+                <option value="flow">Schéma toků (TERA)</option>
+                <option value="lcd">Panel měniče (LCD)</option>
               </select>
             </label>
             <button className="btn primary" onClick={save}>Uložit</button>
