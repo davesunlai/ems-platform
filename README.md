@@ -1,3 +1,10 @@
+## v1.10.1 — LCD panel: menu jako na displeji, podmenu, ◀ Zpět, sloupcová historie
+- Navigace zásobníkem obrazovek (sessionStorage): HOME (schéma) → „MENU = ENTER“ → HLAVNÍ MENU (INFORMACE O ELEKTRÁRNĚ · VÝSTRAHY · NASTAVENÍ SYSTÉMU · SERVISNÍ NASTAVENÍ); ◀ Zpět v liště vrací o úroveň i z podmenu.
+- INFORMACE O ELEKTRÁRNĚ: záložky PV · BATT · GRID · LOAD · MORE, každá s „📊 Historie … = ENTER“ → obrazovka historie se záložkami MĚSÍC (dny) · ROK (měsíce) · CELKEM (roky), ‹ › posun období, sloupce (výroba / nabíjení+vybíjení / nákup+prodej / spotřeba), součty za období. MORE = měnič + čítače dnes/celkem.
+- NASTAVENÍ SYSTÉMU podmenu: REŽIM ÚLOŽIŠTĚ (plánovač: režim, strop exportu, rezerva, limity), NASTAVENÍ BATERIE (bloky, SoH, využitelná z testu, limity proudu, záložní SoC), ZÁKLADNÍ (čas, lokalita, verze), CHYTRÉ VÝSTUPY (výstupy, TČ, wallbox), PŘIPOJENÍ K SÍTI (jistič, strop, napětí fází), DALŠÍ FUNKCE (odkazy). SERVISNÍ NASTAVENÍ jen admin (moduly, diagnostika, EMSBOXy, uživatelé). Hodnoty jen pro čtení, úpravy odkazem do TERA stránek.
+- VÝSTRAHY: aktivní výstrahy/události lokality.
+- API `GET /api/localities/{loc}/energy-history?period=day|month|year&at=YYYY-MM|YYYY` (`ems/energyhist`): z denních čítačů měniče (energy_*_today, max za pražský den přes samples_15m, součet přes zařízení) → pv, bat_chg, bat_dis, imp, exp, load + součty + prev/next.
+
 ## v1.10.0 — Rozhraní dashboardu podle role: „Panel měniče (LCD)“
 - Nová vrstva **rozhraní dashboardu** (`flow` = schéma TERA, `lcd` = panel měniče), nezávislá na barevném motivu. Výchozí podle role (`custom_roles.dashboard_layout`, Uživatelé → Role → „rozhraní dashboardu“), vlastní volba uživatele ve Vzhled → 📟 Rozhraní dashboardu (`ui_prefs.dashboard_layout`, „podle role“ = reset). `/auth/me` vrací `dashboard_layout` a `dashboard_layout_role`; po přihlášení se profil načte hned (ne až po F5).
 - Role **LCD** (viewer, rozhraní lcd) se založí automaticky.

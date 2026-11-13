@@ -112,6 +112,7 @@ export const api = {
   btApply: (id) => request(`/api/battery-test/test/${id}/apply`, { method: "POST" }),
   btCurveClear: (mod) => request(`/api/battery-test/blocks/${encodeURIComponent(mod)}/curve`, { method: "DELETE" }),
   btEnergy: (loc) => request(`/api/battery-test/${loc}/energy`),
+  energyHistory: (loc, period, at) => request(`/api/localities/${loc}/energy-history?period=${period}${at ? `&at=${at}` : ""}`),
   carsMonth: (loc, month) => request(`/api/cars/month?month=${month}${loc ? `&locality_id=${loc}` : ""}`),
   carsSessions: (loc, q) => request(`/api/cars/sessions?${loc ? `locality_id=${loc}&` : ""}${q}`),
   carsRoles: () => request("/api/cars/roles"),
