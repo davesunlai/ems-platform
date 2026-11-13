@@ -43,9 +43,9 @@ _last_slow: dict[tuple[str, str], float] = {}
 def keep_metric(metric: str, params: dict | None, device_id: str | None = None, ts: datetime | None = None) -> bool:
     """False = neukládat: diagnostická veličina mimo aktivní okno, nebo pomalá veličina
     dřív než SLOW_INTERVAL_S po posledním uloženém vzorku téhož zařízení."""
-    if metric in DIAG_METRICS and not diag_active(params):
-        return False
-    if metric in SLOW_METRICS:
+    # MPPT mimo diagnostické okno: ne zahodit, ale ukládat „pomalu“ (1×/min) — LCD panel PV ukazuje MPPT1–4 trvale (13. 11.);
+    # v aktivním okně plné rozlišení jako dřív.
+    if metric in SLOW_METRICS or (metric in DIAG_METRICS and not diag_active(params)):
         t = (ts or datetime.now(timezone.utc)).timestamp()
         key = (device_id or "", metric)
         last = _last_slow.get(key)

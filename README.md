@@ -1,3 +1,7 @@
+## v1.10.2 — LCD PV jako na displeji; MPPT trvale 1×/min
+- PV obrazovka: řádek „Výkon FVE · Výroba dnes · Výroba celkem“, pod ním vždy MPPT1–4 (napětí, proud, výkon).
+- `keep_metric`: MPPT veličiny mimo diagnostické okno se už nezahazují, ale ukládají jako pomalé (1×/min, server i EMSBOX ingest); v okně dál plné rozlišení.
+
 ## v1.10.1 — LCD panel: menu jako na displeji, podmenu, ◀ Zpět, sloupcová historie
 - Navigace zásobníkem obrazovek (sessionStorage): HOME (schéma) → „MENU = ENTER“ → HLAVNÍ MENU (INFORMACE O ELEKTRÁRNĚ · VÝSTRAHY · NASTAVENÍ SYSTÉMU · SERVISNÍ NASTAVENÍ); ◀ Zpět v liště vrací o úroveň i z podmenu.
 - INFORMACE O ELEKTRÁRNĚ: záložky PV · BATT · GRID · LOAD · MORE, každá s „📊 Historie … = ENTER“ → obrazovka historie se záložkami MĚSÍC (dny) · ROK (měsíce) · CELKEM (roky), ‹ › posun období, sloupce (výroba / nabíjení+vybíjení / nákup+prodej / spotřeba), součty za období. MORE = měnič + čítače dnes/celkem.

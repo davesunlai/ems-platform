@@ -264,24 +264,32 @@ const Foot = ({ children }) => <div className="foot">{children}</div>;
 const HistBtn = ({ kind, push, label }) => <button type="button" onClick={() => push({ s: "hist", kind, per: "day" })}>📊 {label} = ‹ ENTER ›</button>;
 
 // ---------- PV ----------
-function PvTab({ d, v, push }) {
-  const mppt = [1, 2, 3, 4].map((i) => ({ i, u: v(`pv_voltage_${i}`), a: v(`pv_current_${i}`) })).filter((x) => x.u != null || x.a != null);
+function PvTab({ d, v, m, push }) {
+  // rozložení jako na displeji: „PV Power · Daily yield · Total yield“ v jednom řádku, pod tím MPPT1–4 (napětí / proud / výkon)
+  const mppt = [1, 2, 3, 4].map((i) => ({ i, u: v(`pv_voltage_${i}`), a: v(`pv_current_${i}`), p: v(`pv_power_${i}`) }));
+  const any = mppt.some((x) => x.u != null || x.a != null);
+  const age = (() => { const t = m.pv_voltage_1?.time; return t ? Math.round((Date.now() - new Date(t).getTime()) / 1000) : null; })();
+  const W_ = (x) => (x.p != null ? Math.round(x.p) : x.u != null && x.a != null ? Math.round(x.u * x.a) : null);
   return (
     <div>
-      <div className="hdr">Výkon FVE: {kW(d.pv_w)} <span>· dnes {kwh(d.today_kwh)} · celkem {kwh(v("energy_pv_total"), 0)}</span></div>
-      <table>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, padding: "2px 10px 14px 0" }}>
+        <span>Výkon FVE: <b>{Math.round(d.pv_w || 0)} W</b></span>
+        <span>Výroba dnes: <b>{kwh(d.today_kwh)}</b></span>
+        <span>Výroba celkem: <b>{kwh(v("energy_pv_total"), 0)}</b></span>
+      </div>
+      <table style={{ fontSize: 16 }}>
         <thead><tr><th></th><th>Napětí</th><th>Proud</th><th>Výkon</th></tr></thead>
         <tbody>
-          {mppt.length ? mppt.map((x) => (
-            <tr key={x.i}><td className="l">MPPT{x.i}</td><td className="v">{num(x.u, 1)} V</td><td className="v">{num(x.a, 1)} A</td><td className="v">{x.u != null && x.a != null ? `${Math.round(x.u * x.a)} W` : "—"}</td></tr>))
-            : <tr><td className="l" colSpan={4} style={{ color: "#44556a" }}>Hodnoty MPPT se čtou jen v diagnostickém okně (Moduly → 🔬 diagnostika MPPT).</td></tr>}
-          <tr><td className="l">Celkem DC</td><td></td><td></td><td className="v">{Math.round(d.pv_w || 0)} W</td></tr>
-          <tr><td className="l">AC výkon měniče</td><td></td><td></td><td className="v">{v("inverter_ac_power") != null ? `${Math.round(v("inverter_ac_power"))} W` : "—"}</td></tr>
-          <tr><td className="l">Teplota měniče</td><td></td><td></td><td className="v">{v("temperature") != null ? `${num(v("temperature"), 1)} °C` : "—"}</td></tr>
+          {mppt.map((x) => (
+            <tr key={x.i}><td className="l">MPPT{x.i}</td><td className="v">{x.u != null ? `${num(x.u, 1)} V` : "—"}</td><td className="v">{x.a != null ? `${num(x.a, 1)} A` : "—"}</td><td className="v">{W_(x) != null ? `${W_(x)} W` : "—"}</td></tr>))}
         </tbody>
       </table>
+      <p style={{ fontSize: 12, color: "#44556a", marginTop: 12 }}>
+        {any ? `MPPT hodnoty 1×/min${age != null ? ` (před ${age} s)` : ""}; v diagnostickém okně (Moduly → 🔬) každých 10 s.` : "MPPT hodnoty zatím nedorazily (ukládají se 1×/min)."}
+        {v("inverter_ac_power") != null ? ` · AC výkon měniče ${Math.round(v("inverter_ac_power"))} W` : ""}{v("temperature") != null ? ` · teplota ${num(v("temperature"), 1)} °C` : ""}
+      </p>
       {(d.pv_forecast_days || []).length > 0 && (
-        <div className="hdr" style={{ marginTop: 16 }}>Predikce: <span>{d.pv_forecast_days.map((f) => `${new Date(f.day).toLocaleDateString("cs-CZ", { weekday: "short" })} ${Math.round(f.kwh)} kWh`).join(" · ")}</span></div>)}
+        <div className="hdr" style={{ marginTop: 6 }}>Predikce: <span>{d.pv_forecast_days.map((f) => `${new Date(f.day).toLocaleDateString("cs-CZ", { weekday: "short" })} ${Math.round(f.kwh)} kWh`).join(" · ")}</span></div>)}
       <Foot><HistBtn kind="pv" push={push} label="Historie výroby" /></Foot>
     </div>
   );
