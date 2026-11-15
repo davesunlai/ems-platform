@@ -1,3 +1,10 @@
+## v1.10.6 — Rozpis spotřeby a 33149 = baterie 1
+- Detail domu: řádky záložní okruh (33148), dům dle měniče (33147), ztráty měniče (DC − AC), „mimo měnič (vidí jen elektroměr: wallbox, TČ…)“ = bilance − 33147 − ztráty. Lekce 15. 11.: bilance 13,1 = záloha 4,5 ∪ dům 7,0 + ztráty 1,4 + ~4,7 mimo.
+- 33149 (battery_power_inv) dává hrubé kroky (−6000, 0); zda je to součet, průměr nebo jen B1, se ověřuje na datech testu 5. 11. — popisky neutrální, detail ukazuje vedle něj B1 i B2.
+
+## v1.10.5 — Detail baterie: plán vs. řízení
+- Při vypnutém plánovači řádek „🧠 plán (plánovač vypnutý — neřídí)“ s akcí v závorce místo „plánovač teď“ (15. 11.: „nabíjení z FVE“ působilo jako aktivní řízení).
+
 ## v1.10.4 — Strop exportu z měřené dodávky
 - `discharge_cap`: povolené vybíjení = aktuální vybíjení + (strop − měřená dodávka z elektroměru) − rezerva `EMS_EXPORT_RESERVE_KW` (0,5 kW). Dřív „strop − FVE + 0,3“, které ignorovalo spotřebu: 15. 11. FVE 20,4 ≥ strop 19,9 → vybíjení zakázáno, přitom dodávka jen 4,6 kW (wallbox ~9–11 kW za elektroměrem). Fallback na FVE pravidlo jen bez elektroměru. Důvody povelů uvádějí dodávku i FVE.
 

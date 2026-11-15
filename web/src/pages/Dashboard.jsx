@@ -742,10 +742,20 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
   } else if (kind === "home") {
     title = "🏠 Dům";
     body = <>
-      <Row l="spotřeba teď (dopočet)" v={kw(d.load_w)} />
-      {d.xcheck?.house_load_inv != null && <Row l="zátěž domu dle měniče (33147)" v={kw(d.xcheck.house_load_inv)} />}
+      <Row l="spotřeba teď (bilance)" v={kw(d.load_w)} />
+      {(() => {   // rozpis: záloha (33148) · dům dle měniče (33147) · ztráty měniče (DC − AC) · zbytek = mimo zálohu, co vidí jen elektroměr
+        const ac = d.xcheck?.inverter_ac_power, dc = (d.pv_w || 0) + Math.max(0, -(d.battery_w || 0)) - Math.max(0, d.battery_w || 0);
+        const loss = ac != null ? Math.max(0, dc - ac) : null;
+        const inv = d.xcheck?.house_load_inv;
+        const rest = inv != null ? Math.max(0, (d.load_w || 0) - inv - (loss || 0)) : null;
+        return <>
+          {d.backup_w != null && <Row l="  · záložní okruh (33148)" v={kw(d.backup_w)} />}
+          {inv != null && <Row l="  · dům dle měniče (33147, vč. zálohy)" v={kw(inv)} />}
+          {loss != null && <Row l="  · ztráty měniče (DC − AC)" v={kw(loss)} />}
+          {rest != null && rest > 200 && <Row l="  · mimo měnič (vidí jen elektroměr: wallbox, TČ…)" v={kw(rest)} />}
+        </>; })()}
       <Row l="spotřeba dnes" v={`${(d.cons_today_kwh ?? 0).toFixed(1)} kWh`} />
-      <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>Spotřeba = FVE + odběr − dodávka − baterie (bilance); není měřená přímo. Wallbox, TČ a spotřebiče jsou v ní zahrnuté.</p>
+      <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>Spotřeba = FVE (DC) + odběr − dodávka − baterie (bilance), zahrnuje i ztráty měniče a vše za elektroměrem (wallbox, TČ). Měnič sám vidí jen zátěž na svém výstupu (33147) a na záloze (33148).</p>
       <Links items={[{ to: "/control", l: "🎛 řízení a spotřebiče" }]} />
     </>;
   } else if (kind === "bat") {
@@ -756,14 +766,16 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
       <Row l={bw >= 0 ? "nabíjení" : "vybíjení"} v={Math.abs(bw) > 50 ? kw(bw) : "klid"} />
       {d.battery_soc_1 != null && <Row l="baterie 1" v={`${Math.round(d.battery_soc_1)} % · ${kw(d.battery_w_1)}${kwhOf(en, 1) != null ? ` · ${kwhOf(en, 1).toFixed(1)} kWh` : ""}`} />}
       {d.battery_soc_2 != null && <Row l="baterie 2" v={`${Math.round(d.battery_soc_2)} % · ${kw(d.battery_w_2)}${kwhOf(en, 2) != null ? ` · ${kwhOf(en, 2).toFixed(1)} kWh` : ""}`} />}
-      {d.xcheck?.battery_power_inv != null && <Row l="výkon dle měniče (33149)" v={kw(d.xcheck.battery_power_inv)} />}
+      {d.xcheck?.battery_power_inv != null && <Row l="výkon dle měniče (33149, hrubé kroky)" v={`${kw(d.xcheck.battery_power_inv)} · B1 ${kw(d.battery_w_1)} · B2 ${kw(d.battery_w_2)}`} />}
       {en && <Row l={`⚡ využitelné teď do ${en.floor_pct ?? 10} % (test #${en.test_id})`} v={`${en.total_usable_kwh.toFixed(2)} kWh`} />}
       {en && en.blocks.map((b) => <Row key={b.idx} l={`  ${b.name}: ${b.soc != null ? Math.round(b.soc) : "?"} % → využitelné / plná`} v={`${(b.kwh_usable ?? 0).toFixed(2)} / ${(b.kwh_full ?? 0).toFixed(2)} kWh`} />)}
       {en && <Row l="využitelná kapacita plné baterie (100 → dno)" v={`${en.total_full_kwh.toFixed(2)} kWh z ${en.total_nominal_kwh.toFixed(1)} jmenovitých`} />}
       {en && <Row l="jmenovitě by teď bylo nad dnem" v={`${en.total_nominal_linear_kwh.toFixed(2)} kWh`} />}
       {cfg.capacity_kwh != null && <Row l={en ? "kapacita jmenovitá (plánovač)" : "kapacita"} v={`${cfg.capacity_kwh} kWh`} />}
       {cfg.soc_min_pct != null && <Row l="bezpečnostní podlaha SoC" v={`${cfg.soc_min_pct} %`} />}
-      {pl?.current && <Row l="🧠 plánovač teď" v={ACT_CZ[pl.current.action] || pl.current.action} />}
+      {pl?.current && (cfg.enabled
+        ? <Row l="🧠 plánovač teď" v={ACT_CZ[pl.current.action] || pl.current.action} />
+        : <Row l="🧠 plán (plánovač vypnutý — neřídí)" v={`(${ACT_CZ[pl.current.action] || pl.current.action})`} />)}
       {d.control_module && (
         <div style={{ marginTop: 10, paddingLeft: 8, borderLeft: "3px solid #a371f7" }}>
           <div className="muted" style={{ fontSize: 11.5, marginBottom: 2 }}>Ruční ovládání baterie</div>
