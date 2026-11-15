@@ -1,3 +1,6 @@
+## v1.10.4 — Strop exportu z měřené dodávky
+- `discharge_cap`: povolené vybíjení = aktuální vybíjení + (strop − měřená dodávka z elektroměru) − rezerva `EMS_EXPORT_RESERVE_KW` (0,5 kW). Dřív „strop − FVE + 0,3“, které ignorovalo spotřebu: 15. 11. FVE 20,4 ≥ strop 19,9 → vybíjení zakázáno, přitom dodávka jen 4,6 kW (wallbox ~9–11 kW za elektroměrem). Fallback na FVE pravidlo jen bez elektroměru. Důvody povelů uvádějí dodávku i FVE.
+
 ## v1.10.3 — Elektroměr po fázích, LCD GRID/LOAD jako displej, oprava „zálohy“
 - Sken 13. 11.: 33153–33158 NEJSOU záloha (22 V při 246 V na displeji; tvar kopíruje proudy měniče) → metriky backup_voltage/current_l* se už nepublikují; `backup_load_power` (33148) zůstává. Skutečný 3f blok zálohy se hledá (není v 33100–33400).
 - Nový blok **33251..33282 = elektroměr (CT)**: `meter_voltage_l1..3` (×0,1 V), `meter_current_l1..3` (×0,01 A), `meter_power_l1..3` (s32 W), `meter_apparent_l1..3` (s32 VA), `meter_frequency`; 1×/min; skupina „⚡ Elektroměr (CT) po fázích“ v Modulech; audit registrů aktualizován.
