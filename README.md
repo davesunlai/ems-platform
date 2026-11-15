@@ -1,6 +1,6 @@
 ## v1.10.6 — Rozpis spotřeby a 33149 = baterie 1
 - Detail domu: řádky záložní okruh (33148), dům dle měniče (33147), ztráty měniče (DC − AC), „mimo měnič (vidí jen elektroměr: wallbox, TČ…)“ = bilance − 33147 − ztráty. Lekce 15. 11.: bilance 13,1 = záloha 4,5 ∪ dům 7,0 + ztráty 1,4 + ~4,7 mimo.
-- 33149 (battery_power_inv) dává hrubé kroky (−6000, 0); zda je to součet, průměr nebo jen B1, se ověřuje na datech testu 5. 11. — popisky neutrální, detail ukazuje vedle něj B1 i B2.
+- 33149 (battery_power_inv) = výkon JEN baterie 1 (ověřeno na testu 5. 11.: kopíruje B1, B2 9–10 kW v něm chybí) — popisky v detailu, schématu, auditu a registrech srovnávají s B1.
 
 ## v1.10.5 — Detail baterie: plán vs. řízení
 - Při vypnutém plánovači řádek „🧠 plán (plánovač vypnutý — neřídí)“ s akcí v závorce místo „plánovač teď“ (15. 11.: „nabíjení z FVE“ působilo jako aktivní řízení).

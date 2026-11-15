@@ -766,7 +766,7 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
       <Row l={bw >= 0 ? "nabíjení" : "vybíjení"} v={Math.abs(bw) > 50 ? kw(bw) : "klid"} />
       {d.battery_soc_1 != null && <Row l="baterie 1" v={`${Math.round(d.battery_soc_1)} % · ${kw(d.battery_w_1)}${kwhOf(en, 1) != null ? ` · ${kwhOf(en, 1).toFixed(1)} kWh` : ""}`} />}
       {d.battery_soc_2 != null && <Row l="baterie 2" v={`${Math.round(d.battery_soc_2)} % · ${kw(d.battery_w_2)}${kwhOf(en, 2) != null ? ` · ${kwhOf(en, 2).toFixed(1)} kWh` : ""}`} />}
-      {d.xcheck?.battery_power_inv != null && <Row l="výkon dle měniče (33149, hrubé kroky)" v={`${kw(d.xcheck.battery_power_inv)} · B1 ${kw(d.battery_w_1)} · B2 ${kw(d.battery_w_2)}`} />}
+      {d.xcheck?.battery_power_inv != null && <Row l="výkon dle měniče (33149 = jen baterie 1)" v={`${kw(d.xcheck.battery_power_inv)} · B1 dle packu ${kw(d.battery_w_1)}`} />}
       {en && <Row l={`⚡ využitelné teď do ${en.floor_pct ?? 10} % (test #${en.test_id})`} v={`${en.total_usable_kwh.toFixed(2)} kWh`} />}
       {en && en.blocks.map((b) => <Row key={b.idx} l={`  ${b.name}: ${b.soc != null ? Math.round(b.soc) : "?"} % → využitelné / plná`} v={`${(b.kwh_usable ?? 0).toFixed(2)} / ${(b.kwh_full ?? 0).toFixed(2)} kWh`} />)}
       {en && <Row l="využitelná kapacita plné baterie (100 → dno)" v={`${en.total_full_kwh.toFixed(2)} kWh z ${en.total_nominal_kwh.toFixed(1)} jmenovitých`} />}
@@ -1103,7 +1103,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}
               </text>
               {en && <text x={125} y={453} textAnchor="middle" fontSize="11" fill="var(--fg)"><tspan fill="var(--muted)">využitelné do {en.floor_pct ?? 10} %: </tspan><tspan fontWeight="700">{en.total_usable_kwh.toFixed(1)}</tspan><tspan fill="var(--muted)"> z {en.total_full_kwh.toFixed(1)} kWh</tspan></text>}
-              {d.xcheck?.battery_power_inv != null && <text x={125} y={en ? 543 : 452} textAnchor="middle" fontSize="10" fill="var(--amber)">měnič (33149): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
+              {d.xcheck?.battery_power_inv != null && <text x={125} y={en ? 543 : 452} textAnchor="middle" fontSize="10" fill="var(--amber)">měnič 33149 (B1): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
               {d.soc != null && (
                 <rect x={25} y={442} width={200 * Math.max(0, Math.min(100, d.soc)) / 100} height={6} rx={3} fill="#a371f7" opacity="0.9" />)}
               {[{ n: 1, soc: d.battery_soc_1, w: d.battery_w_1 }, { n: 2, soc: d.battery_soc_2, w: d.battery_w_2 }]
@@ -1204,7 +1204,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
                 {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}
               </text>
               {en && <text x={145} y={478} textAnchor="middle" fontSize="9.5" fill="var(--fg)"><tspan fill="var(--muted)">využitelné do {en.floor_pct ?? 10} %: </tspan><tspan fontWeight="700">{en.total_usable_kwh.toFixed(1)}</tspan><tspan fill="var(--muted)"> z {en.total_full_kwh.toFixed(1)} kWh</tspan></text>}
-              {d.xcheck?.battery_power_inv != null && <text x={145} y={400} textAnchor="middle" fontSize="9.5" fill="var(--amber)">měnič (33149): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
+              {d.xcheck?.battery_power_inv != null && <text x={145} y={400} textAnchor="middle" fontSize="9.5" fill="var(--amber)">měnič 33149 (B1): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
               {d.soc != null && (
                 <rect x={60} y={392} width={170 * Math.max(0, Math.min(100, d.soc)) / 100} height={4} rx={2} fill="#a371f7" opacity="0.9" />)}
               {[{ n: 1, soc: d.battery_soc_1, w: d.battery_w_1 }, { n: 2, soc: d.battery_soc_2, w: d.battery_w_2 }]

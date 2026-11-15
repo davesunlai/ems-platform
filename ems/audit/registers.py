@@ -59,8 +59,8 @@ SOLIS_INPUT = {
     33140: ("battery_soh_1", "u16", "%", "Zdraví baterie 1"),
     33144: ("battery_temp_1", "s16 ×0.1", "°C", "Teplota baterie 1"),
     33147: ("house_load", "u16", "W", "Zátěž domu podle měniče (backup/household load)"),
-    33149: ("battery_power_inv", "s32", "W", "Výkon baterie podle měniče (+ nabíjení / − vybíjení) — hrubé kroky; zda je to součet packů, průměr nebo jen B1, "
-                                             "se ověřuje (15. 11. 2026: −6,0 kW při B1 −6,15 / B2 −6,54)"),
+    33149: ("battery_power_inv", "s32", "W", "Výkon baterie podle měniče (+ nabíjení / − vybíjení) — na S6-EH3P50K JEN baterie 1 "
+                                             "(ověřeno 15. 11. 2026 na testu 5. 11.: kopíruje battery_power_1, B2 v něm není)"),
     34278: ("battery_soc_2", "u16", "%", "Stav nabití baterie 2"),
     34279: ("battery_soh_2", "u16", "%", "Zdraví baterie 2"),
     34282: ("battery_temp_2", "s16 ×0.1", "°C", "Teplota baterie 2 (34281 vracelo nesmysl)"),

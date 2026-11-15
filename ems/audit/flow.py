@@ -86,7 +86,7 @@ async def build_audit(locality_id: int) -> dict:
         "battery_power_N = voltage_N × current_N × (−1 když direction_N = 1 vybíjení); + nabíjení / − vybíjení",
         bsrc + [_src(d, "battery_power_inv", samples) for d in solis],
         note="Proud packů je MAGNITUDA (registry 33134/34290 vždy +); znaménko dává směrový registr. "
-             "KŘÍŽOVÁ KONTROLA: battery_power_inv = registr 33149 — hodnoty v hrubých krocích (−6000, 0); 15. 11. 2026 −6,0 kW při B1 −6,15 / B2 −6,54 → buď jen B1, nebo zaokrouhlený součet; ověřuje se na datech testu 5. 11.")
+             "KŘÍŽOVÁ KONTROLA: battery_power_inv = registr 33149 = výkon JEN baterie 1 (ověřeno 15. 11. 2026 na datech testu 5. 11.: inv 1120/500/0 W při B1 1207/518/0 a B2 9–10 kW) — porovnávej s battery_power_1.")
     add("load_w", agg.get("load_w"), "W",
         "load_w = pv_w + grid_w − battery_w  (energetická bilance uzlu; záporný výsledek se ořízne na 0)",
         [{"derived_from": ["pv_w", "grid_w", "battery_w"]}] + [_src(d, "house_load_inv", samples) for d in solis]
