@@ -343,6 +343,40 @@ class SolisAdapter:
     async def read(self) -> Reading:
         return await asyncio.to_thread(self._read_sync)
 
+    async def read_fast(self) -> Reading:
+        """Rychlé čtení (v1.10.7): jen síť/měnič, stav+fault slova, zátěže — 3 dotazy, pro 1s vzorkování v okně."""
+        return await asyncio.to_thread(self._read_fast_sync)
+
+    def _read_fast_sync(self) -> Reading:
+        from .mapping import BLOCKS_FAST, FAULT_REGS, REG_INV_FREQ, STATE_WORD
+        cache = self._load(BLOCKS_FAST)
+        out: list[Measurement] = []
+
+        def add(metric: Metric, value) -> None:
+            if value is not None:
+                out.append(Measurement(metric=metric, value=float(value), unit=UNIT_OF[metric]))
+
+        g = self._dec(cache, REG_GRID_METER)
+        add(Metric.GRID_POWER, -g if g is not None else None)
+        add(Metric.GRID_VOLTAGE_L1, self._dec(cache, REG_GRID_V_L1))
+        add(Metric.GRID_VOLTAGE_L2, self._dec(cache, REG_GRID_V_L2))
+        add(Metric.GRID_VOLTAGE_L3, self._dec(cache, REG_GRID_V_L3))
+        add(Metric.INVERTER_CURRENT_L1, self._dec(cache, REG_INV_I_L1))
+        add(Metric.INVERTER_CURRENT_L2, self._dec(cache, REG_INV_I_L2))
+        add(Metric.INVERTER_CURRENT_L3, self._dec(cache, REG_INV_I_L3))
+        add(Metric.INVERTER_AC_POWER, self._dec(cache, REG_INV_AC_POWER))
+        add(Metric.FREQUENCY, self._dec(cache, REG_INV_FREQ))
+        add(Metric.HOUSE_LOAD_INV, self._dec(cache, REG_HOUSE_LOAD))
+        add(Metric.BACKUP_LOAD_POWER, self._dec(cache, REG_BACKUP_LOAD))
+        add(Metric.BATTERY_POWER_INV, self._dec(cache, REG_BAT_POWER_INV))
+        add(Metric.INVERTER_STATE, self._dec(cache, STATE_WORD))
+        faults = [self._dec(cache, (r, "u16", 1.0)) for r in FAULT_REGS]
+        for n, f in enumerate(faults, start=1):
+            add(Metric(f"inverter_fault_w{n}"), f)
+        if any(f is not None for f in faults):
+            add(Metric.INVERTER_FAULT, next((f for f in faults if f), 0))
+        return Reading(device_id=self.device_id, measurements=out)
+
     def _read_sync(self) -> Reading:
         dtype = self.device_type
 

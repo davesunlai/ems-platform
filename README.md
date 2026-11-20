@@ -1,3 +1,11 @@
+## v1.10.7 — rychlé okno čtení měniče + události alarmů Solis
+
+- **Rychlé okno** (hledání ranních výpadků zálohy 18.–20. 11.): modul s `params.fast_window = "06:15-06:45"` (čas Praha, víc oken čárkou)
+  čte EMSBOX v tom okně navíc po ~1 s lehkým čtením (3 dotazy): napětí sítě L1–3, proudy měniče L1–3, AC výkon, frekvence podle
+  měniče (33094, k ověření), síť (33130), dům/záloha (33147/33148), baterie 1 (33149), stav 33095 a fault slova 33116–33121 jednotlivě
+  (`inverter_fault_w1…w6`). Plný cyklus à 30 s běží dál. Jen přes EMSBOX (po deployi „aktualizovat agenta“).
+- **Události**: každý alarmový stav měniče 0x1xxx (např. 4114 = 1012 OV-G-F) → provozní událost + notifikace, při návratu událost s dobou trvání.
+
 ## v1.10.6 — Rozpis spotřeby a 33149 = baterie 1
 - Detail domu: řádky záložní okruh (33148), dům dle měniče (33147), ztráty měniče (DC − AC), „mimo měnič (vidí jen elektroměr: wallbox, TČ…)“ = bilance − 33147 − ztráty. Lekce 15. 11.: bilance 13,1 = záloha 4,5 ∪ dům 7,0 + ztráty 1,4 + ~4,7 mimo.
 - 33149 (battery_power_inv) = výkon JEN baterie 1 (ověřeno na testu 5. 11.: kopíruje B1, B2 9–10 kW v něm chybí) — popisky v detailu, schématu, auditu a registrech srovnávají s B1.

@@ -20,7 +20,8 @@ SOLIS_INPUT = {
     33078: ("inverter_current_l3", "u16 ×0.1", "A", "Proud měniče fáze C"),
     33079: ("inverter_ac_power", "s32", "W", "Činný výkon měniče na AC straně (celkem)"),
     33093: ("temperature", "s16 ×0.1", "°C", "Teplota měniče"),
-    33095: ("inverter_state", "u16", "", "Stav měniče: 3 = generuje, 15 = normální/force; 4121 = alarm IGFOL-F (1019)"),
+    33094: ("frequency", "u16 ×0.01", "Hz", "Frekvence sítě podle měniče (jen rychlé okno; na S6-EH3P50K k ověření proti 33282)"),
+    33095: ("inverter_state", "u16", "", "Stav měniče: 3 = generuje, 15 = normální/force; 0x1xxx = alarm (hex = kód: 4114 = 1012 OV-G-F, 4121 = 1019 IGFOL-F)"),
     33116: ("inverter_fault", "u16 ×6", "", "Poruchová slova 1–6 (bitová pole alarmů)"),
     33130: ("grid_power", "s32", "W", "Činný výkon elektroměru na předávacím místě. Solis: + = DO sítě (export), − = ZE sítě (import). "
                                      "EMS znaménko otáčí (+ = odběr)."),

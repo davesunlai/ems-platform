@@ -38,6 +38,12 @@ class Metric(str, Enum):
     PV_POWER = "pv_power"
     INVERTER_STATE = "inverter_state"     # stavové slovo měniče (Solis 33095; 4121 = interní override)
     INVERTER_FAULT = "inverter_fault"     # první nenulový fault registr (Solis 33116+), 0 = bez chyby
+    INVERTER_FAULT_W1 = "inverter_fault_w1"   # fault slova 33116–33121 jednotlivě (jen rychlé okno, v1.10.7)
+    INVERTER_FAULT_W2 = "inverter_fault_w2"
+    INVERTER_FAULT_W3 = "inverter_fault_w3"
+    INVERTER_FAULT_W4 = "inverter_fault_w4"
+    INVERTER_FAULT_W5 = "inverter_fault_w5"
+    INVERTER_FAULT_W6 = "inverter_fault_w6"
     ACTIVE_POWER = "active_power"
     REACTIVE_POWER = "reactive_power"
     BATTERY_POWER = "battery_power"
@@ -187,6 +193,8 @@ class Metric(str, Enum):
 UNIT_OF: dict[Metric, str] = {
     Metric.INVERTER_STATE: "",
     Metric.INVERTER_FAULT: "",
+    Metric.INVERTER_FAULT_W1: "", Metric.INVERTER_FAULT_W2: "", Metric.INVERTER_FAULT_W3: "",
+    Metric.INVERTER_FAULT_W4: "", Metric.INVERTER_FAULT_W5: "", Metric.INVERTER_FAULT_W6: "",
     Metric.PV_POWER: "W",
     Metric.ACTIVE_POWER: "W",
     Metric.REACTIVE_POWER: "var",

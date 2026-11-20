@@ -134,5 +134,8 @@ CONTROL_REGISTERS = [
 # ~1,4 kW ze sítě; pozorováno v noci, ráno, poledne i večer, i mimo Time-Charging
 # okno a i po jeho vynulování). 33116+ = fault registry.
 BLOCK_STATE = (33095, 30)   # 33095..33124
+# Rychlé okno (v1.10.7, hledání ranních výpadků zálohy): 3 dotazy/s — síť+měnič, stav+faulty, baterie 1 + zátěže.
+REG_INV_FREQ = (33094, "u16", 0.01)   # Hz — frekvence sítě podle MĚNIČE (dle manuálu; na S6-EH3P50K K OVĚŘENÍ proti 33282)
+BLOCKS_FAST = [(33073, 22), (33095, 30), (33130, 21)]   # 33073..33094 · 33095..33124 · 33130..33150
 STATE_WORD = (33095, "u16", 1.0)
 FAULT_REGS = [33116, 33117, 33118, 33119, 33120, 33121]

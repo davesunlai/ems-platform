@@ -438,7 +438,54 @@ class Agent:
             if any(d["device_uid"] not in self.adapters for d in self.cfg.get("devices", [])):
                 await self._reconcile()          # zahozený (zaseklý) adaptér hned znovu
             await self.poll_once()
-            await asyncio.sleep(max(1.0, 30.0 - (time.monotonic() - t0)))
+            # v1.10.7: rychlé okno — mezi plnými cykly čti zařízení s params.fast_window po 1 s (jen lehké bloky)
+            while time.monotonic() - t0 < 29.0:
+                t1 = time.monotonic()
+                fast = self._fast_devices()
+                if not fast:
+                    await asyncio.sleep(min(5.0, max(1.0, 30.0 - (time.monotonic() - t0))))
+                    continue
+                await self.poll_fast(fast)
+                await asyncio.sleep(max(0.2, 1.0 - (time.monotonic() - t1)))
+            await asyncio.sleep(max(0.2, 30.0 - (time.monotonic() - t0)))
+
+    def _fast_devices(self) -> list[str]:
+        """Zařízení, kterým právě běží rychlé okno: params.fast_window = "HH:MM-HH:MM[,HH:MM-HH:MM]" (čas Europe/Prague)."""
+        out = []
+        try:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo("Europe/Prague")).strftime("%H:%M")
+        except Exception:        # image bez tzdata → SEČ (UTC+1); v létě by okno bylo o hodinu posunuté
+            from datetime import timedelta
+            now = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%H:%M")
+        for d in self.cfg.get("devices", []):
+            uid = d.get("device_uid")
+            a = self.adapters.get(uid)
+            if a is None or not hasattr(a, "read_fast"):
+                continue
+            for w in str((d.get("params") or {}).get("fast_window") or "").split(","):
+                lo, _, hi = w.strip().partition("-")
+                if len(lo) == 5 and len(hi) == 5 and (lo <= now < hi if lo <= hi else (now >= lo or now < hi)):
+                    out.append(uid)
+                    break
+        return out
+
+    async def poll_fast(self, uids: list[str]) -> None:
+        cycle: list[tuple[str, str, dict]] = []
+        for uid in uids:
+            a = self.adapters.get(uid)
+            if a is None:
+                continue
+            try:
+                async with self._io_lock:
+                    reading = await asyncio.wait_for(a.read_fast(), timeout=8.0)
+                metrics = {m.metric.value if hasattr(m.metric, "value") else str(m.metric): m.value
+                           for m in (reading.measurements or [])}
+                if metrics:
+                    cycle.append((uid, _now_iso(), metrics))
+            except Exception as exc:
+                logger.info("rychlé čtení %s: %s", uid, exc)
+        self.buffer.add_cycle(cycle, mono=time.monotonic(), boot=_clock.boot_id(), synced=_clock.synced())
 
     async def run(self) -> None:
         await self.refresh_config()

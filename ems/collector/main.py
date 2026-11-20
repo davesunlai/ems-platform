@@ -1060,6 +1060,10 @@ async def tick_soc_targets(state: dict) -> None:
         logger.debug("tick_soc_targets: %s", exc)
 
 
+SOLIS_ALARMS = {"1010": "OV-G-V (přepětí sítě)", "1011": "UN-G-V (podpětí sítě)", "1012": "OV-G-F (frekvence sítě nad mezí)",
+                "1013": "UN-G-F (frekvence sítě pod mezí)", "1015": "NO-Grid (bez sítě)", "1018": "OV-G-I (nadproud do sítě)"}
+
+
 async def tick_inverter_state(state: dict) -> None:
     """Alarm: měnič ve stavu 4121 (interní override — ignoruje force, trickle-nabíjí).
     Event + notifikace s cooldownem 30 min per modul; zotavení zaloguje info."""
@@ -1093,6 +1097,27 @@ async def tick_inverter_state(state: dict) -> None:
             elif dev in bad:
                 del bad[dev]
                 logger.info("Měnič %s: stav zpět v normálu (%s)", dev, val)
+            # v1.10.7: každý jiný alarmový stav 0x1xxx (hex = kód alarmu Solis, např. 4114 = 0x1012 = OV-G-F)
+            # → událost při začátku a při návratu (s dobou trvání). 4121 má vlastní větev výše.
+            alarm = state.setdefault("invstate_alarm", {})
+            is_alarm = (val & 0xF000) == 0x1000 and val != 4121
+            cur = alarm.get(dev)
+            if is_alarm and (cur is None or cur["val"] != val):
+                alarm[dev] = {"val": val, "since": now}
+                code = format(val, "X")
+                from ems.alerts import db as alerts_db
+                from ems.notify import dispatch as notify_dispatch
+                await alerts_db.record_event(r["locality_id"], "inverter",
+                    f"⚠ Solis alarm {code} {SOLIS_ALARMS.get(code, '')} – {dev}".replace("  ", " "),
+                    f"Stavové slovo 33095 = {val} (0x{code}). Měnič se typicky odpojí od sítě a zálohu "
+                    "živí ostrovně; po ~10 min se sám připojí zpět. Detail v Alarm history na displeji.")
+                await notify_dispatch.notify_new_alerts()
+            elif not is_alarm and cur is not None:
+                del alarm[dev]
+                from ems.alerts import db as alerts_db
+                await alerts_db.record_event(r["locality_id"], "inverter",
+                    f"✓ Solis zpět v normálu – {dev}",
+                    f"Alarm {format(cur['val'], 'X')} trval ~{max(1, round((now - cur['since']) / 60))} min (stav nyní {val}).")
     except Exception as exc:
         logger.debug("tick_inverter_state: %s", exc)
 
