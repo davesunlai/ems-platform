@@ -236,6 +236,27 @@ export default function Modules() {
               <input style={{ minWidth: 260 }} value={f.serial_port} placeholder="/dev/ttyUSB0 (lépe /dev/serial/by-id/…)"
                      onChange={(e) => setF({ ...f, serial_port: e.target.value })} />
             </div>
+            {(() => {
+              const box = boxes.find((b) => String(b.id) === String(f.emsbox_id));
+              const ports = box?.serial_ports;
+              const usedBy = (p) => mods.filter((m) => String(m.emsbox_id) === String(f.emsbox_id) && m.id !== f.id &&
+                [p.path, p.tty, p.legacy_alias].filter(Boolean).includes(m.transport_params?.serial_port)).map((m) => m.name || m.id);
+              return (
+                <div style={{ gridColumn: "1 / -1", fontSize: 12, border: "1px dashed var(--border)", borderRadius: 8, padding: "6px 10px" }}>
+                  <b>USB převodníky na boxu {box?.name || ""}</b>
+                  {ports == null && <span className="muted"> — box je zatím nehlásí (aktualizuj agenta na verzi 1.11.7 nebo novější).</span>}
+                  {ports && ports.length === 0 && <span className="muted"> — žádný převodník není vložený.</span>}
+                  {ports && ports.map((p) => { const u = usedBy(p); const sel = f.serial_port === p.path; return (
+                    <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "3px 0" }}>
+                      <button type="button" className="btn" style={{ padding: "1px 9px", fontWeight: sel ? 800 : 400 }} onClick={() => setF({ ...f, serial_port: p.path })}>{sel ? "✓ vybráno" : "použít"}</button>
+                      <code style={{ fontSize: 11.5 }}>{p.path}</code>
+                      <span className="muted">({p.tty})</span>
+                      {u.length > 0 ? <span style={{ color: "var(--amber)" }}>používá: {u.join(", ")}</span> : <span style={{ color: "var(--green)" }}>volný</span>}
+                      {!p.mapped && <span style={{ color: "var(--amber)" }}>· agent ho ještě nevidí — po uložení dej „aktualizovat agenta“</span>}
+                    </div>); })}
+                  <div className="muted" style={{ marginTop: 3 }}>Seznam posílá box jednou za minutu. Nově vložený převodník se objeví do minuty; aby ho agent mohl používat, je potřeba ho jednou aktualizovat (restart).</div>
+                </div>);
+            })()}
             <div className="field" style={{ marginBottom: 0, maxWidth: 90 }}>
               <label>Baud</label>
               <input value={f.baudrate} onChange={(e) => setF({ ...f, baudrate: e.target.value })} />

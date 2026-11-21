@@ -26,6 +26,7 @@ ALLOWED_SOURCES = {SRC, "keepalive", "export_guard", "self-heal", "target"}   # 
 TICK_S = 20
 COMM_LOSS_S = 120
 CELL_VMIN, CELL_VMAX, T_MAX = 2.80, 3.65, 50.0
+CELL_VTOP_DEFAULT = 3.60   # strop článku při nabíjení v testu = 54 V / 15 článků (horní mez nabíjecího napětí H48050 z datového listu)
 BREAKER_PF = 0.95          # rezerva pod jističem (3 × 230 V × A × 0,95)
 CHARGE_TAPER = 1.2         # BMS u 100 % zpomaluje → odhad délky nabíjení × 1,2
 
@@ -139,7 +140,7 @@ async def precheck(locality_id: int, module_id: str, params: dict) -> dict:
 
 def default_params(capacity_kwh: float) -> dict:
     return {"capacity_kwh": capacity_kwh, "p_chg_kw": round(capacity_kwh / 10, 1), "p_dis_kw": round(capacity_kwh / 10, 1),
-            "hold_min": 60, "floor_pct": 10, "ceil_pct": 100}
+            "hold_min": 60, "floor_pct": 10, "ceil_pct": 100, "cell_vtop": CELL_VTOP_DEFAULT}
 
 
 # ---------- start / abort ----------
@@ -212,6 +213,33 @@ async def _finish(t: dict, status: str, reason: str | None) -> None:
         full = await db.get(t["id"]); r = (full or {}).get("result") or {}
         await _event(t, "dokončen", f"nabito {r.get('e_charge_kwh')} kWh, vybito {r.get('e_discharge_kwh')} kWh, kapacita ≈ {r.get('capacity_est_kwh')} kWh, "
                                     f"SoH {r.get('soh_pct')} %, účinnost {r.get('efficiency_pct')} %")
+
+
+async def _bms_direct(t: dict, act: list[int]) -> dict | None:
+    """Nejvyšší/nejnižší článek a teplota z přímého BMS (adaptér pylontech_sc0500) testovaných bloků; None když není nebo jsou data starší 90 s."""
+    try:
+        from ems.api.db import get_pool
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT m.id, m.params->>'block_idx' AS blk, s.metric, s.value
+                   FROM modules m JOIN LATERAL (
+                        SELECT DISTINCT ON (metric) metric, value FROM samples
+                        WHERE device_id = m.id AND metric IN ('bms_cell_vmax','bms_cell_vmin','bms_temp_max')
+                          AND time > now() - interval '90 seconds' ORDER BY metric, time DESC) s ON true
+                   WHERE m.adapter = 'pylontech_sc0500' AND m.locality_id = $1""", t.get("locality_id"))
+        vals: dict = {}
+        for r in rows:
+            if act and r["blk"] and int(r["blk"]) not in act:
+                continue
+            vals.setdefault(r["metric"], []).append(float(r["value"]))
+        if not vals.get("bms_cell_vmax") or not vals.get("bms_cell_vmin"):
+            return None
+        return {"vmax": max(vals["bms_cell_vmax"]), "vmin": min(vals["bms_cell_vmin"]),
+                "tmax": max(vals["bms_temp_max"]) if vals.get("bms_temp_max") else None}
+    except Exception as exc:
+        logger.debug("battest bms_direct: %s", exc)
+        return None
 
 
 # ---------- výpočet výsledku ----------
@@ -296,8 +324,15 @@ async def _step(t: dict, state: dict) -> None:
     vmin = min([v for k, v in m.items() if k.startswith("battery_cell_vmin") and _mine(k)] or [9])
     vmax = max([v for k, v in m.items() if k.startswith("battery_cell_vmax") and _mine(k)] or [0])
     tmax = max([v for k, v in m.items() if k.startswith("battery_cell_tmax") and _mine(k)] or [0])
+    # v1.11.6: přímé BMS (Pylontech SC0500 po RS485) má přednost — skutečný nejvyšší/nejnižší článek, obnova à 30 s (živě à 5 s)
+    direct = await _bms_direct(t, _act)
+    cell_src = "měnič"
+    if direct:
+        vmax, vmin, cell_src = direct["vmax"], direct["vmin"], "BMS"
+        if direct.get("tmax") is not None:
+            tmax = max(tmax, direct["tmax"])
     if vmin < CELL_VMIN or vmax > CELL_VMAX:
-        return await _finish(t, "aborted", f"napětí článku mimo meze (min {vmin:.3f} V, max {vmax:.3f} V)")
+        return await _finish(t, "aborted", f"napětí článku mimo meze (min {vmin:.3f} V, max {vmax:.3f} V, zdroj {cell_src})")
     if tmax > T_MAX:
         return await _finish(t, "aborted", f"teplota baterie {tmax:.0f} °C > {T_MAX:g} °C")
     floor, ceil = float(p["floor_pct"]), float(p["ceil_pct"])
@@ -352,8 +387,13 @@ async def _step(t: dict, state: dict) -> None:
             await _snapshot(t, "charge", nxt, phase_start, now, m)
             saved["next_step"] = nxt + 10
             await db.update(tid, saved=saved)
-        if soc >= ceil or (full_bms and (now - phase_start).total_seconds() > 600):
-            if soc < ceil:
+        vtop = float(p.get("cell_vtop") or CELL_VTOP_DEFAULT)
+        cell_top = vmax >= vtop                   # nejvyšší článek dosáhl stropu z datového listu → dál nenabíjet, i když SoC není 100 %
+        if soc >= ceil or cell_top or (full_bms and (now - phase_start).total_seconds() > 600):
+            if cell_top and soc < ceil:
+                await db.log(tid, f"Nejvyšší článek {vmax:.3f} V ≥ strop {vtop:.2f} V (zdroj {cell_src}) při SoC {soc_raw:.1f} % → nabíjení ukončeno, strop považován za dosažený.")
+                await _event(t, "strop článku", f"nejvyšší článek {vmax:.3f} V dosáhl {vtop:.2f} V při SoC {soc_raw:.0f} % — blok je omezen shora jedním článkem")
+            elif soc < ceil:
                 await db.log(tid, f"SoC {soc_raw:.1f} % (packy {'/'.join(f'{s:g}' for s in socs)} %), BMS nabíjení ukončil → strop považován za dosažený.")
             if int(saved.get("next_step") or 0) <= int(ceil):
                 await _snapshot(t, "charge", int(ceil), phase_start, now, m)

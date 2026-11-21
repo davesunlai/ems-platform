@@ -366,7 +366,7 @@ class Agent:
                     "clock_synced": _clock.synced(),
                     "private_ip": _private_ip(), "fingerprint": _fingerprint(), **_sysinfo(),
                     "buffer_rows": st["rows"], "buffer_oldest_ts": st["oldest_ts"],
-                    "disk_free_mb": disk_free, "agent_version": AGENT_VERSION,
+                    "disk_free_mb": disk_free, "agent_version": AGENT_VERSION, "serial_ports": _serial_ports(),
                     "devices": [{"device_uid": uid, **s} for uid, s in self.dev_state.items()]}
             try:
                 ack = getattr(self, "_action_ack", None)
@@ -706,6 +706,44 @@ async def run_with_ui() -> None:
 def _hw_info() -> dict:
     import platform
     return {"machine": platform.machine(), "system": platform.system(), "node": platform.node()}
+
+
+def _parse_byid(listing: str) -> list[dict]:
+    """Řádky `ls -l /dev/serial/by-id` → [{name, path, tty}] (name -> ../../ttyUSB1)."""
+    out = []
+    for line in listing.splitlines():
+        if " -> " not in line:
+            continue
+        left, target = line.rsplit(" -> ", 1)
+        name = left.split()[-1]
+        out.append({"name": name, "path": f"/dev/serial/by-id/{name}", "tty": "/dev/" + target.strip().split("/")[-1]})
+    return sorted(out, key=lambda x: x["name"])
+
+
+def _serial_ports() -> list[dict]:
+    """USB sériové převodníky na HOSTU (i ty vložené po startu kontejneru) + zda je agent vidí (`mapped`).
+    Host se čte přes nsenter do PID 1 (stejně jako servisní konzole); bez něj jen to, co vidí kontejner."""
+    import shutil
+    import subprocess
+    ports: list[dict] = []
+    try:
+        if os.path.exists("/proc/1/ns/mnt") and shutil.which("nsenter"):
+            r = subprocess.run(["nsenter", "-t", "1", "-m", "--", "ls", "-l", "/dev/serial/by-id"],
+                               capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                ports = _parse_byid(r.stdout)
+    except Exception:
+        ports = []
+    if not ports:
+        try:
+            r = subprocess.run(["ls", "-l", "/dev/serial/by-id"], capture_output=True, text=True, timeout=5)
+            ports = _parse_byid(r.stdout) if r.returncode == 0 else []
+        except Exception:
+            ports = []
+    for i, p in enumerate(ports):
+        p["mapped"] = os.path.exists(p["path"]) or (i == 0 and os.path.exists("/dev/ttyUSB0"))
+        p["legacy_alias"] = "/dev/ttyUSB0" if i == 0 else None      # první převodník je v kontejneru i jako /dev/ttyUSB0
+    return ports
 
 
 def _sysinfo() -> dict:

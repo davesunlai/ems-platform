@@ -434,9 +434,15 @@ async def tick(state: dict) -> None:
                 await db.update_account(aid, stream_status=f"chyba: {exc}")
         if st is not None:
             await _consume(aid, st)
+        if aid not in _last_rest and acc.get("last_rest_at"):
+            # v1.11.7: po restartu kolektoru navázat na poslední dotaz z DB — jinak každý restart (deploy) stál REST dotazy
+            # navíc a 21. 11. tak došel denní rozpočet (45) už ve 12:05.
+            age = (datetime.now(timezone.utc) - acc["last_rest_at"]).total_seconds()
+            _last_rest[aid] = now - max(0.0, age)
         if now - _last_rest.get(aid, -1e9) > REST_POLL_S:
             _last_rest[aid] = now
             try:
+                await db.update_account(aid, last_rest_at=datetime.now(timezone.utc))
                 if not [v for v in await db.list_vehicles() if v["account_id"] == aid]:
                     await sync_vehicles(aid)
                 await poll_rest(aid)

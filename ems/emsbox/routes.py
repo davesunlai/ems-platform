@@ -110,10 +110,22 @@ async def all_boxes(_: dict = Depends(read)) -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT e.id, e.name, e.status, e.locality_id, l.name AS locality_name "
+            "SELECT e.id, e.name, e.status, e.locality_id, l.name AS locality_name, e.agent_version, "
+            "e.last_heartbeat_body->'serial_ports' AS serial_ports "
             "FROM emsbox e LEFT JOIN localities l ON l.id = e.locality_id "
             "WHERE e.status != 'disabled' ORDER BY e.id")
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        sp = d.get("serial_ports")
+        if isinstance(sp, str):
+            try:
+                sp = json.loads(sp)
+            except ValueError:
+                sp = None
+        d["serial_ports"] = sp if isinstance(sp, list) else None     # None = agent je ještě nehlásí (starší verze)
+        out.append(d)
+    return out
 
 
 # --- uživatelské CRUD -------------------------------------------------------

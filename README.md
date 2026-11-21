@@ -1,3 +1,20 @@
+## v1.11.7 — USB převodníky boxu ve formuláři modulu, BMW dotazy po restartu, strop článku max. 3,60 V
+
+- **Moduly**: po výběru EMSBOXu a transportu RS485 se zobrazí USB sériové převodníky vložené v boxu (cesta /dev/serial/by-id/…, ttyUSBn,
+  kdo port používá / volný, zda ho agent už vidí) s tlačítkem „použít“. Box seznam posílá v heartbeatu (čte hostitele, takže vidí i
+  převodník vložený za chodu); aby agent nový převodník mohl používat, je potřeba ho jednou aktualizovat. Vyžaduje aktualizaci agenta.
+- **BMW CarData**: čas posledního REST dotazu se ukládá do DB (`car_accounts.last_rest_at`) — restart kolektoru už nespustí dotaz navíc.
+  (21. 11. po ~12 nasazeních došel denní rozpočet 45 dotazů už ve 12:05 a X3, který nestreamuje, zůstal do půlnoci UTC bez dat.)
+- **Test baterie**: strop článku lze nastavit nejvýš na 3,60 V (mez datového listu); popisek upřesňuje, že jde o konec nabíjení v testu.
+
+## v1.11.6 — test baterie: strop článku podle datového listu, pojistky z přímého BMS
+
+- Nový parametr testu **strop článku** (výchozí 3,60 V = 54 V / 15 článků, horní mez nabíjecího napětí H48050): jakmile nejvyšší článek
+  testovaného bloku při nabíjení stropu dosáhne, nabíjení se ukončí a test pokračuje výdrží a vybíjením (nepřeruší se), i když SoC není 100 %.
+- Pojistky testu (max/min článek, teplota) berou data z přímého BMS (Pylontech SC0500), je-li k dispozici a čerstvé (≤ 90 s); jinak z měniče jako dosud.
+  `bms_cell_vmax`, `bms_cell_vmin`, `bms_temp_max` se proto ukládají plným tempem (30 s). Tvrdé přerušení při > 3,65 V zůstává.
+- Týká se jen testu baterie; do nastavení BMS ani měniče se nezasahuje.
+
 ## v1.11.5 — teploty článků po restartu serveru
 
 - Po restartu API zmizely teploty článků až na minutu (živé snímky nesou jen napětí a paměť byla prázdná) a první uložený řádek

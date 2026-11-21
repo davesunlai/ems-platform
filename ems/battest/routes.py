@@ -26,6 +26,7 @@ class Params(BaseModel):
     floor_pct: float = 10
     ceil_pct: float = 100
     capacity_kwh: float
+    cell_vtop: float = 3.60                   # strop článku při nabíjení (V); 54 V / 15 článků dle datového listu H48050
     active_blocks: list[int] | None = None   # testované bloky (1 = B1…); None = všechny, které měnič vidí
 
 
@@ -47,6 +48,8 @@ def _check(p: Params) -> None:
         raise HTTPException(status_code=400, detail="Výkony 0,5–50 kW")
     if not (5 <= p.floor_pct < p.ceil_pct <= 100):
         raise HTTPException(status_code=400, detail="Dno 5–95 %, strop ≤ 100 %, dno < strop")
+    if not (3.40 <= p.cell_vtop <= 3.60):
+        raise HTTPException(status_code=400, detail="Strop článku 3,40–3,60 V (3,60 V = mez datového listu H48050)")
     if not (0 <= p.hold_min <= 24 * 60):
         raise HTTPException(status_code=400, detail="Výdrž 0–1440 min")
 

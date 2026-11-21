@@ -144,6 +144,7 @@ export function BatteryTestDialog({ locId, onClose }) {
               <label>výdrž na stropu min<br /><input style={FLD} type="number" value={p.hold_min} onChange={num("hold_min")} /></label>
               <label>dno %<br /><input style={FLD} type="number" value={p.floor_pct} onChange={num("floor_pct")} /></label>
               <label>strop %<br /><input style={FLD} type="number" value={p.ceil_pct} onChange={num("ceil_pct")} /></label>
+              <label title="Kdy test UKONČÍ nabíjení: jakmile nejvyšší článek dosáhne této hodnoty, i když SoC ještě není na stropu. Nejvýš 3,60 V = 54 V / 15 článků (datový list H48050). Jak vysoko se skutečně nabíjí, určuje BMS — tímto polem ho výš nepustíš.">strop článku V (konec nabíjení)<br /><input style={FLD} type="number" step="0.01" min="3.4" max="3.6" value={p.cell_vtop ?? 3.6} onChange={num("cell_vtop")} /></label>
               <label>kapacita kWh<br /><input style={FLD} type="number" step="0.01" value={p.capacity_kwh === "" ? "" : Math.round(Number(p.capacity_kwh) * 100) / 100} onChange={num("capacity_kwh")} readOnly={!!defs?.blocks?.[mod]?.length} title={defs?.blocks?.[mod]?.length ? "součet TESTOVANÝCH bateriových bloků (Moduly → měnič → Bateriové bloky)" : ""} /></label>
               <button className="btn" disabled={busy || !mod} onClick={precheck}>🔎 Zkontrolovat a odhadnout</button>
             </div>

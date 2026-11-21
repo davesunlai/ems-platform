@@ -93,6 +93,7 @@ async def ensure_schema() -> None:
             )""")
         await conn.execute("""
             ALTER TABLE car_accounts ADD COLUMN IF NOT EXISTS container_keys TEXT;
+            ALTER TABLE car_accounts ADD COLUMN IF NOT EXISTS last_rest_at TIMESTAMPTZ;
             CREATE TABLE IF NOT EXISTS car_vehicles (
                 vin TEXT PRIMARY KEY,
                 account_id INTEGER REFERENCES car_accounts(id) ON DELETE CASCADE,
