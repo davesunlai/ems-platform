@@ -136,6 +136,7 @@ CONTROL_REGISTERS = [
 BLOCK_STATE = (33095, 30)   # 33095..33124
 # Rychlé okno (v1.10.7, hledání ranních výpadků zálohy): 3 dotazy/s — síť+měnič, stav+faulty, baterie 1 + zátěže.
 REG_INV_FREQ = (33094, "u16", 0.01)   # Hz — frekvence sítě podle MĚNIČE (dle manuálu; na S6-EH3P50K K OVĚŘENÍ proti 33282)
+REG_OP_STATUS = (33121, "u16", 1.0)   # provozní stav: bit0 normál · bit1 inicializace · bit2 řízené vypnutí (ověřeno 21. 11. 2026: 1033→1036→1034→1033 při výpadku zálohy)
 BLOCKS_FAST = [(33073, 22), (33095, 30), (33130, 21)]   # 33073..33094 · 33095..33124 · 33130..33150
 STATE_WORD = (33095, "u16", 1.0)
 FAULT_REGS = [33116, 33117, 33118, 33119, 33120, 33121]

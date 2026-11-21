@@ -21,7 +21,7 @@ _UNITS = {m.value: UNIT_OF.get(m, "") for m in Metric}
 class TelemetryRow(BaseModel):
     device_uid: str
     ts: str
-    metrics: dict[str, float]
+    metrics: dict[str, float | list[float]]
 
 
 class TelemetryBody(BaseModel):
@@ -52,8 +52,17 @@ async def ingest_telemetry(body: TelemetryBody, box: dict = Depends(box_auth)) -
         except ValueError:
             skipped += 1
             continue
+        arrays = {k: v for k, v in r.metrics.items() if isinstance(v, list)}
+        if arrays:
+            try:
+                from ems.bms import db as bms_db
+                await bms_db.maybe_store(r.device_uid, ts, arrays)
+            except Exception as exc:
+                logger.warning("bms_cells %s: %s", r.device_uid, exc)
         for metric, val in r.metrics.items():
-            if not keep_metric(metric, mparams, r.device_uid, ts):   # 🔬 diagnostika mimo okno / pomalé 1×/min
+            if isinstance(val, list):
+                continue
+            if not keep_metric(metric, mparams, r.device_uid, ts, val):   # 🔬 diagnostika mimo okno / pomalé 1×/min
                 continue
             rows.append((ts, r.device_uid, metric, val, _UNITS.get(metric, "")))
     accepted = await db.insert_rows(rows)

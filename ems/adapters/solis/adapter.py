@@ -343,6 +343,18 @@ class SolisAdapter:
     async def read(self) -> Reading:
         return await asyncio.to_thread(self._read_sync)
 
+    async def read_state(self) -> Reading:
+        """Hlídání provozního stavu (v1.10.10): 1 dotaz na stavový blok, jen 33121 — volá se à pár sekund,
+        ukládá se při změně. Zachytí i krátké řízené vypnutí měniče (22 s 21. 11.), které 30s cyklus mine."""
+        return await asyncio.to_thread(self._read_state_sync)
+
+    def _read_state_sync(self) -> Reading:
+        from .mapping import REG_OP_STATUS
+        cache = self._load([BLOCK_STATE])
+        v = self._dec(cache, REG_OP_STATUS)
+        out = [Measurement(metric=Metric.INVERTER_OP_STATUS, value=float(v), unit="")] if v is not None else []
+        return Reading(device_id=self.device_id, measurements=out)
+
     async def read_fast(self) -> Reading:
         """Rychlé čtení (v1.10.7): jen síť/měnič, stav+fault slova, zátěže — 3 dotazy, pro 1s vzorkování v okně."""
         return await asyncio.to_thread(self._read_fast_sync)
@@ -373,6 +385,7 @@ class SolisAdapter:
         faults = [self._dec(cache, (r, "u16", 1.0)) for r in FAULT_REGS]
         for n, f in enumerate(faults, start=1):
             add(Metric(f"inverter_fault_w{n}"), f)
+        add(Metric.INVERTER_OP_STATUS, faults[5])
         if any(f is not None for f in faults):
             add(Metric.INVERTER_FAULT, next((f for f in faults if f), 0))
         return Reading(device_id=self.device_id, measurements=out)
@@ -513,6 +526,7 @@ class SolisAdapter:
             faults = [int(self._dec(cache, (r, "u16", 1.0)) or 0) for r in FAULT_REGS]
             first_fault = next((f for f in faults if f), 0)
             add(Metric.INVERTER_FAULT, first_fault)
+            add(Metric.INVERTER_OP_STATUS, self._dec(cache, (33121, "u16", 1.0)))
             if first_fault:
                 logger.warning("Solis '%s': FAULT registry 33116+: %s", self.device_id, faults)
             if powers:

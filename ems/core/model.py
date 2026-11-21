@@ -38,6 +38,18 @@ class Metric(str, Enum):
     PV_POWER = "pv_power"
     INVERTER_STATE = "inverter_state"     # stavové slovo měniče (Solis 33095; 4121 = interní override)
     INVERTER_FAULT = "inverter_fault"     # první nenulový fault registr (Solis 33116+), 0 = bez chyby
+    # BMS bloku přímo po RS485 (Pylontech SC0500, v1.11.0); napětí všech článků jdou zvlášť do tabulky bms_cells
+    BMS_VOLTAGE = "bms_voltage"
+    BMS_CURRENT = "bms_current"
+    BMS_SOC = "bms_soc"
+    BMS_CELL_VMAX = "bms_cell_vmax"
+    BMS_CELL_VMIN = "bms_cell_vmin"
+    BMS_CELL_NMAX = "bms_cell_nmax"            # číslo článku (od 1) s nejvyšším napětím
+    BMS_CELL_NMIN = "bms_cell_nmin"
+    BMS_CELL_DELTA_MV = "bms_cell_delta_mv"
+    BMS_TEMP_MAX = "bms_temp_max"
+    BMS_TEMP_MIN = "bms_temp_min"
+    INVERTER_OP_STATUS = "inverter_op_status"   # Solis 33121 provozní stav (bit0 normál, bit1 inicializace, bit2 řízené vypnutí) — ukládá se při změně
     INVERTER_FAULT_W1 = "inverter_fault_w1"   # fault slova 33116–33121 jednotlivě (jen rychlé okno, v1.10.7)
     INVERTER_FAULT_W2 = "inverter_fault_w2"
     INVERTER_FAULT_W3 = "inverter_fault_w3"
@@ -193,6 +205,9 @@ class Metric(str, Enum):
 UNIT_OF: dict[Metric, str] = {
     Metric.INVERTER_STATE: "",
     Metric.INVERTER_FAULT: "",
+    Metric.INVERTER_OP_STATUS: "",
+    Metric.BMS_VOLTAGE: "V", Metric.BMS_CURRENT: "A", Metric.BMS_SOC: "%", Metric.BMS_CELL_VMAX: "V", Metric.BMS_CELL_VMIN: "V",
+    Metric.BMS_CELL_NMAX: "", Metric.BMS_CELL_NMIN: "", Metric.BMS_CELL_DELTA_MV: "mV", Metric.BMS_TEMP_MAX: "°C", Metric.BMS_TEMP_MIN: "°C",
     Metric.INVERTER_FAULT_W1: "", Metric.INVERTER_FAULT_W2: "", Metric.INVERTER_FAULT_W3: "",
     Metric.INVERTER_FAULT_W4: "", Metric.INVERTER_FAULT_W5: "", Metric.INVERTER_FAULT_W6: "",
     Metric.PV_POWER: "W",
@@ -321,6 +336,7 @@ class Reading(BaseModel):
     timestamp: datetime = Field(default_factory=utcnow)
     measurements: list[Measurement] = Field(default_factory=list)
     states: dict[str, str] = Field(default_factory=dict)
+    arrays: dict[str, list[float]] = Field(default_factory=dict)   # pole hodnot mimo samples (napětí článků BMS → bms_cells)
 
 
 class Sample(BaseModel):

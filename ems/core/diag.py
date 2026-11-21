@@ -36,14 +36,33 @@ SLOW_METRICS = frozenset(
                                                    "cell_nmax", "bms_current", "cycles", "bms_modules", "bms_cells_per_module")]
     + [f"energy_{k}_{p}" for k in ("bat_charge", "bat_discharge", "import", "export", "load") for p in ("today", "total")]
     + [f"backup_{k}_l{n}" for k in ("voltage", "current") for n in (1, 2, 3)]
-    + [f"meter_{k}_l{n}" for k in ("voltage", "current", "power", "apparent") for n in (1, 2, 3)] + ["meter_frequency"])
+    + [f"meter_{k}_l{n}" for k in ("voltage", "current", "power", "apparent") for n in (1, 2, 3)] + ["meter_frequency"]
+    + ["bms_cell_vmax", "bms_cell_vmin", "bms_cell_nmax", "bms_cell_nmin", "bms_cell_delta_mv", "bms_temp_max", "bms_temp_min"])
 SLOW_INTERVAL_S = 60
 _last_slow: dict[tuple[str, str], float] = {}
 
 
-def keep_metric(metric: str, params: dict | None, device_id: str | None = None, ts: datetime | None = None) -> bool:
+# Veličiny ukládané JEN PŘI ZMĚNĚ (+ 1× za hodinu jako „žiju“): stavová slova, která se čtou často, ale mění zřídka.
+CHANGE_METRICS = frozenset(["inverter_op_status"])
+CHANGE_HEARTBEAT_S = 3600
+_last_change: dict[tuple[str, str], tuple[float, float]] = {}
+
+
+def keep_metric(metric: str, params: dict | None, device_id: str | None = None, ts: datetime | None = None, value=None) -> bool:
     """False = neukládat: diagnostická veličina mimo aktivní okno, nebo pomalá veličina
     dřív než SLOW_INTERVAL_S po posledním uloženém vzorku téhož zařízení."""
+    return _keep(metric, params, device_id, ts, value)
+
+
+def _keep(metric, params, device_id, ts, value) -> bool:
+    if metric in CHANGE_METRICS and value is not None:
+        t = (ts or datetime.now(timezone.utc)).timestamp()
+        key = (device_id or "", metric)
+        last = _last_change.get(key)
+        if last is not None and last[0] == float(value) and 0 <= t - last[1] < CHANGE_HEARTBEAT_S:
+            return False
+        _last_change[key] = (float(value), t)
+        return True
     # MPPT mimo diagnostické okno: ne zahodit, ale ukládat „pomalu“ (1×/min) — LCD panel PV ukazuje MPPT1–4 trvale (13. 11.);
     # v aktivním okně plné rozlišení jako dřív.
     if metric in SLOW_METRICS or (metric in DIAG_METRICS and not diag_active(params)):

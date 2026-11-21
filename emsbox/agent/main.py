@@ -134,6 +134,7 @@ class Agent:
                     reading = await asyncio.wait_for(a.read(), timeout=self.READ_TIMEOUT_S)
                 metrics = {m.metric.value if hasattr(m.metric, "value") else str(m.metric): m.value
                            for m in (reading.measurements or [])}
+                metrics.update(getattr(reading, "arrays", None) or {})     # pole (napětí článků BMS) — server je ukládá zvlášť
                 if metrics:
                     ts = _now_iso()
                     cycle.append((uid, ts, metrics))
@@ -442,10 +443,14 @@ class Agent:
             while time.monotonic() - t0 < 29.0:
                 t1 = time.monotonic()
                 fast = self._fast_devices()
-                if not fast:
-                    await asyncio.sleep(min(5.0, max(1.0, 30.0 - (time.monotonic() - t0))))
-                    continue
-                await self.poll_fast(fast)
+                if fast:
+                    await self.poll_fast(fast)
+                # v1.10.10: hlídání provozního stavu měniče à STATE_WATCH_S (1 dotaz; server ukládá jen změnu)
+                if time.monotonic() - self._last_state_watch >= self.STATE_WATCH_S:
+                    self._last_state_watch = time.monotonic()
+                    watch = [u for u, a in self.adapters.items() if hasattr(a, "read_state") and u not in fast]
+                    if watch:
+                        await self.poll_fast(watch, method="read_state")
                 await asyncio.sleep(max(0.2, 1.0 - (time.monotonic() - t1)))
             await asyncio.sleep(max(0.2, 30.0 - (time.monotonic() - t0)))
 
@@ -470,7 +475,10 @@ class Agent:
                     break
         return out
 
-    async def poll_fast(self, uids: list[str]) -> None:
+    STATE_WATCH_S = 5.0
+    _last_state_watch = 0.0
+
+    async def poll_fast(self, uids: list[str], method: str = "read_fast") -> None:
         cycle: list[tuple[str, str, dict]] = []
         for uid in uids:
             a = self.adapters.get(uid)
@@ -478,7 +486,7 @@ class Agent:
                 continue
             try:
                 async with self._io_lock:
-                    reading = await asyncio.wait_for(a.read_fast(), timeout=8.0)
+                    reading = await asyncio.wait_for(getattr(a, method)(), timeout=8.0)
                 metrics = {m.metric.value if hasattr(m.metric, "value") else str(m.metric): m.value
                            for m in (reading.measurements or [])}
                 if metrics:

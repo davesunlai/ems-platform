@@ -75,7 +75,7 @@ async def poll_device(adapter, sink, params: dict | None = None, entry: dict | N
         if params is not None:          # 🔬 diagnostické veličiny jen v aktivním okně
             from ems.core.diag import keep_metric
             samples = [s for s in samples if keep_metric(str(getattr(s.metric, "value", s.metric)), params,
-                                                         reading.device_id, s.time)]
+                                                         reading.device_id, s.time, getattr(s, "value", None))]
         await sink.write(samples)
         if reading.states and hasattr(sink, "write_states"):
             await sink.write_states(reading.device_id, reading.states)
@@ -1120,6 +1120,48 @@ async def tick_inverter_state(state: dict) -> None:
                     f"Alarm {format(cur['val'], 'X')} trval ~{max(1, round((now - cur['since']) / 60))} min (stav nyní {val}).")
     except Exception as exc:
         logger.debug("tick_inverter_state: %s", exc)
+    try:
+        await _tick_op_shutdown(state)
+    except Exception as exc:
+        logger.debug("tick_op_shutdown: %s", exc)
+
+
+async def _tick_op_shutdown(state: dict) -> None:
+    """v1.10.10: řízené vypnutí měniče (Solis 33121 bit 2) → provozní událost s časem a délkou.
+    Metrika inverter_op_status se ukládá při změně; hledá se úsek „bit2 nastaven … návrat do normálu (bit0)“."""
+    from zoneinfo import ZoneInfo
+    from ems.api.db import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT s.device_id, s.time, s.value, m.locality_id FROM samples s JOIN modules m ON m.id = s.device_id
+               WHERE s.metric = 'inverter_op_status' AND s.time > now() - interval '30 minutes'
+               ORDER BY s.device_id, s.time""")
+    done = state.setdefault("opshut_done", set())
+    by_dev: dict = {}
+    for r in rows:
+        by_dev.setdefault(r["device_id"], []).append(r)
+    tz = ZoneInfo("Europe/Prague")
+    for dev, rs in by_dev.items():
+        start = None
+        for i, r in enumerate(rs):
+            v = int(r["value"])
+            if v & 4 and start is None and (i == 0 or not int(rs[i - 1]["value"]) & 4):
+                start = r
+            elif start is not None and (v & 1) and not (v & 6):
+                key = (dev, start["time"])
+                if key not in done:
+                    done.add(key)
+                    secs = (r["time"] - start["time"]).total_seconds()
+                    from ems.alerts import db as alerts_db
+                    from ems.notify import dispatch as notify_dispatch
+                    await alerts_db.record_event(start["locality_id"], "inverter",
+                        f"⚠ Solis: řízené vypnutí měniče {secs:.0f} s – {dev}",
+                        f"{start['time'].astimezone(tz):%d. %m. %H:%M:%S} → {r['time'].astimezone(tz):%H:%M:%S}: provozní stav 33121 hlásil "
+                        "„control shutdown“ (bit 2) a pak inicializaci. Výstup měniče včetně ZÁLOHY byl po tu dobu bez napětí; "
+                        "síť přitom může být v pořádku a alarm nevzniká. Povel přichází zvenčí (dálkové vypnutí / HDO vstup) nebo jde o restart měniče.")
+                    await notify_dispatch.notify_new_alerts()
+                start = None
 
 
 async def tick_force_keepalive(state: dict) -> None:

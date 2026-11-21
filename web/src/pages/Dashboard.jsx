@@ -1,3 +1,4 @@
+import BmsCells from "../components/BmsCells";
 import { useEffect, useState, useRef } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -785,6 +786,7 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
           <ForceBtn mode="discharge" dev={d.control_module} soc={d.soc} maxKw={d.max_discharge_kw} />
           <div style={{ marginTop: 6 }}><BatteryTestButton locId={locId} /></div>
         </div>)}
+      <BmsCells locId={locId} />
       <Links items={[{ to: "/control", l: "🎛 plánovač, časový plán, spot pravidla" }, has("admin") && { to: "/localities", l: "⚙ hlídání článků (Lokality)" }]} />
     </>;
   } else if (kind === "hp") {

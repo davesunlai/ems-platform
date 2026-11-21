@@ -19,7 +19,7 @@ def build_adapter(device: Device) -> TelemetryAdapter:
     """Vytvoří instanci adaptéru podle device.adapter. Sem se přidávají nové typy."""
     name = device.adapter.lower()
     # Klíče určené jen pro UI/zobrazení — do konstruktoru adaptéru NEPATŘÍ.
-    DISPLAY_ONLY = {"hidden_metrics", "control_enabled", "mppt_diag_until"}
+    DISPLAY_ONLY = {"hidden_metrics", "control_enabled", "mppt_diag_until", "fast_window"}
     params = {k: v for k, v in device.params.items() if k not in DISPLAY_ONLY}
     if name == "mock":
         from ems.adapters.goodwe import MockInverterAdapter
@@ -42,6 +42,11 @@ def build_adapter(device: Device) -> TelemetryAdapter:
     if name == "goe_charger":
         from ems.adapters.goe_charger import GoeChargerAdapter
         return GoeChargerAdapter(device_id=device.id, **params)
+    if name == "pylontech_sc0500":
+        from ems.adapters.pylontech_sc0500 import PylontechSc0500Adapter
+        if "device_id" in params and "unit" not in params:
+            params["unit"] = params.pop("device_id")
+        return PylontechSc0500Adapter(device_id=device.id, **{k: v for k, v in params.items() if k != "block_idx"})
     if name == "uvr_cmi":
         from ems.adapters.uvr_cmi import UvrCmiAdapter
         return UvrCmiAdapter(device_id=device.id, **params)

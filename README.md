@@ -1,3 +1,21 @@
+## v1.11.0 — BMS Pylontech SC0500 po RS485: všechny články bloku
+
+- Nový adaptér `pylontech_sc0500` (Modbus RTU přes EMSBOX, 9600 Bd 8N1, jen čtení). Mapa registrů nalezena průchodem na pilotu 21. 11. 2026
+  (není z dokumentace výrobce): souhrn 4352+, napětí modulů 5216+, teploty modulů 5296+, napětí článků 5376+ (mV), teploty článků 6144+.
+- Souhrn bloku jako metriky `bms_*` (napětí, proud, SoC, min/max článek a jeho číslo, rozptyl, teploty).
+- Napětí a teploty všech článků v tabulce `bms_cells` (jeden řádek = blok a okamžik, hodnoty v polích): 1× za 5 min, při testu baterie 1× za min.
+- Dashboard → detail baterie: mapa článků po modulech s odchylkou od mediánu bloku, přepínač napětí / teploty.
+- Moduly: nový model „Pylontech SC0500“ (typ senzor), volba adresy a bateriového bloku.
+- EMSBOX: update skript mapuje do kontejneru všechny RS485 převodníky pod jejich /dev/serial/by-id/… cestou (nutná jednorázová úprava skriptu na boxu).
+- Znaménko proudu při vybíjení (registr 4357) zatím neověřeno; vyhodnocení testu baterie po všech článcích přijde v další verzi.
+
+## v1.10.10 — hlídání řízeného vypnutí měniče (Solis 33121)
+
+- Nález 21. 11. 06:40:16–06:40:38: měnič při zdravé síti na 22 s vypnul výstup včetně zálohy; 33095 beze změny, žádný alarm,
+  ale 33121 šel 1033 → 1036 (bit 2 „control shutdown“) → 1034 (bit 1 inicializace) → 1033. TERA v tu dobu nic neposlala.
+- Nová metrika `inverter_op_status` (33121): EMSBOX ji čte à 5 s jedním dotazem, server ji **ukládá jen při změně** (+ 1× za hodinu).
+- Každé řízené vypnutí → provozní událost s časem a délkou + notifikace. Po deployi „aktualizovat agenta“.
+
 ## v1.10.9 — kWh baterie na dashboardu i bez testu (jmenovitě)
 
 - Blok bez aplikované křivky z testu (nová instalace, po „vrátit jmenovité“) ukazuje kWh lineárně ze jmenovité kapacity nad dnem
