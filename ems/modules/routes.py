@@ -28,7 +28,7 @@ async def create_module(body: ModuleCreate, _: dict = Depends(require_permission
         raise HTTPException(status_code=400, detail="ID modulu nesmí být prázdné")
     existing = await db.list_all()
     if any(m.id == body.id for m in existing):
-        raise HTTPException(status_code=409, detail="Modul s tímto id už existuje")
+        raise HTTPException(status_code=409, detail=f"ID modulu „{body.id}“ už je použité — zvol jiné (nejde o Modbus adresu)")
     return await db.create(Module(**body.model_dump()))
 
 

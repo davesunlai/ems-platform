@@ -1,3 +1,9 @@
+## v1.11.8 — nový modul se ukládá i s EMSBOXem a portem
+
+- **Moduly**: „Přidat modul“ ukládal jen základ — EMSBOX, transport a sériový port se zahodily (uměla je jen úprava), takže box o novém
+  modulu nevěděl. Teď se uloží hned při založení.
+- Hláška při duplicitním ID modulu říká, že jde o ID modulu, ne o Modbus adresu.
+
 ## v1.11.7 — USB převodníky boxu ve formuláři modulu, BMW dotazy po restartu, strop článku max. 3,60 V
 
 - **Moduly**: po výběru EMSBOXu a transportu RS485 se zobrazí USB sériové převodníky vložené v boxu (cesta /dev/serial/by-id/…, ttyUSBn,

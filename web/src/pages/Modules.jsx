@@ -176,6 +176,16 @@ export default function Modules() {
         id: f.id, name: f.name, adapter: f.adapter, device_type: f.device_type,
         kind: f.kind, params: buildParams(), enabled: true,
       });
+      // v1.11.8: nový modul se dřív uložil BEZ EMSBOXu a portu (ty uměla jen úprava) → box o něm nevěděl
+      const viaBox = f.emsbox_id !== "" && f.emsbox_id != null;
+      if (viaBox) {
+        const tp = f.transport === "modbus_rtu"
+          ? { transport: "modbus_rtu", serial_port: f.serial_port || "/dev/ttyUSB0",
+              baudrate: Number(f.baudrate || 9600), parity: f.parity || "N",
+              stopbits: Number(f.stopbits || 1), bytesize: Number(f.bytesize || 8) }
+          : { transport: "modbus_tcp" };
+        await api.updateModule(f.id, { emsbox_id: Number(f.emsbox_id), transport_params: tp });
+      }
       setF(emptyForm()); load();
     } catch (e) { setErr(e.message); }
   };
