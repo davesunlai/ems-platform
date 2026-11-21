@@ -45,6 +45,11 @@ async def maybe_store(device_id: str, ts: datetime, arrays: dict) -> bool:
         return False
     from . import live
     arrays = live.put(device_id, ts, arrays)   # poslední stav v paměti pro živé okno; doplní teploty z posledního úplného čtení
+    if not arrays.get("bms_cells_temp"):
+        # po restartu serveru je paměť prázdná a živé snímky nesou jen napětí → teploty vezmi z posledního uloženého řádku (v1.11.5)
+        seed = await latest_temps(device_id)
+        if seed:
+            arrays = live.seed(device_id, seed)
     t = ts.timestamp()
     every = STORE_TEST_S if await _test_running() else STORE_S
     last = _last.get(device_id)
@@ -69,6 +74,17 @@ async def latest(device_id: str) -> dict | None:
         return None
     return {"time": r["time"].isoformat(), "mv": list(r["mv"]), "temp": list(r["temp"] or []),
             "module_cv": list(r["module_cv"] or []), "module_temp": list(r["module_temp"] or [])}
+
+
+async def latest_temps(device_id: str) -> dict | None:
+    """Poslední uložené teploty článků a modulů (řádek, kde teploty jsou)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        r = await conn.fetchrow("SELECT temp, module_temp FROM bms_cells WHERE device_id=$1 AND temp IS NOT NULL "
+                                "AND time > now() - interval '6 hours' ORDER BY time DESC LIMIT 1", device_id)
+    if not r:
+        return None
+    return {"bms_cells_temp": [float(x) for x in r["temp"]], "bms_modules_temp": [float(x) for x in (r["module_temp"] or [])]}
 
 
 async def cleanup() -> None:

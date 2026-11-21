@@ -1,3 +1,8 @@
+## v1.11.5 — teploty článků po restartu serveru
+
+- Po restartu API zmizely teploty článků až na minutu (živé snímky nesou jen napětí a paměť byla prázdná) a první uložený řádek
+  mohl být bez teplot. Nově se chybějící teploty doplní z posledního uloženého řádku.
+
 ## v1.11.4 — články BMS: směr a výkon bloku, trend každého článku
 
 - Celá obrazovka článků: velký ukazatel bloku — modrá šipka nahoru = nabíjení, červená dolů = vybíjení, s výkonem v kW a proudem

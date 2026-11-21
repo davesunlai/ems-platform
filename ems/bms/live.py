@@ -41,6 +41,16 @@ def put(device_id: str, ts: datetime, arrays: dict) -> dict:
     return merged
 
 
+def seed(device_id: str, arrays: dict) -> dict:
+    """Doplní do posledního stavu chybějící pole (teploty po restartu serveru); existující hodnoty nepřepisuje."""
+    prev = _latest.get(device_id)
+    if prev is None:
+        return arrays
+    merged = {**arrays, **prev[1]}
+    _latest[device_id] = (prev[0], merged)
+    return merged
+
+
 def trend(device_id: str) -> dict | None:
     """Rychlost změny napětí každého článku v mV/min z posledních až TREND_N snímků
     (průměr 3 nejnovějších − průměr 3 nejstarších, děleno časem mezi nimi — tlumí kvantizační šum ±1 mV)."""
