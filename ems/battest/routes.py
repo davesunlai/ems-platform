@@ -129,7 +129,7 @@ async def clear_curve(module_id: str, _: dict = Depends(tester)):
 
 @router.get("/{locality_id}/energy")
 async def energy(locality_id: int, _: dict = Depends(read)):
-    """Využitelná energie po blocích podle aplikované křivky z testu; null, když křivka není."""
+    """Využitelná energie po blocích: z křivky testu, jinak ze jmenovité kapacity bloku; null, když bloky nejsou zadané."""
     for m in await _solis_modules(locality_id):
         e = await blocks_mod.energy_now(m)
         if e:

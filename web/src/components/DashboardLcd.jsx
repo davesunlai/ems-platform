@@ -226,7 +226,7 @@ function StatusTab({ d, v, en, push }) {
           <text x={330} y={310}>Výroba dnes: <tspan fontWeight="600">{kwh(d.today_kwh)}</tspan></text>
           <text x={330} y={332}>Nákup dnes: <tspan fontWeight="600">{kwh(d.import_kwh)}</tspan> · Prodej dnes: <tspan fontWeight="600">{kwh(d.export_kwh)}</tspan></text>
           <text x={330} y={354}>Spotřeba dnes: <tspan fontWeight="600">{kwh(d.cons_today_kwh)}</tspan></text>
-          {en && <text x={330} y={376}>Využitelné v baterii: <tspan fontWeight="600" fill="#2457a8">{num(en.total_usable_kwh, 1)} kWh</tspan> <tspan fill="#44556a">(do {en.floor_pct ?? 10} %, test #{en.test_id})</tspan></text>}
+          {en && <text x={330} y={376}>Využitelné v baterii: <tspan fontWeight="600" fill="#2457a8">{num(en.total_usable_kwh, 1)} kWh</tspan> <tspan fill="#44556a">(do {en.floor_pct ?? 10} %, {en.source === "nominal" ? "jmenovitě" : `test #${en.test_id}`}){en.total_capacity_kwh != null ? ` · celkem ${num(en.total_now_kwh, 1)} z ${num(en.total_capacity_kwh, 1)} kWh` : ""}</tspan></text>}
           {d.xcheck?.battery_power_inv != null && <text x={330} y={402} fontSize="12" fill="#44556a">měnič hlásí baterii {kW(d.xcheck.battery_power_inv)} · dům {d.xcheck.house_load_inv != null ? kW(d.xcheck.house_load_inv) : "—"}</text>}
         </g>
       </svg>
@@ -539,7 +539,7 @@ function BatterySetting({ blocks, en, v }) {
         <tbody>{(blocks.length ? blocks : [{ idx: 1, name: "B1" }, { idx: 2, name: "B2" }]).map((b) => {
           const e = en?.blocks?.find((x) => x.idx === b.idx);
           return <tr key={b.idx}><td className="v">{b.name}</td><td className="l">{b.modules_count ? `${b.modules_count}× ${b.module_model || ""}` : "—"}</td><td className="v">{b.capacity_kwh != null ? kwh(b.capacity_kwh, 2) : "—"}</td>
-            <td className="l">{b.installed || "—"}</td><td className="v">{v(`battery_soh_${b.idx}`) != null ? `${Math.round(v(`battery_soh_${b.idx}`))} %` : "—"}</td><td className="v">{e?.kwh_full != null ? `${num(e.kwh_full, 2)} kWh (test #${en.test_id})` : "—"}</td></tr>; })}
+            <td className="l">{b.installed || "—"}</td><td className="v">{v(`battery_soh_${b.idx}`) != null ? `${Math.round(v(`battery_soh_${b.idx}`))} %` : "—"}</td><td className="v">{e?.kwh_full != null ? `${num(e.kwh_full, 2)} kWh (${e.source === "nominal" ? "jmenovitě" : `test #${e.test_id}`})` : "—"}</td></tr>; })}
         </tbody>
       </table>
       <div className="kv" style={{ marginTop: 14 }}>

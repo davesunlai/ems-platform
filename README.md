@@ -1,3 +1,11 @@
+## v1.10.9 — kWh baterie na dashboardu i bez testu (jmenovitě)
+
+- Blok bez aplikované křivky z testu (nová instalace, po „vrátit jmenovité“) ukazuje kWh lineárně ze jmenovité kapacity nad dnem
+  (pevně 10 %) s označením „jmenovitě“; po testu a ⚡ použít se přepne na změřené. Lze i smíšeně po blocích.
+- „Využitelné“ je vždy nad 10 % SoC bez ohledu na dno testu (5–20 %). Nově i **celková kapacita 0–100 %** a energie teď celkem:
+  část pod dnem testu se dopočítá sklonem nejnižších 10 % změřené křivky (pod dno test baterii nepouští).
+- ⚡ použít u testu jen části bloků přepíše křivku jen testovaných bloků.
+
 ## v1.10.8 — test baterie jen na zapnutých blocích
 
 - **Testované bloky**: test baterie pozná, které baterie měnič právě vidí (čerstvé SoC > 0 a napětí packu > 100 V), a jmenovitou kapacitu,

@@ -767,10 +767,12 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
       {d.battery_soc_1 != null && <Row l="baterie 1" v={`${Math.round(d.battery_soc_1)} % · ${kw(d.battery_w_1)}${kwhOf(en, 1) != null ? ` · ${kwhOf(en, 1).toFixed(1)} kWh` : ""}`} />}
       {d.battery_soc_2 != null && <Row l="baterie 2" v={`${Math.round(d.battery_soc_2)} % · ${kw(d.battery_w_2)}${kwhOf(en, 2) != null ? ` · ${kwhOf(en, 2).toFixed(1)} kWh` : ""}`} />}
       {d.xcheck?.battery_power_inv != null && <Row l="výkon dle měniče (33149 = jen baterie 1)" v={`${kw(d.xcheck.battery_power_inv)} · B1 dle packu ${kw(d.battery_w_1)}`} />}
-      {en && <Row l={`⚡ využitelné teď do ${en.floor_pct ?? 10} % (test #${en.test_id})`} v={`${en.total_usable_kwh.toFixed(2)} kWh`} />}
-      {en && en.blocks.map((b) => <Row key={b.idx} l={`  ${b.name}: ${b.soc != null ? Math.round(b.soc) : "?"} % → využitelné / plná`} v={`${(b.kwh_usable ?? 0).toFixed(2)} / ${(b.kwh_full ?? 0).toFixed(2)} kWh`} />)}
-      {en && <Row l="využitelná kapacita plné baterie (100 → dno)" v={`${en.total_full_kwh.toFixed(2)} kWh z ${en.total_nominal_kwh.toFixed(1)} jmenovitých`} />}
-      {en && <Row l="jmenovitě by teď bylo nad dnem" v={`${en.total_nominal_linear_kwh.toFixed(2)} kWh`} />}
+      {en && <Row l={`⚡ využitelné teď do ${en.floor_pct ?? 10} % (${en.source === "nominal" ? "jmenovitě — test baterie zatím neproběhl / není použit" : en.source === "mixed" ? `zčásti test #${en.test_id}, zčásti jmenovitě` : `test #${en.test_id}`})`} v={`${en.total_usable_kwh.toFixed(2)} kWh`} />}
+      {en && en.blocks.map((b) => <Row key={b.idx} l={`  ${b.name}: ${b.soc != null ? Math.round(b.soc) : "?"} % → využitelné / plná${b.source === "nominal" ? " (jmenovitě)" : ` (test #${b.test_id})`}`} v={`${(b.kwh_usable ?? 0).toFixed(2)} / ${(b.kwh_full ?? 0).toFixed(2)} kWh`} />)}
+      {en && <Row l={`využitelná kapacita plné baterie (100 → ${en.floor_pct ?? 10} %)`} v={`${en.total_full_kwh.toFixed(2)} kWh z ${en.total_nominal_kwh.toFixed(1)} jmenovitých`} />}
+      {en && en.total_capacity_kwh != null && <Row l="celkem v baterii teď / celková kapacita (0–100 %)" v={`${en.total_now_kwh.toFixed(2)} / ${en.total_capacity_kwh.toFixed(2)} kWh`} />}
+      {en && en.blocks.filter((b) => b.kwh_total_full != null).map((b) => <Row key={"t" + b.idx} l={`  ${b.name}: celkem teď / kapacita${b.source === "test" ? ` (pod dnem testu ${b.test_floor_pct ?? "?"} % dopočteno ${(b.kwh_below_test_floor ?? 0).toFixed(2)} kWh)` : " (jmenovitě)"}`} v={`${(b.kwh_total_now ?? 0).toFixed(2)} / ${b.kwh_total_full.toFixed(2)} kWh`} />)}
+      {en && en.source !== "nominal" && <Row l="jmenovitě by teď bylo nad dnem" v={`${en.total_nominal_linear_kwh.toFixed(2)} kWh`} />}
       {cfg.capacity_kwh != null && <Row l={en ? "kapacita jmenovitá (plánovač)" : "kapacita"} v={`${cfg.capacity_kwh} kWh`} />}
       {cfg.soc_min_pct != null && <Row l="bezpečnostní podlaha SoC" v={`${cfg.soc_min_pct} %`} />}
       {pl?.current && (cfg.enabled
@@ -1102,7 +1104,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
               <text x={125} y={434} textAnchor="middle" fontSize="19" fontWeight="700" fill="#a371f7" onMouseEnter={(e) => onAudit("battery_w", e)} onMouseLeave={() => onAudit(null)} style={d?.audit_mode ? { cursor: "help", textDecoration: "underline dotted" } : undefined}>
                 {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `▲ ${f1(kw(batW))}` : `▼ ${f1(kw(batW))}`) : "klid"}
               </text>
-              {en && <text x={125} y={453} textAnchor="middle" fontSize="11" fill="var(--fg)"><tspan fill="var(--muted)">využitelné do {en.floor_pct ?? 10} %: </tspan><tspan fontWeight="700">{en.total_usable_kwh.toFixed(1)}</tspan><tspan fill="var(--muted)"> z {en.total_full_kwh.toFixed(1)} kWh</tspan></text>}
+              {en && <text x={125} y={453} textAnchor="middle" fontSize="11" fill="var(--fg)"><tspan fill="var(--muted)">{en.source === "nominal" ? "jmenovitě" : "využitelné"} do {en.floor_pct ?? 10} %: </tspan><tspan fontWeight="700">{en.total_usable_kwh.toFixed(1)}</tspan><tspan fill="var(--muted)"> z {en.total_full_kwh.toFixed(1)} kWh</tspan></text>}
               {d.xcheck?.battery_power_inv != null && <text x={125} y={en ? 543 : 452} textAnchor="middle" fontSize="10" fill="var(--amber)">měnič 33149 (B1): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
               {d.soc != null && (
                 <rect x={25} y={442} width={200 * Math.max(0, Math.min(100, d.soc)) / 100} height={6} rx={3} fill="#a371f7" opacity="0.9" />)}
@@ -1203,7 +1205,7 @@ function EnergyFlow({ locId, deviceIds, name, onClose, inline = false }) {
               <text x={145} y={386} textAnchor="middle" fontSize="14" fontWeight="700" fill="#a371f7" onMouseEnter={(e) => onAudit("battery_w", e)} onMouseLeave={() => onAudit(null)} style={d?.audit_mode ? { cursor: "help", textDecoration: "underline dotted" } : undefined}>
                 {d.soc != null ? Math.round(d.soc) : "?"} % · {kw(batW) > 0.05 ? (batW > 0 ? `nabíjí ${f1(kw(batW))}` : `vybíjí ${f1(kw(batW))}`) : "klid"}
               </text>
-              {en && <text x={145} y={478} textAnchor="middle" fontSize="9.5" fill="var(--fg)"><tspan fill="var(--muted)">využitelné do {en.floor_pct ?? 10} %: </tspan><tspan fontWeight="700">{en.total_usable_kwh.toFixed(1)}</tspan><tspan fill="var(--muted)"> z {en.total_full_kwh.toFixed(1)} kWh</tspan></text>}
+              {en && <text x={145} y={478} textAnchor="middle" fontSize="9.5" fill="var(--fg)"><tspan fill="var(--muted)">{en.source === "nominal" ? "jmenovitě" : "využitelné"} do {en.floor_pct ?? 10} %: </tspan><tspan fontWeight="700">{en.total_usable_kwh.toFixed(1)}</tspan><tspan fill="var(--muted)"> z {en.total_full_kwh.toFixed(1)} kWh</tspan></text>}
               {d.xcheck?.battery_power_inv != null && <text x={145} y={400} textAnchor="middle" fontSize="9.5" fill="var(--amber)">měnič 33149 (B1): {(d.xcheck.battery_power_inv / 1000).toFixed(2)} kW</text>}
               {d.soc != null && (
                 <rect x={60} y={392} width={170 * Math.max(0, Math.min(100, d.soc)) / 100} height={4} rx={2} fill="#a371f7" opacity="0.9" />)}

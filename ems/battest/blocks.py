@@ -209,7 +209,10 @@ async def apply_test(test: dict, phase_marks: list[dict]) -> list[dict]:
     import json
     done = 0
     async with pool.acquire() as conn:
+        tested = [int(x) for x in (p.get("active_blocks") or [])]
         for b in bl:
+            if tested and int(b["idx"]) not in tested:
+                continue          # blok v testu nebyl (vypnutá baterie) → jeho křivku neměnit
             curve = curve_from_rows(rows, int(b["idx"]), floor)
             if not curve:
                 continue
@@ -228,31 +231,72 @@ async def clear_curves(module_id: str) -> list[dict]:
     return await list_blocks(module_id)
 
 
-async def energy_now(module_id: str) -> dict | None:
-    """Aktuální využitelná energie po blocích podle aplikované křivky (None, když křivka není)."""
+DISPLAY_FLOOR_PCT = 10.0     # „využitelné“ na dashboardu = nad 10 % SoC, nezávisle na dně konkrétního testu
+
+
+def curve_to_zero(curve: list[list[float]]) -> tuple[float, float, float]:
+    """Křivka z testu udává kWh NAD dnem testu (5–20 %). Zbytek do 0 % se nedá změřit (baterii pod dno nepouštíme),
+    proto se dopočítá sklonem nejnižších 10 % změřené části. Vrací (soc_dna_testu, kWh pod dnem, sklon kWh/%)."""
+    pos = [(s, k) for s, k in curve if k > 0]
+    if not pos:
+        return 0.0, 0.0, 0.0
+    s_end = float(pos[0][0]) - 1.0                      # poslední SoC s 0 kWh = dno testu
+    top = next(((s, k) for s, k in pos if s >= s_end + 10), pos[-1])
+    slope = float(top[1]) / max(1.0, float(top[0]) - s_end)
+    return s_end, slope * max(0.0, s_end), slope
+
+
+def kwh_above_zero(curve: list[list[float]], soc: float) -> float | None:
+    """Energie v bloku nad 0 % SoC: změřená křivka + dopočtený zbytek pod dnem testu."""
+    if soc is None:
+        return None
+    s_end, below, slope = curve_to_zero(curve)
+    if soc <= s_end:
+        return max(0.0, slope * soc)
+    return (kwh_at(curve, soc) or 0.0) + below
+
+
+async def energy_now(module_id: str, floor_default: float = DISPLAY_FLOOR_PCT) -> dict | None:
+    """Aktuální energie po blocích — celková (0–100 %) i využitelná (nad DISPLAY_FLOOR_PCT).
+    Blok s aplikovanou křivkou z testu → změřené kWh + dopočet pod dnem testu (source=test);
+    blok bez křivky (nová instalace, po „vrátit jmenovité“) → lineárně ze jmenovité kapacity (source=nominal).
+    None jen když modul nemá zadané žádné bloky."""
     from . import db as bt_db
-    bl = [b for b in await list_blocks(module_id) if b.get("curve")]
+    bl = [b for b in await list_blocks(module_id) if b.get("curve") or b.get("capacity_kwh")]
     if not bl:
         return None
     m = await bt_db.latest_metrics(module_id, [f"battery_soc_{b['idx']}" for b in bl] + ["battery_soc"], 900)
-    out = {"module_id": module_id, "test_id": bl[0].get("curve_test_id"), "applied_at": bl[0].get("curve_applied_at"), "floor_pct": bl[0].get("curve_floor_pct"), "blocks": []}
-    tot_u = 0.0; tot_n = 0.0; tot_cap = 0.0; tot_full = 0.0
+    cur = [b for b in bl if b.get("curve")]
+    D = float(floor_default)
+    out = {"module_id": module_id, "test_id": cur[0].get("curve_test_id") if cur else None,
+           "applied_at": cur[0].get("curve_applied_at") if cur else None, "floor_pct": D,
+           "source": "test" if len(cur) == len(bl) else ("mixed" if cur else "nominal"), "blocks": []}
+    tot = {"u": 0.0, "f": 0.0, "n": 0.0, "cap": 0.0, "now": 0.0, "all": 0.0}
     for b in bl:
         soc = m.get(f"battery_soc_{b['idx']}")
-        usable = kwh_at(b["curve"], soc) if soc is not None else None
-        full = kwh_at(b["curve"], 100.0)
         nominal = float(b["capacity_kwh"]) if b.get("capacity_kwh") else None
-        lin = nominal * max(0.0, (soc - float(b.get("curve_floor_pct") or 0))) / 100.0 if (nominal and soc is not None) else None
-        out["blocks"].append({"idx": b["idx"], "name": b["name"], "soc": soc, "kwh_usable": round(usable, 2) if usable is not None else None,
-                              "kwh_full": round(full, 2) if full is not None else None, "kwh_nominal_linear": round(lin, 2) if lin is not None else None, "nominal_kwh": nominal})
-        if usable is not None:
-            tot_u += usable
-        if lin is not None:
-            tot_n += lin
-        if nominal:
-            tot_cap += nominal
-        if full is not None:
-            tot_full += full
-    out["total_usable_kwh"] = round(tot_u, 2); out["total_nominal_linear_kwh"] = round(tot_n, 2)
-    out["total_full_kwh"] = round(tot_full, 2); out["total_nominal_kwh"] = round(tot_cap, 2); out["soc"] = m.get("battery_soc")
+        lin = nominal * max(0.0, (soc - D)) / 100.0 if (nominal and soc is not None) else None
+        if b.get("curve"):
+            E = lambda s, c=b["curve"]: kwh_above_zero(c, s)
+            s_end, below, _ = curve_to_zero(b["curve"])
+        else:
+            E = lambda s, n=nominal: (n * s / 100.0 if n else None)
+            s_end, below = None, None
+        e_d, e_full = E(D), E(100.0)
+        e_now = E(soc) if soc is not None else None
+        usable = max(0.0, e_now - e_d) if (e_now is not None and e_d is not None) else None
+        full = (e_full - e_d) if (e_full is not None and e_d is not None) else None
+        r2 = lambda x: round(x, 2) if x is not None else None
+        out["blocks"].append({"idx": b["idx"], "name": b["name"], "soc": soc, "kwh_usable": r2(usable), "kwh_full": r2(full),
+                              "kwh_total_now": r2(e_now), "kwh_total_full": r2(e_full),
+                              "kwh_nominal_linear": r2(lin), "nominal_kwh": nominal,
+                              "source": "test" if b.get("curve") else "nominal", "test_id": b.get("curve_test_id"),
+                              "test_floor_pct": b.get("curve_floor_pct") if b.get("curve") else None,
+                              "kwh_below_test_floor": r2(below)})
+        for k, v in (("u", usable), ("f", full), ("n", lin), ("cap", nominal), ("now", e_now), ("all", e_full)):
+            if v is not None:
+                tot[k] += v
+    out["total_usable_kwh"] = round(tot["u"], 2); out["total_nominal_linear_kwh"] = round(tot["n"], 2)
+    out["total_full_kwh"] = round(tot["f"], 2); out["total_nominal_kwh"] = round(tot["cap"], 2); out["soc"] = m.get("battery_soc")
+    out["total_now_kwh"] = round(tot["now"], 2); out["total_capacity_kwh"] = round(tot["all"], 2)
     return out
