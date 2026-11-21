@@ -84,7 +84,12 @@ class PylontechSc0500Adapter(TelemetryAdapter):
     async def read(self) -> Reading:
         return await asyncio.to_thread(self._read_sync)
 
-    def _read_sync(self) -> Reading:
+    async def read_live(self) -> Reading:
+        """Živé sledování: souhrn + napětí všech článků hned. Teploty se živě nečtou (mění se pomalu) —
+        ty dál chodí s běžným čtením 1× za minutu, takže živé čtení zatěžuje linku zhruba poloviční dobu."""
+        return await asyncio.to_thread(self._read_sync, True)
+
+    def _read_sync(self, live: bool = False) -> Reading:
         if self._client is None or not getattr(self._client, "connected", False):
             self._connect_sync()
         s = self._block(*REG_SUMMARY)
@@ -110,13 +115,15 @@ class PylontechSc0500Adapter(TelemetryAdapter):
         modules, cells = g(4406), g(4407)
         arrays: dict[str, list[float]] = {}
         now = time.monotonic()
-        if 0 < cells <= MAX_CELLS and 0 < modules <= MAX_MODULES and now - self._last_cells >= CELLS_EVERY_S:
+        full = now - self._last_cells >= CELLS_EVERY_S
+        if 0 < cells <= MAX_CELLS and 0 < modules <= MAX_MODULES and (full or live):
             try:
                 arrays["bms_cells_mv"] = [float(v) for v in self._block(REG_CELL_V, cells)]
-                arrays["bms_cells_temp"] = [float(_s16(v)) for v in self._block(REG_CELL_T, cells)]
                 arrays["bms_modules_cv"] = [float(v) for v in self._block(REG_MODULE_V, modules)]
-                arrays["bms_modules_temp"] = [float(_s16(v)) for v in self._block(REG_MODULE_T, modules)]
-                self._last_cells = now
+                if full:
+                    arrays["bms_cells_temp"] = [float(_s16(v)) for v in self._block(REG_CELL_T, cells)]
+                    arrays["bms_modules_temp"] = [float(_s16(v)) for v in self._block(REG_MODULE_T, modules)]
+                    self._last_cells = now
             except Exception as exc:                       # souhrn pošli i když články zrovna nejdou
                 logger.info("SC0500 '%s': články nepřečteny: %s", self.device_id, exc)
                 arrays = {}

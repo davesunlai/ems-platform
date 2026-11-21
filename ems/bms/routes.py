@@ -6,7 +6,7 @@ import statistics
 from fastapi import APIRouter, Depends
 
 from ems.auth.deps import require_permission
-from . import db
+from . import db, live
 
 router = APIRouter(prefix="/api/bms", tags=["bms"])
 read = require_permission("read")
@@ -30,6 +30,13 @@ async def bms_locality(locality_id: int, _: dict = Depends(read)) -> list[dict]:
         mod = await modules_db.get(d["id"])
         params = (getattr(mod, "params", None) or {}) if mod is not None else {}
         cells = await db.latest(d["id"])
+        lv = live.latest(d["id"])
+        is_live = False
+        if lv and (cells is None or lv[0].isoformat() > cells["time"]):
+            ints = lambda k: [int(round(x)) for x in (lv[1].get(k) or [])]
+            cells = {"time": lv[0].isoformat(), "mv": ints("bms_cells_mv"), "temp": ints("bms_cells_temp"),
+                     "module_cv": ints("bms_modules_cv"), "module_temp": ints("bms_modules_temp")}
+            is_live = True
         item = {"module_id": d["id"], "name": getattr(mod, "name", None) or d["id"], "block_idx": params.get("block_idx"),
                 "summary": await bt_db.latest_metrics(d["id"], SUMMARY, 600), "cells": None}
         if cells and cells["mv"]:
@@ -45,8 +52,18 @@ async def bms_locality(locality_id: int, _: dict = Depends(read)) -> list[dict]:
                              "temp": (cells["temp"][i:i + per] if cells["temp"] else []),
                              "voltage": (cells["module_cv"][i // per] / 100.0 if i // per < len(cells["module_cv"]) else None),
                              "temp_module": (cells["module_temp"][i // per] / 10.0 if i // per < len(cells["module_temp"]) else None)})
+            from datetime import datetime, timezone
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(cells["time"])).total_seconds()
+            item["live"] = {"active": d["id"] in live.active(), "from_memory": is_live, "age_s": round(age, 1), "period_s": live.LIVE_S}
             item["cells"] = {"time": cells["time"], "count": len(mv), "per_module": per, "median": med,
                              "min": min(mv), "max": max(mv), "delta": max(mv) - min(mv),
                              "nmin": mv.index(min(mv)) + 1, "nmax": mv.index(max(mv)) + 1, "modules": mods}
         out.append(item)
     return out
+
+
+@router.post("/live/{module_id}")
+async def bms_live(module_id: str, _: dict = Depends(read)) -> dict:
+    """Okno s články je otevřené → EMSBOX čte články à LIVE_S s ještě HOLD_S sekund (UI volá opakovaně). Jen čtení z BMS."""
+    until = live.touch(module_id)
+    return {"module_id": module_id, "until": until.isoformat(), "period_s": live.LIVE_S}

@@ -1,3 +1,12 @@
+## v1.11.1 — živé sledování článků BMS, širší detail baterie
+
+- Detail baterie je širší (780 px), mapa 11 × 15 článků se vejde bez vodorovného posuvníku.
+- **Živé sledování**: dokud je okno s články otevřené, UI to hlásí serveru a EMSBOX čte všechny články každých 5 s
+  (nastavení `settings.live` v konfiguraci boxu, platí 60 s od posledního ohlášení; stav jen v paměti API). Po zavření okna se čtení
+  samo vrátí na 1× za minutu. Ukazatel „Živě — čte se každých N s“ se skutečně změřeným rozestupem snímků a animovaným odpočtem do dalšího čtení.
+- Ukládání do historie se živým čtením nemění (1× za 5 min, při testu baterie 1× za min).
+- Teploty článků se živě nečtou (jen napětí): zůstávají v detailu baterie pod přepínačem „zobrazit teploty“ a obnovují se 1× za minutu.
+
 ## v1.11.0 — BMS Pylontech SC0500 po RS485: všechny články bloku
 
 - Nový adaptér `pylontech_sc0500` (Modbus RTU přes EMSBOX, 9600 Bd 8N1, jen čtení). Mapa registrů nalezena průchodem na pilotu 21. 11. 2026

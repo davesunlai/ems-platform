@@ -79,6 +79,14 @@ async def build_config(box_id: int) -> tuple[str, str]:
                "locality": {"id": row["locality_id"], "name": row["locality_name"]} if row else None,
                "devices": devices,
                "settings": {"heartbeat_s": 60, "config_poll_s": 300, "max_batch_rows": db.BOX_BATCH_ROWS}}
+    try:                                   # živé sledování článků BMS (jen když je okno otevřené)
+        from ems.bms import live as _bms_live
+        lv = {k: v for k, v in _bms_live.active().items() if any(d["device_uid"] == k for d in devices)}
+        if lv:
+            payload["settings"]["live"] = lv
+            payload["settings"]["live_s"] = _bms_live.LIVE_S
+    except Exception:
+        pass
     body = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     etag = '"' + hashlib.md5(body.encode()).hexdigest() + '"'
     return body, etag

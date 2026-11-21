@@ -445,6 +445,11 @@ class Agent:
                 fast = self._fast_devices()
                 if fast:
                     await self.poll_fast(fast)
+                # v1.11.1: živé sledování článků BMS — jen když je na serveru otevřené okno (settings.live)
+                live = self._live_devices()
+                if live and time.monotonic() - self._last_live >= float(self.cfg.get("settings", {}).get("live_s", 5)):
+                    self._last_live = time.monotonic()
+                    await self.poll_fast(live, method="read_live")
                 # v1.10.10: hlídání provozního stavu měniče à STATE_WATCH_S (1 dotaz; server ukládá jen změnu)
                 if time.monotonic() - self._last_state_watch >= self.STATE_WATCH_S:
                     self._last_state_watch = time.monotonic()
@@ -477,6 +482,19 @@ class Agent:
 
     STATE_WATCH_S = 5.0
     _last_state_watch = 0.0
+    _last_live = 0.0
+
+    def _live_devices(self) -> list[str]:
+        out = []
+        now = datetime.now(timezone.utc)
+        for uid, until in (self.cfg.get("settings", {}).get("live") or {}).items():
+            try:
+                u = datetime.fromisoformat(str(until).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if u > now and hasattr(self.adapters.get(uid), "read_live"):
+                out.append(uid)
+        return out
 
     async def poll_fast(self, uids: list[str], method: str = "read_fast") -> None:
         cycle: list[tuple[str, str, dict]] = []

@@ -822,7 +822,7 @@ function NodeDetail({ kind, d, pl, hp, outs, ewDev, locId, onClose, en }) {
   }
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 95, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: "min(560px, 96vw)", maxHeight: "92vh", overflow: "auto", padding: 14 }}>
+      <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: kind === "bat" ? "min(780px, 96vw)" : "min(560px, 96vw)", maxHeight: "92vh", overflow: "auto", padding: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <b style={{ fontSize: 15 }}>{title}</b>
           <button className="btn" style={{ marginLeft: "auto", padding: "3px 10px" }} onClick={onClose}>✕</button>

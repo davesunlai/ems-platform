@@ -43,6 +43,8 @@ async def maybe_store(device_id: str, ts: datetime, arrays: dict) -> bool:
     mv = arrays.get("bms_cells_mv")
     if not mv:
         return False
+    from . import live
+    arrays = live.put(device_id, ts, arrays)   # poslední stav v paměti pro živé okno; doplní teploty z posledního úplného čtení
     t = ts.timestamp()
     every = STORE_TEST_S if await _test_running() else STORE_S
     last = _last.get(device_id)

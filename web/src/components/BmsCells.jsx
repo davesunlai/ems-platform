@@ -14,15 +14,32 @@ const fill = (dv, span) => {
 export default function BmsCells({ locId }) {
   const [data, setData] = useState(null);
   const [mode, setMode] = useState("mv");
+  const [now, setNow] = useState(Date.now());
+  const [period, setPeriod] = useState({});          // skutečný rozestup mezi posledními dvěma snímky, podle modulu
+  // Živé sledování: dokud je okno otevřené, hlásíme to serveru (EMSBOX pak čte články po pár sekundách) a dotahujeme po 5 s.
   useEffect(() => {
-    let live = true;
-    const load = () => api.bmsLocality(locId).then((r) => live && setData(r || [])).catch(() => live && setData([]));
-    load(); const t = setInterval(load, 60000);
-    return () => { live = false; clearInterval(t); };
+    let alive = true;
+    const seen = {};
+    const load = () => api.bmsLocality(locId).then((r) => {
+      if (!alive) return;
+      (r || []).forEach((b) => {
+        const t = b.cells ? Date.parse(b.cells.time) : null;
+        if (t && seen[b.module_id] && t > seen[b.module_id]) setPeriod((p) => ({ ...p, [b.module_id]: (t - seen[b.module_id]) / 1000 }));
+        if (t) seen[b.module_id] = t;
+        api.bmsLive(b.module_id).catch(() => {});
+      });
+      setData(r || []);
+    }).catch(() => alive && setData([]));
+    load();
+    const t = setInterval(load, 5000);
+    const t2 = setInterval(() => setNow(Date.now()), 1000);
+    return () => { alive = false; clearInterval(t); clearInterval(t2); };
   }, [locId]);
   if (!data || !data.length) return null;
   return (
     <div style={{ marginTop: 12 }}>
+      <style>{`@keyframes bmsfill { from { width: 0% } to { width: 100% } }
+        @media (prefers-reduced-motion: reduce) { .bms-bar > i { animation: none !important; width: 100% !important; } }`}</style>
       {data.map((b) => {
         const c = b.cells, s = b.summary || {};
         if (!c) return <p key={b.module_id} className="muted" style={{ fontSize: 12 }}>🔬 BMS {b.name}: zatím žádná data článků.</p>;
@@ -40,6 +57,22 @@ export default function BmsCells({ locId }) {
                 <a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === "mv" ? "temp" : "mv"); }}>{mode === "mv" ? "zobrazit teploty" : "zobrazit napětí"}</a>
               </span>
             </div>
+            {(() => {
+              const age = Math.max(0, (now - Date.parse(c.time)) / 1000);
+              const per = period[b.module_id] || b.live?.period_s || 5;
+              const fresh = age < Math.max(15, per * 3);
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, margin: "0 0 5px" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 4, background: fresh ? "#0ca30c" : "#fab219", flex: "0 0 auto" }} />
+                  <span>{fresh
+                    ? <><b>Živě</b> — články se čtou každých {per < 9.5 ? per.toFixed(0) : Math.round(per)} s, jen dokud je toto okno otevřené</>
+                    : <><b>Čekám na živá data z boxu…</b> poslední snímek je {age < 90 ? `${Math.round(age)} s` : `${Math.round(age / 60)} min`} starý</>}</span>
+                  <span className="muted" style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>{fresh ? `další čtení za ${Math.max(0, Math.ceil(per - age))} s` : ""}</span>
+                  {fresh && <span className="bms-bar" title="čas do dalšího čtení" style={{ width: 90, height: 5, borderRadius: 3, background: "var(--border, #ddd)", overflow: "hidden", flex: "0 0 auto" }}>
+                    <i key={c.time} style={{ display: "block", height: "100%", background: "#2a78d6", animation: `bmsfill ${per}s linear forwards` }} />
+                  </span>}
+                </div>);
+            })()}
             <div style={{ overflowX: "auto" }}>
               <table style={{ borderCollapse: "collapse", fontSize: 10.5, fontVariantNumeric: "tabular-nums" }}>
                 <thead><tr>
@@ -68,7 +101,8 @@ export default function BmsCells({ locId }) {
               </table>
             </div>
             <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>
-              {mode === "mv" ? <>Napětí v mV. Podbarvení = odchylka od mediánu bloku ({c.median} mV): <span style={{ background: LOW[1], padding: "0 5px", borderRadius: 3 }}>níž</span> · <span style={{ background: HIGH[1], padding: "0 5px", borderRadius: 3 }}>výš</span>. Tučně nejnižší a nejvyšší článek.</> : "Teploty u článků ve °C."}
+              Do historie se ukládá 1× za 5 min, při testu baterie 1× za min — živé čtení ukládání nemění.{" "}
+              {mode === "mv" ? <>Napětí v mV. Podbarvení = odchylka od mediánu bloku ({c.median} mV): <span style={{ background: LOW[1], padding: "0 5px", borderRadius: 3 }}>níž</span> · <span style={{ background: HIGH[1], padding: "0 5px", borderRadius: 3 }}>výš</span>. Tučně nejnižší a nejvyšší článek.</> : "Teploty u článků ve °C. Teploty se živě nečtou — obnovují se 1× za minutu."}
             </div>
           </div>);
       })}
