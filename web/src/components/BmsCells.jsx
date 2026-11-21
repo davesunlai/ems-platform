@@ -12,8 +12,48 @@ const fill = (dv, span) => {
 };
 const median = (arr) => { const s = [...arr].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
+const UP = "#3987e5", DOWN = "#e5484d";
+/** Šipka trendu napětí článku: ▲ modrá roste, ▼ červená klesá; sytost podle rychlosti vůči nejrychlejšímu článku. */
+function TrendArrow({ rate, maxUp, maxDown, size = 15 }) {
+  if (rate == null) return null;
+  const flat = Math.abs(rate) < 0.1;
+  const rel = flat ? 0 : rate > 0 ? rate / Math.max(maxUp, 0.1) : rate / Math.min(maxDown, -0.1);
+  const op = 0.45 + 0.55 * Math.min(1, rel);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: size + 3, height: size + 3, marginLeft: 4,
+                   borderRadius: (size + 3) / 2, background: "var(--panel, #fff)", verticalAlign: "-2px" }}>
+      <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
+        {flat ? <rect x="3" y="5.2" width="6" height="1.6" rx="0.8" fill="var(--muted, #888)" />
+          : rate > 0 ? <path d="M6 1.5 L10.5 9.5 H1.5 Z" fill={UP} fillOpacity={op} />
+            : <path d="M6 10.5 L1.5 2.5 H10.5 Z" fill={DOWN} fillOpacity={op} />}
+      </svg>
+    </span>);
+}
+
+/** Celkový stav bloku: velká šipka nahoru modrá = nabíjení, dolů červená = vybíjení, s výkonem. */
+function PowerBadge({ power, current }) {
+  const w = power?.w;
+  if (w == null) return null;
+  const idle = Math.abs(w) < 100, chg = w > 0;
+  const col = idle ? "var(--muted, #888)" : chg ? UP : DOWN;
+  return (
+    <span title={`výkon bloku podle ${power.source === "BMS" ? "BMS (U × I)" : "měniče"}`}
+          style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "6px 16px 6px 10px", borderRadius: 14, border: `2px solid ${col}` }}>
+      <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true">
+        {idle ? <circle cx="12" cy="12" r="5" fill={col} />
+          : chg ? <path d="M12 2 L21 13 H15.5 V22 H8.5 V13 H3 Z" fill={col} />
+            : <path d="M12 22 L3 11 H8.5 V2 H15.5 V11 H21 Z" fill={col} />}
+      </svg>
+      <span style={{ lineHeight: 1.15 }}>
+        <span style={{ display: "block", fontSize: 12 }} className="muted">{idle ? "Baterie" : chg ? "Baterie se nabíjí" : "Baterie se vybíjí"}</span>
+        <b style={{ fontSize: 22 }}>{idle ? "klid" : `${(Math.abs(w) / 1000).toFixed(2)} kW`}</b>
+        {!idle && current != null && <span className="muted" style={{ fontSize: 12 }}> · {Math.abs(Number(current)).toFixed(1)} A</span>}
+      </span>
+    </span>);
+}
+
 /** Jedna tabulka 11 × 15: mode "mv" = napětí, "temp" = teploty. big = režim celé obrazovky (větší písmo). */
-function CellTable({ c, mode, big }) {
+function CellTable({ c, mode, big, trend }) {
   const fs = big ? 15 : 10.5, pad = big ? "4px 7px" : "1px 2px";
   const temps = c.modules.flatMap((m) => m.temp);
   const tMed = temps.length ? median(temps) : 0;
@@ -36,11 +76,12 @@ function CellTable({ c, mode, big }) {
               const mv = m.mv[i];
               const bg = mode === "mv" ? fill(mv - c.median, vSpan) : fill(v - tMed, tSpan);
               return (
-                <td key={i} title={`článek ${n} (modul ${m.idx}, pozice ${i + 1}): ${mv} mV, ${mv - c.median >= 0 ? "+" : ""}${Math.round(mv - c.median)} mV od mediánu${m.temp[i] != null ? `, ${(m.temp[i] / 10).toFixed(1)} °C` : ""}`}
+                <td key={i} title={`článek ${n} (modul ${m.idx}, pozice ${i + 1}): ${mv} mV, ${mv - c.median >= 0 ? "+" : ""}${Math.round(mv - c.median)} mV od mediánu${m.temp[i] != null ? `, ${(m.temp[i] / 10).toFixed(1)} °C` : ""}${trend && trend.rate[n - 1] != null ? `, trend ${trend.rate[n - 1] > 0 ? "+" : ""}${trend.rate[n - 1].toFixed(2)} mV/min` : ""}`}
                     style={{ padding: pad, textAlign: "right", border: "1px solid var(--panel, #fff)", borderRadius: 3,
                              background: bg, color: bg === "transparent" ? undefined : "#0b0b0b",
                              fontWeight: mode === "mv" && (n === c.nmin || n === c.nmax) ? 700 : 400 }}>
                   {mode === "mv" ? v : (v / 10).toFixed(big ? 1 : 0)}
+                  {mode === "mv" && trend && <TrendArrow rate={trend.rate[n - 1]} maxUp={trend.max_up} maxDown={trend.max_down} />}
                 </td>);
             })}
             <td style={{ padding: "1px 6px", textAlign: "right" }}>{mode === "mv" ? m.avg.toFixed(0) : (m.temp_module != null ? `${m.temp_module.toFixed(1)} °C` : "—")}</td>
@@ -142,13 +183,21 @@ export default function BmsCells({ locId }) {
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "var(--panel, var(--bg, #fff))", color: "var(--fg, #111)", overflow: "auto", padding: "14px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
             <b style={{ fontSize: 19 }}>🔬 Články {fb.block_idx ? `B${fb.block_idx}` : fb.name} (BMS)</b>
+            <PowerBadge power={fb.power} current={s.bms_current} />
             <button className="btn" onClick={() => setFull(null)} style={{ marginLeft: "auto", fontWeight: 800, padding: "8px 16px", fontSize: 14, borderRadius: 10 }}>✕ Zavřít (Esc)</button>
           </div>
           <div style={{ marginBottom: 6 }}>{head(c, s)}</div>
           {liveBar(fb, c)}
           <h3 style={{ fontSize: 15, margin: "10px 0 4px" }}>Napětí článků (mV)</h3>
-          <CellTable c={c} mode="mv" big />
+          <CellTable c={c} mode="mv" big trend={fb.trend} />
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec V = napětí celého modulu." /></div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+            {fb.trend
+              ? <>Šipka u článku = změna jeho napětí za posledních {fb.trend.samples} snímků ({fb.trend.window_s < 120 ? `${fb.trend.window_s} s` : `${Math.round(fb.trend.window_s / 60)} min`}):{" "}
+                  <TrendArrow rate={1} maxUp={1} maxDown={-1} /> roste · <TrendArrow rate={-1} maxUp={1} maxDown={-1} /> klesá · <TrendArrow rate={0} maxUp={1} maxDown={-1} /> beze změny.
+                  Sytější šipka = rychlejší změna; nejrychleji teď roste +{fb.trend.max_up.toFixed(2)} mV/min, nejrychleji klesá {fb.trend.max_down.toFixed(2)} mV/min.</>
+              : "Šipky trendu článků se objeví po několika snímcích (do ~20 s od otevření okna)."}
+          </div>
           <h3 style={{ fontSize: 15, margin: "18px 0 4px" }}>Teploty u článků (°C)</h3>
           <CellTable c={c} mode="temp" big />
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${(median(c.modules.flatMap((m) => m.temp)) / 10).toFixed(1)} °C`} what=". Teploty se živě nečtou, obnovují se 1× za minutu. Poslední sloupec = teplota modulu." /></div>

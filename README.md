@@ -1,3 +1,10 @@
+## v1.11.4 — články BMS: směr a výkon bloku, trend každého článku
+
+- Celá obrazovka článků: velký ukazatel bloku — modrá šipka nahoru = nabíjení, červená dolů = vybíjení, s výkonem v kW a proudem
+  (výkon z měniče `battery_power_N`, znaménko ověřené; bez měniče U × I z BMS).
+- U každého článku šipka trendu napětí z posledních až 60 snímků (živě ≈ 5 min): ▲ modrá roste, ▼ červená klesá, sytost podle rychlosti
+  vůči nejrychleji rostoucímu / klesajícímu článku; v nápovědě buňky rychlost v mV/min. Historie pro trend je v paměti serveru.
+
 ## v1.11.3 — články BMS přes celou obrazovku
 
 - Výrazné tlačítko „⛶ Zvětšit na celou obrazovku“ u mapy článků: napětí všech článků a pod nimi teploty ve dvou tabulkách s větším písmem,

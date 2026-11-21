@@ -2,12 +2,15 @@
 Stav je jen v paměti API procesu (žádný zápis do DB); boxu se předává v nastavení konfigurace (settings.live)."""
 from __future__ import annotations
 
+from collections import deque
 from datetime import datetime, timedelta, timezone
 
 LIVE_S = 5            # perioda čtení na boxu při živém sledování
 HOLD_S = 60           # jak dlouho po posledním „pingu“ z UI živé čtení trvá
 _until: dict[str, datetime] = {}
 _latest: dict[str, tuple[datetime, dict]] = {}
+TREND_N = 60          # trend článku = změna napětí přes posledních TREND_N snímků (živě ≈ 5 min, jinak ≈ 1 h)
+_hist: dict[str, deque] = {}
 
 
 def touch(module_id: str) -> datetime:
@@ -33,7 +36,28 @@ def put(device_id: str, ts: datetime, arrays: dict) -> dict:
         return prev[1]                              # starší dávka (dosílání z bufferu) nepřepíše novější stav
     merged = {**(prev[1] if prev else {}), **arrays}
     _latest[device_id] = (ts, merged)
+    if arrays.get("bms_cells_mv"):
+        _hist.setdefault(device_id, deque(maxlen=TREND_N)).append((ts, list(arrays["bms_cells_mv"])))
     return merged
+
+
+def trend(device_id: str) -> dict | None:
+    """Rychlost změny napětí každého článku v mV/min z posledních až TREND_N snímků
+    (průměr 3 nejnovějších − průměr 3 nejstarších, děleno časem mezi nimi — tlumí kvantizační šum ±1 mV)."""
+    h = list(_hist.get(device_id) or [])
+    if len(h) < 4:
+        return None
+    k = 3 if len(h) >= 8 else 1
+    old, new = h[:k], h[-k:]
+    n = min(len(x[1]) for x in old + new)
+    t_old = sum(x[0].timestamp() for x in old) / k
+    t_new = sum(x[0].timestamp() for x in new) / k
+    dt_min = (t_new - t_old) / 60.0
+    if dt_min <= 0.05:
+        return None
+    rate = [round((sum(x[1][i] for x in new) / k - sum(x[1][i] for x in old) / k) / dt_min, 2) for i in range(n)]
+    return {"rate": rate, "samples": len(h), "window_s": round(h[-1][0].timestamp() - h[0][0].timestamp()),
+            "max_up": max([r for r in rate if r > 0], default=0.0), "max_down": min([r for r in rate if r < 0], default=0.0)}
 
 
 def latest(device_id: str) -> tuple[datetime, dict] | None:

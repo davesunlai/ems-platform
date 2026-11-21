@@ -55,9 +55,25 @@ async def bms_locality(locality_id: int, _: dict = Depends(read)) -> list[dict]:
             from datetime import datetime, timezone
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(cells["time"])).total_seconds()
             item["live"] = {"active": d["id"] in live.active(), "from_memory": is_live, "age_s": round(age, 1), "period_s": live.LIVE_S}
+            item["trend"] = live.trend(d["id"])
             item["cells"] = {"time": cells["time"], "count": len(mv), "per_module": per, "median": med,
                              "min": min(mv), "max": max(mv), "delta": max(mv) - min(mv),
                              "nmin": mv.index(min(mv)) + 1, "nmax": mv.index(max(mv)) + 1, "modules": mods}
+        # výkon bloku: z měniče (battery_power_N, + nabíjení / − vybíjení, ověřené znaménko); jinak U×I z BMS (znaménko proudu neověřeno)
+        try:
+            idx = int(params.get("block_idx") or 0)
+            pw = None
+            for dd in await loc_db.devices_for_locality(locality_id):
+                if idx and (devs.get(dd["id"]) or {}).get("adapter") == "solis":
+                    pw = (await bt_db.latest_metrics(dd["id"], [f"battery_power_{idx}"], 180)).get(f"battery_power_{idx}")
+                    if pw is not None:
+                        break
+            src = "měnič"
+            if pw is None and item["summary"].get("bms_voltage") is not None and item["summary"].get("bms_current") is not None:
+                pw, src = item["summary"]["bms_voltage"] * item["summary"]["bms_current"], "BMS"
+            item["power"] = {"w": round(pw) if pw is not None else None, "source": src}
+        except Exception:
+            item["power"] = {"w": None, "source": None}
         out.append(item)
     return out
 
