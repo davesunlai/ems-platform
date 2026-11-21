@@ -1,3 +1,7 @@
+## v1.11.2 — oprava živého čtení článků
+
+- Agent při živém čtení BMS posílal jen souhrn bez napětí článků (pole se přidávala jen v běžném cyklu). Opraveno; změna je jen v agentovi EMSBOXu.
+
 ## v1.11.1 — živé sledování článků BMS, širší detail baterie
 
 - Detail baterie je širší (780 px), mapa 11 × 15 článků se vejde bez vodorovného posuvníku.

@@ -507,6 +507,7 @@ class Agent:
                     reading = await asyncio.wait_for(getattr(a, method)(), timeout=8.0)
                 metrics = {m.metric.value if hasattr(m.metric, "value") else str(m.metric): m.value
                            for m in (reading.measurements or [])}
+                metrics.update(getattr(reading, "arrays", None) or {})     # živé čtení BMS: pole napětí článků (v1.11.2 — chybělo)
                 if metrics:
                     cycle.append((uid, _now_iso(), metrics))
             except Exception as exc:
