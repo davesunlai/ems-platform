@@ -1,3 +1,9 @@
+## v1.11.3 — články BMS přes celou obrazovku
+
+- Výrazné tlačítko „⛶ Zvětšit na celou obrazovku“ u mapy článků: napětí všech článků a pod nimi teploty ve dvou tabulkách s větším písmem,
+  živý ukazatel zůstává, zavření tlačítkem nebo Esc. Teploty jsou podbarvené odchylkou od mediánu teplot.
+- Čísla v podbarvených buňkách mají tmavý inkoust (čitelnost v tmavém vzhledu). Změna jen ve webu, agent EMSBOXu se nemění.
+
 ## v1.11.2 — oprava živého čtení článků
 
 - Agent při živém čtení BMS posílal jen souhrn bez napětí článků (pole se přidávala jen v běžném cyklu). Opraveno; změna je jen v agentovi EMSBOXu.

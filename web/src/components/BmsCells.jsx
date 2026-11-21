@@ -2,18 +2,61 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 
 // Mapa všech článků bloku z BMS (Pylontech SC0500 po RS485): řádek = modul, buňka = článek.
-// Barva = odchylka napětí článku od mediánu bloku (modrá níž, oranžová výš); čísla zůstávají v běžné barvě textu.
+// Barva = odchylka od mediánu bloku (modrá níž, oranžová výš); čísla zůstávají v běžné barvě textu.
 const LOW = ["#cde2fb", "#86b6ef", "#2a78d6"], HIGH = ["#fbd9c9", "#f2a27f", "#eb6834"];
 const fill = (dv, span) => {
-  const a = Math.abs(dv) / Math.max(10, span);
+  const a = Math.abs(dv) / Math.max(1, span);
   if (a < 0.2) return "transparent";
   const ramp = dv < 0 ? LOW : HIGH;
   return ramp[a < 0.5 ? 0 : a < 0.8 ? 1 : 2];
 };
+const median = (arr) => { const s = [...arr].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+/** Jedna tabulka 11 × 15: mode "mv" = napětí, "temp" = teploty. big = režim celé obrazovky (větší písmo). */
+function CellTable({ c, mode, big }) {
+  const fs = big ? 15 : 10.5, pad = big ? "4px 7px" : "1px 2px";
+  const temps = c.modules.flatMap((m) => m.temp);
+  const tMed = temps.length ? median(temps) : 0;
+  const tSpan = temps.length ? Math.max(Math.max(...temps) - tMed, tMed - Math.min(...temps), 20) : 20;   // min. rozsah 2 °C
+  const vSpan = Math.max(c.max - c.median, c.median - c.min, 10);
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ borderCollapse: "collapse", fontSize: fs, fontVariantNumeric: "tabular-nums", width: big ? "100%" : undefined }}>
+        <thead><tr>
+          <th style={{ textAlign: "left", padding: "1px 6px 1px 0" }} className="muted">modul</th>
+          {Array.from({ length: c.per_module }, (_, i) => <th key={i} className="muted" style={{ fontWeight: 400, padding: pad }}>{i + 1}</th>)}
+          <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>{mode === "mv" ? "průměr" : "modul"}</th>
+          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>V</th>}
+        </tr></thead>
+        <tbody>{c.modules.map((m) => (
+          <tr key={m.idx}>
+            <td style={{ padding: "1px 6px 1px 0", fontWeight: 600 }}>{m.idx}</td>
+            {(mode === "mv" ? m.mv : m.temp).map((v, i) => {
+              const n = (m.idx - 1) * c.per_module + i + 1;
+              const mv = m.mv[i];
+              const bg = mode === "mv" ? fill(mv - c.median, vSpan) : fill(v - tMed, tSpan);
+              return (
+                <td key={i} title={`článek ${n} (modul ${m.idx}, pozice ${i + 1}): ${mv} mV, ${mv - c.median >= 0 ? "+" : ""}${Math.round(mv - c.median)} mV od mediánu${m.temp[i] != null ? `, ${(m.temp[i] / 10).toFixed(1)} °C` : ""}`}
+                    style={{ padding: pad, textAlign: "right", border: "1px solid var(--panel, #fff)", borderRadius: 3,
+                             background: bg, color: bg === "transparent" ? undefined : "#0b0b0b",
+                             fontWeight: mode === "mv" && (n === c.nmin || n === c.nmax) ? 700 : 400 }}>
+                  {mode === "mv" ? v : (v / 10).toFixed(big ? 1 : 0)}
+                </td>);
+            })}
+            <td style={{ padding: "1px 6px", textAlign: "right" }}>{mode === "mv" ? m.avg.toFixed(0) : (m.temp_module != null ? `${m.temp_module.toFixed(1)} °C` : "—")}</td>
+            {mode === "mv" && <td style={{ padding: "1px 6px", textAlign: "right" }}>{m.voltage != null ? m.voltage.toFixed(2) : "—"}</td>}
+          </tr>))}</tbody>
+      </table>
+    </div>);
+}
+
+const Legend = ({ what, med }) => (
+  <span>Podbarvení = odchylka od mediánu bloku ({med}): <span style={{ background: LOW[1], color: "#0b0b0b", padding: "0 5px", borderRadius: 3 }}>níž</span> · <span style={{ background: HIGH[1], color: "#0b0b0b", padding: "0 5px", borderRadius: 3 }}>výš</span>{what}</span>);
 
 export default function BmsCells({ locId }) {
   const [data, setData] = useState(null);
   const [mode, setMode] = useState("mv");
+  const [full, setFull] = useState(null);             // module_id zobrazený přes celou obrazovku
   const [now, setNow] = useState(Date.now());
   const [period, setPeriod] = useState({});          // skutečný rozestup mezi posledními dvěma snímky, podle modulu
   // Živé sledování: dokud je okno otevřené, hlásíme to serveru (EMSBOX pak čte články po pár sekundách) a dotahujeme po 5 s.
@@ -35,7 +78,39 @@ export default function BmsCells({ locId }) {
     const t2 = setInterval(() => setNow(Date.now()), 1000);
     return () => { alive = false; clearInterval(t); clearInterval(t2); };
   }, [locId]);
+  useEffect(() => {
+    if (!full) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setFull(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [full]);
   if (!data || !data.length) return null;
+
+  const liveBar = (b, c) => {
+    const age = Math.max(0, (now - Date.parse(c.time)) / 1000);
+    const per = period[b.module_id] || b.live?.period_s || 5;
+    const fresh = age < Math.max(15, per * 3);
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, margin: "0 0 5px" }}>
+        <span style={{ width: 8, height: 8, borderRadius: 4, background: fresh ? "#0ca30c" : "#fab219", flex: "0 0 auto" }} />
+        <span>{fresh
+          ? <><b>Živě</b> — napětí článků se čtou každých {per < 9.5 ? per.toFixed(0) : Math.round(per)} s, jen dokud je toto okno otevřené</>
+          : <><b>Čekám na živá data z boxu…</b> poslední snímek je {age < 90 ? `${Math.round(age)} s` : `${Math.round(age / 60)} min`} starý</>}</span>
+        <span className="muted" style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>{fresh ? `další čtení za ${Math.max(0, Math.ceil(per - age))} s` : ""}</span>
+        {fresh && <span className="bms-bar" title="čas do dalšího čtení" style={{ width: 90, height: 5, borderRadius: 3, background: "var(--border, #ddd)", overflow: "hidden", flex: "0 0 auto" }}>
+          <i key={c.time} style={{ display: "block", height: "100%", background: "#2a78d6", animation: `bmsfill ${per}s linear forwards` }} />
+        </span>}
+      </div>);
+  };
+  const head = (c, s) => (
+    <span className="muted" style={{ fontSize: 11.5 }}>
+      {c.count} článků · min {c.min} mV (č. {c.nmin}) · max {c.max} mV (č. {c.nmax}) · rozptyl {c.delta} mV
+      {s.bms_soc != null ? ` · SoC ${Math.round(s.bms_soc)} %` : ""}{s.bms_voltage != null ? ` · ${Number(s.bms_voltage).toFixed(1)} V` : ""}
+      {s.bms_current != null ? ` · ${Number(s.bms_current).toFixed(1)} A` : ""}
+      {" · "}{new Date(c.time).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+    </span>);
+  const fb = full ? data.find((b) => b.module_id === full && b.cells) : null;
+
   return (
     <div style={{ marginTop: 12 }}>
       <style>{`@keyframes bmsfill { from { width: 0% } to { width: 100% } }
@@ -43,68 +118,40 @@ export default function BmsCells({ locId }) {
       {data.map((b) => {
         const c = b.cells, s = b.summary || {};
         if (!c) return <p key={b.module_id} className="muted" style={{ fontSize: 12 }}>🔬 BMS {b.name}: zatím žádná data článků.</p>;
-        const span = Math.max(c.max - c.median, c.median - c.min);
         return (
           <div key={b.module_id} style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
               <b style={{ fontSize: 13 }}>🔬 Články {b.block_idx ? `B${b.block_idx}` : b.name} (BMS)</b>
-              <span className="muted" style={{ fontSize: 11.5 }}>
-                {c.count} článků · min {c.min} mV (č. {c.nmin}) · max {c.max} mV (č. {c.nmax}) · rozptyl {c.delta} mV
-                {s.bms_soc != null ? ` · SoC ${Math.round(s.bms_soc)} %` : ""}{s.bms_voltage != null ? ` · ${Number(s.bms_voltage).toFixed(1)} V` : ""}
-                {" · "}{new Date(c.time).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
-              </span>
-              <span style={{ marginLeft: "auto", fontSize: 11.5 }}>
-                <a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === "mv" ? "temp" : "mv"); }}>{mode === "mv" ? "zobrazit teploty" : "zobrazit napětí"}</a>
-              </span>
+              <button className="btn" onClick={() => setFull(b.module_id)} title="Napětí i teploty všech článků přes celou obrazovku"
+                      style={{ marginLeft: "auto", background: "#2a78d6", color: "#fff", fontWeight: 800, padding: "7px 14px", fontSize: 13.5, borderRadius: 10 }}>
+                ⛶ Zvětšit na celou obrazovku
+              </button>
             </div>
-            {(() => {
-              const age = Math.max(0, (now - Date.parse(c.time)) / 1000);
-              const per = period[b.module_id] || b.live?.period_s || 5;
-              const fresh = age < Math.max(15, per * 3);
-              return (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, margin: "0 0 5px" }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 4, background: fresh ? "#0ca30c" : "#fab219", flex: "0 0 auto" }} />
-                  <span>{fresh
-                    ? <><b>Živě</b> — články se čtou každých {per < 9.5 ? per.toFixed(0) : Math.round(per)} s, jen dokud je toto okno otevřené</>
-                    : <><b>Čekám na živá data z boxu…</b> poslední snímek je {age < 90 ? `${Math.round(age)} s` : `${Math.round(age / 60)} min`} starý</>}</span>
-                  <span className="muted" style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>{fresh ? `další čtení za ${Math.max(0, Math.ceil(per - age))} s` : ""}</span>
-                  {fresh && <span className="bms-bar" title="čas do dalšího čtení" style={{ width: 90, height: 5, borderRadius: 3, background: "var(--border, #ddd)", overflow: "hidden", flex: "0 0 auto" }}>
-                    <i key={c.time} style={{ display: "block", height: "100%", background: "#2a78d6", animation: `bmsfill ${per}s linear forwards` }} />
-                  </span>}
-                </div>);
-            })()}
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "collapse", fontSize: 10.5, fontVariantNumeric: "tabular-nums" }}>
-                <thead><tr>
-                  <th style={{ textAlign: "left", padding: "1px 6px 1px 0" }} className="muted">modul</th>
-                  {Array.from({ length: c.per_module }, (_, i) => <th key={i} className="muted" style={{ fontWeight: 400, padding: "1px 3px" }}>{i + 1}</th>)}
-                  <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>{mode === "mv" ? "průměr" : "modul"}</th>
-                  <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>V</th>
-                </tr></thead>
-                <tbody>{c.modules.map((m) => (
-                  <tr key={m.idx}>
-                    <td style={{ padding: "1px 6px 1px 0", fontWeight: 600 }}>{m.idx}</td>
-                    {(mode === "mv" ? m.mv : m.temp).map((v, i) => {
-                      const n = (m.idx - 1) * c.per_module + i + 1;
-                      const mv = m.mv[i];
-                      return (
-                        <td key={i} title={`článek ${n} (modul ${m.idx}, pozice ${i + 1}): ${mv} mV, ${mv - c.median >= 0 ? "+" : ""}${Math.round(mv - c.median)} mV od mediánu${m.temp[i] != null ? `, ${(m.temp[i] / 10).toFixed(1)} °C` : ""}`}
-                            style={{ padding: "1px 2px", textAlign: "right", border: "1px solid var(--bg, #fff)", borderRadius: 3,
-                                     background: mode === "mv" ? fill(mv - c.median, span) : "transparent",
-                                     fontWeight: n === c.nmin || n === c.nmax ? 700 : 400 }}>
-                          {mode === "mv" ? v : (v / 10).toFixed(0)}
-                        </td>);
-                    })}
-                    <td style={{ padding: "1px 6px", textAlign: "right" }}>{mode === "mv" ? m.avg.toFixed(0) : (m.temp_module != null ? `${m.temp_module.toFixed(1)} °C` : "—")}</td>
-                    <td style={{ padding: "1px 6px", textAlign: "right" }}>{m.voltage != null ? m.voltage.toFixed(2) : "—"}</td>
-                  </tr>))}</tbody>
-              </table>
-            </div>
+            <div style={{ marginBottom: 4 }}>{head(c, s)}</div>
+            {liveBar(b, c)}
+            <CellTable c={c} mode={mode} />
             <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>
-              Do historie se ukládá 1× za 5 min, při testu baterie 1× za min — živé čtení ukládání nemění.{" "}
-              {mode === "mv" ? <>Napětí v mV. Podbarvení = odchylka od mediánu bloku ({c.median} mV): <span style={{ background: LOW[1], padding: "0 5px", borderRadius: 3 }}>níž</span> · <span style={{ background: HIGH[1], padding: "0 5px", borderRadius: 3 }}>výš</span>. Tučně nejnižší a nejvyšší článek.</> : "Teploty u článků ve °C. Teploty se živě nečtou — obnovují se 1× za minutu."}
+              <a href="#" onClick={(e) => { e.preventDefault(); setMode(mode === "mv" ? "temp" : "mv"); }}>{mode === "mv" ? "zobrazit teploty" : "zobrazit napětí"}</a>{" · "}
+              {mode === "mv" ? <><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek." /></> : "Teploty u článků ve °C, obnovují se 1× za minutu."}
+              {" "}Do historie se ukládá 1× za 5 min, při testu baterie 1× za min.
             </div>
           </div>);
       })}
+
+      {fb && (() => { const c = fb.cells, s = fb.summary || {}; return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "var(--panel, var(--bg, #fff))", color: "var(--fg, #111)", overflow: "auto", padding: "14px 18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+            <b style={{ fontSize: 19 }}>🔬 Články {fb.block_idx ? `B${fb.block_idx}` : fb.name} (BMS)</b>
+            <button className="btn" onClick={() => setFull(null)} style={{ marginLeft: "auto", fontWeight: 800, padding: "8px 16px", fontSize: 14, borderRadius: 10 }}>✕ Zavřít (Esc)</button>
+          </div>
+          <div style={{ marginBottom: 6 }}>{head(c, s)}</div>
+          {liveBar(fb, c)}
+          <h3 style={{ fontSize: 15, margin: "10px 0 4px" }}>Napětí článků (mV)</h3>
+          <CellTable c={c} mode="mv" big />
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec V = napětí celého modulu." /></div>
+          <h3 style={{ fontSize: 15, margin: "18px 0 4px" }}>Teploty u článků (°C)</h3>
+          <CellTable c={c} mode="temp" big />
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${(median(c.modules.flatMap((m) => m.temp)) / 10).toFixed(1)} °C`} what=". Teploty se živě nečtou, obnovují se 1× za minutu. Poslední sloupec = teplota modulu." /></div>
+        </div>); })()}
     </div>);
 }
