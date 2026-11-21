@@ -98,6 +98,15 @@ export function BatteryTestDialog({ locId, onClose }) {
     load(); const t = setInterval(load, 10000); return () => clearInterval(t);
     /* eslint-disable-next-line */ }, [locId]);
   const num = (k) => (e) => setP({ ...p, [k]: e.target.value === "" ? "" : Number(e.target.value) });
+  const toggleBlock = (idx) => {
+    const all = (defs?.blocks?.[mod] || []);
+    const cur = p.active_blocks || all.map((b) => b.idx);
+    const next = cur.includes(idx) ? cur.filter((x) => x !== idx) : [...cur, idx].sort();
+    if (!next.length) return;                                    // aspoň jeden blok
+    const cap = Math.round(all.filter((b) => next.includes(b.idx)).reduce((s, b) => s + Number(b.capacity_kwh), 0) * 100) / 100;
+    const c10 = Math.round(cap) / 10;                            // 0,1 C
+    setP({ ...p, active_blocks: next, capacity_kwh: cap, p_chg_kw: c10, p_dis_kw: c10 }); setPre(null);
+  };
   const precheck = async () => {
     setBusy(true); setMsg(""); setPre(null);
     try { setPre(await api.btPrecheck(locId, { module_id: mod, params: p })); setAck(false); } catch (e) { setMsg(e.message); }
@@ -126,7 +135,7 @@ export function BatteryTestDialog({ locId, onClose }) {
           <div style={{ marginTop: 8, fontSize: 13 }}>
             <p className="muted" style={{ margin: "0 0 8px", fontSize: 12.5 }}>
               Kroky: 0 Příprava → 1 Předvybití na dno → 2 Nabíjení na strop (snímek po 10 %) → 3 Výdrž → 4 Vybíjení na dno (snímek po 10 %) → Vyhodnocení. Měří se energie na DC straně baterie.
-              Výsledek: nabito / vybito kWh, kapacita, účinnost, kondice vs. {p.capacity_kwh} kWh jmenovitých, rozdíl packů.
+              Výsledek: nabito / vybito kWh, kapacita, účinnost, kondice vs. {Number(p.capacity_kwh || 0).toFixed(2)} kWh jmenovitých, rozdíl packů.
             </p>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
               {defs?.modules?.length > 1 && <label>modul<br /><select style={{ ...FLD, width: 140 }} value={mod} onChange={(e) => setMod(e.target.value)}>{defs.modules.map((m) => <option key={m}>{m}</option>)}</select></label>}
@@ -135,14 +144,25 @@ export function BatteryTestDialog({ locId, onClose }) {
               <label>výdrž na stropu min<br /><input style={FLD} type="number" value={p.hold_min} onChange={num("hold_min")} /></label>
               <label>dno %<br /><input style={FLD} type="number" value={p.floor_pct} onChange={num("floor_pct")} /></label>
               <label>strop %<br /><input style={FLD} type="number" value={p.ceil_pct} onChange={num("ceil_pct")} /></label>
-              <label>kapacita kWh<br /><input style={FLD} type="number" step="0.01" value={p.capacity_kwh} onChange={num("capacity_kwh")} readOnly={!!defs?.blocks?.[mod]?.length} title={defs?.blocks?.[mod]?.length ? "součet bateriových bloků (Moduly → měnič → Bateriové bloky)" : ""} /></label>
+              <label>kapacita kWh<br /><input style={FLD} type="number" step="0.01" value={p.capacity_kwh === "" ? "" : Math.round(Number(p.capacity_kwh) * 100) / 100} onChange={num("capacity_kwh")} readOnly={!!defs?.blocks?.[mod]?.length} title={defs?.blocks?.[mod]?.length ? "součet TESTOVANÝCH bateriových bloků (Moduly → měnič → Bateriové bloky)" : ""} /></label>
               <button className="btn" disabled={busy || !mod} onClick={precheck}>🔎 Zkontrolovat a odhadnout</button>
             </div>
             <p className="muted" style={{ fontSize: 11.5, margin: "6px 0 0" }}>Výchozí výkony = 10 % kapacity (0,1 C). Strop exportu distributora má přednost — vybíjení se při slunci ořeže.</p>
             {defs?.blocks?.[mod]?.length ? (
-              <p className="muted" style={{ fontSize: 11.5, margin: "2px 0 0" }}>
-                Bloky: {defs.blocks[mod].map((b) => `${b.name} ${Number(b.capacity_kwh).toFixed(2)} kWh${b.module_model ? ` (${b.modules_count ? b.modules_count + "× " : ""}${b.module_model})` : ""}`).join(" · ")} — SoH se vyhodnotí pro každý blok zvlášť.
-              </p>) : (
+              <div style={{ fontSize: 12, margin: "6px 0 0" }}>
+                <span className="muted">Testované bloky: </span>
+                {defs.blocks[mod].map((b) => {
+                  const seen = (defs.active?.[mod] || []).includes(b.idx);
+                  const on = (p.active_blocks || defs.blocks[mod].map((x) => x.idx)).includes(b.idx);
+                  return (
+                    <label key={b.idx} style={{ marginRight: 14, whiteSpace: "nowrap" }} title={seen ? "měnič blok vidí (SoC a napětí)" : "měnič blok teď nevidí — vypnutý / odpojený"}>
+                      <input type="checkbox" checked={on} onChange={() => toggleBlock(b.idx)} />{" "}
+                      <b>{b.name}</b> {Number(b.capacity_kwh).toFixed(2)} kWh{b.module_model ? ` (${b.modules_count ? b.modules_count + "× " : ""}${b.module_model})` : ""}
+                      {seen ? "" : <span style={{ color: "#b45309" }}> · vypnutý</span>}
+                    </label>);
+                })}
+                <span className="muted">— kapacita a výkony se počítají jen z vybraných; SoH pro každý blok zvlášť.</span>
+              </div>) : (
               <p className="muted" style={{ fontSize: 11.5, margin: "2px 0 0" }}>Bloky nejsou zadané — kapacita se rozdělí rovnoměrně podle počtu baterií měniče. Zadat je lze v Moduly → měnič → Bateriové bloky.</p>)}
 
             {pre && (

@@ -1,3 +1,10 @@
+## v1.10.8 — test baterie jen na zapnutých blocích
+
+- **Testované bloky**: test baterie pozná, které baterie měnič právě vidí (čerstvé SoC > 0 a napětí packu > 100 V), a jmenovitou kapacitu,
+  výchozí výkony (0,1 C) i SoH počítá jen z nich (jeden blok = 26,40 kWh místo 52,80). Ve formuláři zaškrtávátka B1/B2 (vypnutý blok označen),
+  volbu lze ručně změnit. Dno/strop se řídí SoC testovaných bloků, ochrany článků/teplot také; do parametrů testu se ukládá `active_blocks`.
+- Bateriové bloky: kapacity jako DOUBLE + zaokrouhlení (konec 26,399999618530273).
+
 ## v1.10.7 — rychlé okno čtení měniče + události alarmů Solis
 
 - **Rychlé okno** (hledání ranních výpadků zálohy 18.–20. 11.): modul s `params.fast_window = "06:15-06:45"` (čas Praha, víc oken čárkou)

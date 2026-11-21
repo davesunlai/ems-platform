@@ -151,7 +151,12 @@ async def start(locality_id: int, module_id: str, params: dict, username: str | 
     from . import blocks as blocks_mod
     m0 = await db.latest_metrics(module_id, ["battery_soc_1", "battery_soc_2"], 600)
     packs = sum(1 for k in ("battery_soc_1", "battery_soc_2") if k in m0) or 1
-    params = {**params, "blocks": await blocks_mod.blocks_for_test(module_id, float(params["capacity_kwh"]), packs)}
+    # v1.10.8: testované bloky = zvolené v UI, jinak ty, které měnič právě vidí (vypnutá baterie se nepočítá)
+    act = [int(x) for x in (params.get("active_blocks") or [])] or await blocks_mod.active_packs(module_id)
+    params = {**params, "active_blocks": act or None,
+              "blocks": await blocks_mod.blocks_for_test(module_id, float(params["capacity_kwh"]), packs, act or None)}
+    if params["blocks"] and not any(b.get("derived") for b in params["blocks"]):
+        params["capacity_kwh"] = round(sum(float(b["capacity_kwh"]) for b in params["blocks"]), 2)   # jmenovitá = součet TESTOVANÝCH bloků
     t = await db.create(locality_id, module_id, params, saved, username)
     await db.log(t["id"], f"Test založen uživatelem {username or '?'}: {params}")
     await _event(t, "spuštěn", f"{username or '?'} · nabíjení {params['p_chg_kw']} kW, vybíjení {params['p_dis_kw']} kW, výdrž {params['hold_min']} min, "
@@ -232,7 +237,7 @@ async def compute_result(t: dict) -> dict:
                         "kw": round(float(s["e_step_kwh"]) / (float(s["minutes_step"]) / 60), 2) if s.get("e_step_kwh") and s.get("minutes_step") else None}
                        for s in snaps if s["phase"] in ("charge", "discharge")]
     s1 = [x for x in snaps if x.get("soc1") is not None and x.get("soc2") is not None]
-    if s1:
+    if s1 and len(p.get("active_blocks") or [1, 2]) > 1:
         out["pack_drift_pct_max"] = round(max(abs(float(x["soc1"]) - float(x["soc2"])) for x in s1), 1)
     # vyhodnocení po blocích a článcích (assess.py); při chybě výsledek nesmí spadnout
     try:
@@ -285,18 +290,26 @@ async def _step(t: dict, state: dict) -> None:
     # bezpečnost
     if "battery_soc" not in m:
         return await _finish(t, "aborted", "ztráta komunikace s měničem > 120 s")
-    vmin = min([v for k, v in m.items() if k.startswith("battery_cell_vmin")] or [9])
-    vmax = max([v for k, v in m.items() if k.startswith("battery_cell_vmax")] or [0])
-    tmax = max([v for k, v in m.items() if k.startswith("battery_cell_tmax")] or [0])
+    _act = [int(x) for x in (p.get("active_blocks") or [])]
+    def _mine(k: str) -> bool:      # články/teploty jen z testovaných bloků (vypnutá baterie může hlásit 0 V)
+        return not _act or any(k.endswith(f"_{n}") for n in _act)
+    vmin = min([v for k, v in m.items() if k.startswith("battery_cell_vmin") and _mine(k)] or [9])
+    vmax = max([v for k, v in m.items() if k.startswith("battery_cell_vmax") and _mine(k)] or [0])
+    tmax = max([v for k, v in m.items() if k.startswith("battery_cell_tmax") and _mine(k)] or [0])
     if vmin < CELL_VMIN or vmax > CELL_VMAX:
         return await _finish(t, "aborted", f"napětí článku mimo meze (min {vmin:.3f} V, max {vmax:.3f} V)")
     if tmax > T_MAX:
         return await _finish(t, "aborted", f"teplota baterie {tmax:.0f} °C > {T_MAX:g} °C")
-    soc_raw = float(m["battery_soc"]); floor, ceil = float(p["floor_pct"]), float(p["ceil_pct"])
+    floor, ceil = float(p["floor_pct"]), float(p["ceil_pct"])
+    # v1.10.8: test jen části bloků → SoC jen z testovaných packů (průměr s vypnutou baterií by zkreslil dno/strop)
+    act = [int(x) for x in (p.get("active_blocks") or [])]
+    act_socs = [float(m[f"battery_soc_{k}"]) for k in act if f"battery_soc_{k}" in m]
+    soc_raw = (sum(act_socs) / len(act_socs)) if act_socs else float(m["battery_soc"])
+    m = {**m, "battery_soc": soc_raw}      # snímky a kroky ukládají SoC testovaných bloků
     # battery_soc je u dvou packů průměr (99 % + 100 % = 99,5 %) → pro prahy zaokrouhlujeme na celé %,
     # jinak se strop 100 % nikdy nedosáhne (test #1 stál 5 h na 99,5 %).
     soc = float(round(soc_raw))
-    socs = [float(m[k]) for k in ("battery_soc_1", "battery_soc_2") if k in m]
+    socs = act_socs or [float(m[k]) for k in ("battery_soc_1", "battery_soc_2") if k in m]
     full_bms = (socs and max(socs) >= ceil and abs(float(m.get("battery_power") or 0)) < 300)   # jeden pack 100 % a BMS už nenabíjí
     saved = t.get("saved") or {}
     status = t["status"]

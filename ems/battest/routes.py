@@ -26,6 +26,7 @@ class Params(BaseModel):
     floor_pct: float = 10
     ceil_pct: float = 100
     capacity_kwh: float
+    active_blocks: list[int] | None = None   # testované bloky (1 = B1…); None = všechny, které měnič vidí
 
 
 class StartBody(BaseModel):
@@ -56,15 +57,26 @@ async def defaults(locality_id: int, _: dict = Depends(read)):
     cfg = await planner_db.get_config(locality_id) or {}
     cap = float(cfg.get("capacity_kwh") or 52.8)
     mods = await _solis_modules(locality_id)
-    blocks = {}
+    blocks, active = {}, {}
     for m in mods:
         bl = await blocks_mod.list_blocks(m)
+        act = await blocks_mod.active_packs(m)
+        active[m] = act
         if bl:
             blocks[m] = bl
-            cap_b = sum(float(b["capacity_kwh"]) for b in bl)
-            if cap_b > 0:
-                cap = cap_b
-    return {"modules": mods, "params": engine.default_params(cap), "blocks": blocks}
+    m0 = mods[0] if mods else None
+    act0 = active.get(m0) or []
+    if m0 and blocks.get(m0):
+        # kapacita = součet bloků, které měnič právě vidí (vypnutá baterie se do testu nepočítá)
+        use = [b for b in blocks[m0] if int(b["idx"]) in act0] or blocks[m0]
+        cap_b = sum(float(b["capacity_kwh"]) for b in use)
+        if cap_b > 0:
+            cap = cap_b
+    elif m0 and len(act0) == 1:
+        cap = cap / 2
+    params = engine.default_params(round(cap, 2))
+    params["active_blocks"] = act0 or None
+    return {"modules": mods, "params": params, "blocks": blocks, "active": active}
 
 
 # ---------- bateriové bloky ----------

@@ -34,6 +34,9 @@ async def ensure_schema() -> None:
         await conn.execute("ALTER TABLE battery_blocks ADD COLUMN IF NOT EXISTS curve_test_id INTEGER")
         await conn.execute("ALTER TABLE battery_blocks ADD COLUMN IF NOT EXISTS curve_applied_at TIMESTAMPTZ")
         await conn.execute("ALTER TABLE battery_blocks ADD COLUMN IF NOT EXISTS curve_floor_pct REAL")
+        # v1.10.8: REAL (float4) vracel 26,399999618530273 → DOUBLE + zaokrouhlení na 3 des. místa
+        await conn.execute("ALTER TABLE battery_blocks ALTER COLUMN capacity_kwh TYPE DOUBLE PRECISION USING round(capacity_kwh::numeric, 3)")
+        await conn.execute("ALTER TABLE battery_blocks ALTER COLUMN module_kwh TYPE DOUBLE PRECISION USING round(module_kwh::numeric, 3)")
 
 
 async def list_blocks(module_id: str) -> list[dict]:
@@ -47,7 +50,26 @@ async def list_blocks(module_id: str) -> list[dict]:
             import json; d["curve"] = json.loads(d["curve"])
         if d.get("curve_applied_at"):
             d["curve_applied_at"] = d["curve_applied_at"].isoformat()
+        for k in ("capacity_kwh", "module_kwh"):
+            if d.get(k) is not None:
+                d[k] = round(float(d[k]), 3)
         out.append(d)
+    return out
+
+
+PACK_MIN_VOLTAGE = 100.0   # HV pack pod 100 V = odpojený (běžně ~480–580 V)
+
+
+async def active_packs(module_id: str, max_age_s: int = 300) -> list[int]:
+    """Baterie (packy), které měnič právě vidí: čerstvé SoC > 0 a napětí packu > 100 V.
+    Odpojený/vypnutý blok SoC neposílá (adaptér ho v režimu auto vynechá) nebo hlásí 0 V."""
+    from . import db as bt_db
+    m = await bt_db.latest_metrics(module_id, [f"battery_{k}_{n}" for n in (1, 2) for k in ("soc", "voltage")], max_age_s)
+    out = []
+    for n in (1, 2):
+        soc, v = m.get(f"battery_soc_{n}"), m.get(f"battery_voltage_{n}")
+        if soc is not None and soc > 0 and (v is None or v > PACK_MIN_VOLTAGE):
+            out.append(n)
     return out
 
 
@@ -85,9 +107,14 @@ async def save_blocks(module_id: str, blocks: list[dict]) -> list[dict]:
     return out
 
 
-async def blocks_for_test(module_id: str, total_kwh: float, packs: int) -> list[dict]:
-    """Bloky pro parametry testu: zadané, nebo rovnoměrně rozdělená celková kapacita podle počtu packů měniče."""
+async def blocks_for_test(module_id: str, total_kwh: float, packs: int, only: list[int] | None = None) -> list[dict]:
+    """Bloky pro parametry testu: zadané, nebo rovnoměrně rozdělená celková kapacita podle počtu packů měniče.
+    only = testované bloky (v1.10.8: test jen zapnutých baterií) — ostatní se do testu nezahrnou."""
     bl = await list_blocks(module_id)
+    if bl and only:
+        bl = [b for b in bl if int(b["idx"]) in only] or bl
+    if not bl and only:
+        return [{"idx": i, "name": f"B{i}", "capacity_kwh": round(total_kwh / len(only), 3), "derived": True} for i in only]
     if bl:
         return [{"idx": b["idx"], "name": b["name"], "capacity_kwh": float(b["capacity_kwh"]), "modules_count": b.get("modules_count"),
                  "module_model": b.get("module_model"), "installed": b.get("installed"), "note": b.get("note")} for b in bl]
