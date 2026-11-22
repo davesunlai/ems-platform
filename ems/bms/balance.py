@@ -254,7 +254,7 @@ async def _finish(b: dict, status: str, reason: str, now: datetime) -> None:
     if ce.get("in"):
         ratio = [round(o / i * 100, 2) if i > 0.5 else None for i, o in zip(ce["in"], ce["out"])]
         ok = [(r, n + 1) for n, r in enumerate(ratio) if r is not None]
-        result["cell_energy"] = {"in_wh": [round(x, 2) for x in ce["in"]], "out_wh": [round(x, 2) for x in ce["out"]],
+        result["cell_energy"] = {"in_wh": [round(x, 3) for x in ce["in"]], "out_wh": [round(x, 3) for x in ce["out"]],
                                  "ratio_pct": ratio, "per_module": st.get("per_module"),
                                  "ratio_min": min(ok) if ok else None, "ratio_max": max(ok) if ok else None,
                                  "ratio_avg": round(sum(r for r, _ in ok) / len(ok), 2) if ok else None}

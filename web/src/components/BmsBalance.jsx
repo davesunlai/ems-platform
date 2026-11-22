@@ -193,7 +193,7 @@ function BalanceChart({ S, params, live, changes = [] }) {
 /** Pravítko 3,1–3,6 V a pod ním všechny články seřazené od nejvyššího; pozice značky = napětí článku. */
 function CellRuler({ cells, params, energy }) {
   const hasE = !!(energy?.in?.length);
-  const V0 = 3100, V1 = 3600, ROW = 19, LAB = hasE ? 372 : 172;
+  const V0 = 3100, V1 = 3600, ROW = 19, LAB = hasE ? 422 : 172;
   const ratioOf = (n) => { const i = energy.in[n - 1], o = energy.out[n - 1]; return i > 0.5 ? (o / i) * 100 : null; };
   const list = useMemo(() => { const out = []; let n = 0;
     for (const m of cells.modules) m.mv.forEach((mv, i) => out.push({ n: ++n, mod: m.idx, pos: i + 1, mv }));
@@ -227,9 +227,9 @@ function CellRuler({ cells, params, energy }) {
                 <span style={{ display: "inline-block", width: 50, fontSize: 12, color: "var(--muted)" }}>{c.mod}/{c.pos}</span>
                 <span style={{ display: "inline-block", width: 46 }}>{cs(c.mv)}</span>
                 {hasE && <span style={{ fontWeight: 400 }}>
-                  <span style={{ display: "inline-block", width: 64, textAlign: "right", color: LO }}>▲ {cs(energy.in[c.n - 1], 1)}</span>
-                  <span style={{ display: "inline-block", width: 64, textAlign: "right", color: HI }}>▼ {cs(energy.out[c.n - 1], 1)}</span>
-                  <span style={{ display: "inline-block", width: 62, textAlign: "right", fontWeight: 700 }}>{ratioOf(c.n) == null ? "—" : `${cs(ratioOf(c.n), 1)} %`}</span>
+                  <span style={{ display: "inline-block", width: 84, textAlign: "right", color: LO }}>▲ {cs(energy.in[c.n - 1], 3)}</span>
+                  <span style={{ display: "inline-block", width: 84, textAlign: "right", color: HI }}>▼ {cs(energy.out[c.n - 1], 3)}</span>
+                  <span style={{ display: "inline-block", width: 72, textAlign: "right", fontWeight: 700 }}>{ratioOf(c.n) == null ? "—" : `${cs(ratioOf(c.n), 2)} %`}</span>
                 </span>}
               </div>
               <div style={{ position: "relative", flex: 1, height: "100%" }}>
@@ -263,8 +263,8 @@ function CellEnergy({ ce }) {
       Články jsou v sérii, teče jimi stejný proud; rozdíl v poměru je dán jen napětím článku při nabíjení a vybíjení. <span style={{ color: HI }}>■</span> pod průměrem (článek se při nabíjení zvedá a při vybíjení propadá víc než ostatní), <span style={{ color: LO }}>■</span> nad průměrem. Najetím na buňku uvidíš Wh.</div>
     <div style={{ overflow: "auto" }}><table style={{ borderCollapse: "collapse", fontSize: 12, fontVariantNumeric: "tabular-nums" }}><tbody>
       {rows.map((row, m) => <tr key={m}><td className="muted" style={{ padding: "2px 8px 2px 0", whiteSpace: "nowrap" }}>box {m + 1}</td>
-        {row.map((c) => <td key={c.n} title={`článek ${c.n}: do ${cs(ce.in_wh[c.n - 1], 1)} Wh, z ${cs(ce.out_wh[c.n - 1], 1)} Wh`}
-                            style={{ padding: "2px 6px", textAlign: "right", background: bg(c.r), border: "1px solid var(--border)", fontWeight: c.n === ce.ratio_min?.[1] || c.n === ce.ratio_max?.[1] ? 800 : 400 }}>{c.r == null ? "—" : cs(c.r, 1)}</td>)}</tr>)}
+        {row.map((c) => <td key={c.n} title={`článek ${c.n}: do ${cs(ce.in_wh[c.n - 1], 3)} Wh, z ${cs(ce.out_wh[c.n - 1], 3)} Wh`}
+                            style={{ padding: "2px 6px", textAlign: "right", background: bg(c.r), border: "1px solid var(--border)", fontWeight: c.n === ce.ratio_min?.[1] || c.n === ce.ratio_max?.[1] ? 800 : 400 }}>{c.r == null ? "—" : cs(c.r, 2)}</td>)}</tr>)}
     </tbody></table></div>
   </div>);
 }

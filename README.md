@@ -1,3 +1,7 @@
+## v1.12.12 — energie článků na 3 desetinná místa
+
+- Wh u článků (řádky pod pravítkem, bubliny v reportu, uložený výsledek) na 3 desetinná místa, poměr na 2.
+
 ## v1.12.11 — balancování: energie do/z každého článku a jejich poměr
 
 - Pro každý článek se od začátku balancování sčítá energie do článku (nabíjení) a z článku (vybíjení):
