@@ -1,3 +1,8 @@
+## v1.13.2 — články přes celou obrazovku: napětí bloků vedle sebe
+
+- V hlavičce (vedle výkonu baterie) napětí celého bloku pro všechny BMS lokality (B1, B2…), průměr na článek, SoC a rozdíl
+  napětí mezi dvěma bloky. Jen web.
+
 ## v1.13.1 — články: dočasný živý graf, zvýraznění a detail článku
 
 - Panel ⚖ Balancování bez běžícího balancování kreslí **dočasný graf** (napětí max/min/průměr, rozpětí, výkon bloku, SoC)

@@ -203,6 +203,25 @@ export default function BmsCells({ locId }) {
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
             <b style={{ fontSize: 19 }}>🔬 Články {fb.block_idx ? `B${fb.block_idx}` : fb.name} (BMS)</b>
             <PowerBadge power={fb.power} current={s.bms_current} />
+            {(() => {                                  // napětí celých bloků vedle sebe (z BMS; jinak součet článků)
+              const packs = data.map((b) => ({ id: b.module_id, lab: b.block_idx ? `B${b.block_idx}` : b.name,
+                v: b.summary?.bms_voltage ?? (b.cells ? b.cells.modules.reduce((x, m) => x + m.mv.reduce((y, z) => y + z, 0), 0) / 1000 : null),
+                n: b.cells?.count, soc: b.summary?.bms_soc })).filter((x) => x.v != null);
+              if (!packs.length) return null;
+              const fv = (v) => Number(v).toLocaleString("cs-CZ", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+              return (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 14, padding: "4px 12px", border: "1px solid var(--border)", borderRadius: 10 }}
+                      title="Napětí celého bloku podle BMS. Bloky s různým počtem článků mají různé napětí i při stejném stavu — proto je pod ním i průměr na článek.">
+                  {packs.map((x) => <span key={x.id} style={{ lineHeight: 1.15, opacity: x.id === fb.module_id ? 1 : 0.8 }}>
+                    <span className="muted" style={{ display: "block", fontSize: 12 }}>Napětí {x.lab}{x.id === fb.module_id ? " (tento)" : ""}</span>
+                    <b style={{ fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{fv(x.v)} V</b>
+                    <span className="muted" style={{ fontSize: 12 }}>{x.n ? ` · ${(x.v / x.n).toLocaleString("cs-CZ", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} V/čl.` : ""}{x.soc != null ? ` · ${Math.round(x.soc)} %` : ""}</span>
+                  </span>)}
+                  {packs.length === 2 && <span style={{ lineHeight: 1.15 }}>
+                    <span className="muted" style={{ display: "block", fontSize: 12 }}>Rozdíl</span>
+                    <b style={{ fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{fv(Math.abs(packs[0].v - packs[1].v))} V</b></span>}
+                </span>);
+            })()}
             <button className="btn" onClick={() => setBal(!bal)} title="Řízené cyklické nabíjení a vybíjení podle rozpětí napětí článků"
                     style={{ fontWeight: 800, padding: "8px 16px", fontSize: 14, borderRadius: 10, background: bal ? "var(--border)" : "#2a78d6", color: bal ? "var(--fg)" : "#fff" }}>⚖ Balancování</button>
             <button className="btn" onClick={() => setFull(null)} style={{ marginLeft: "auto", fontWeight: 800, padding: "8px 16px", fontSize: 14, borderRadius: 10 }}>✕ Zavřít (Esc)</button>
