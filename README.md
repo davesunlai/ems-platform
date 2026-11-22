@@ -1,3 +1,10 @@
+## v1.12.10 — balancování přes EMSBOX: bez e-mailů o krocích, zámek řízení
+
+- Oznámení „Vynucené nabíjení / Vybíjení do sítě“ vzniká na DVOU místech: v kolektoru (přímo čtené moduly) a v příjmu výsledků
+  povelů z EMSBOXu. Potlačení pro zdroj `bms_balance` bylo od 1.12.2 jen v kolektoru → u měniče čteného přes box e-maily chodily dál.
+  Teď je i v `ems/emsbox/ingest_routes.py`.
+- Zámek řízení při testu baterie / balancování platí i pro moduly přes EMSBOX (ruční a cizí povely se odmítnou už při výdeji boxu).
+
 ## v1.12.9 — stav 4220 při nuceném režimu už není „alarm“
 
 - Kolektor bral každé stavové slovo 0x1xxx jako alarm. Stav 4220 (0x107C), který Solis hlásí při nuceném nabíjení/vybíjení,

@@ -144,8 +144,21 @@ async def box_commands(box: dict = Depends(box_auth)) -> dict:
         return {"commands": [], "config_etag": cfg_etag}
     pool = await get_pool()
     fresh = []
+    # v1.12.10: zámek řízení (🧪 test baterie / ⚖ balancování) platí i pro moduly čtené přes EMSBOX —
+    # dřív ho hlídal jen kolektor u přímo čtených modulů, takže ruční povel přes box prošel.
+    try:
+        from ems.battest import db as battest_db, engine as battest_engine
+        locked, allowed = await battest_db.running_modules(), battest_engine.ALLOWED_SOURCES
+    except Exception:
+        locked, allowed = set(), set()
     async with pool.acquire() as conn:
         for c in cmds:
+            if c["module_id"] in locked:
+                src = (c["params"] or {}).get("source") or c.get("username") or "manual"
+                if src not in allowed and c["action"] not in ("force_poke", "read_controls", "read_holding", "read_input"):
+                    await control_db.complete(c["id"], False, {"error": "běží test baterie nebo balancování — povel odmítnut", "source": src})
+                    logger.info("zámek řízení: povel #%s %s od %s odmítnut", c["id"], c["action"], src)
+                    continue
             age_min = await conn.fetchval(
                 "SELECT EXTRACT(EPOCH FROM (now() - created_at)) / 60 FROM control_queue WHERE id = $1", c["id"])
             if age_min is not None and age_min > CMD_MAX_AGE_MIN:
@@ -193,6 +206,8 @@ async def box_command_result(body: CommandResult, box: dict = Depends(box_auth))
         except Exception:
             pass
         try:
+            if (body.params or {}).get("source") == "bms_balance":
+                raise LookupError("kroky balancování se neoznamují")     # ⚖ jen e-mail při spuštění a po skončení (v1.12.10)
             from ems.alerts import db as alerts_db
             from ems.notify import dispatch as notify_dispatch
             from ems.api.db import get_pool
