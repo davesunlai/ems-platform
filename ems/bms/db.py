@@ -33,7 +33,7 @@ async def _test_running() -> bool:
         _test_cache["t"] = now
         try:
             from ems.battest import db as bt_db
-            _test_cache["running"] = bool(await bt_db.running())
+            _test_cache["running"] = bool(await bt_db.running_modules())    # test baterie i ⚖ balancování → ukládat 1× za min
         except Exception:
             _test_cache["running"] = False
     return _test_cache["running"]

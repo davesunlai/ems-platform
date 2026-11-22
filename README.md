@@ -1,3 +1,13 @@
+## v1.13.1 — články: dočasný živý graf, zvýraznění a detail článku
+
+- Panel ⚖ Balancování bez běžícího balancování kreslí **dočasný graf** (napětí max/min/průměr, rozpětí, výkon bloku, SoC)
+  z živých snímků po 5 s, které se čtou, dokud je okno otevřené. Nic se kvůli tomu neukládá; po zavření okna se graf zahodí.
+- **Zvýraznění**: najetí myší na článek v tabulce zvýrazní jeho řádek v seznamu seřazeném podle napětí (seznam se na něj
+  posune) a naopak.
+- **Detail článku** (klik v tabulce nebo v seznamu): průběh napětí článku a průměru bloku — uložená historie
+  (`bms_cells`, 1× za 5 min; při testu a nově i při balancování 1× za min) + živý úsek po 5 s. Období: jen živě / 6 h / 24 h /
+  7 dní / 30 dní. Napětí, odchylka od mediánu, pořadí, teplota, trend, rozsah. Nový endpoint `GET /api/bms/cell/{modul}/{n}`.
+
 ## v1.13.0 — balancování: druhá logika „napětí nejvyššího článku“ (body podle SoC)
 
 - Přepínač logiky před spuštěním: **Rozpětí článků** (dosavadní) / **Napětí nejvyššího článku (body podle SoC)**.

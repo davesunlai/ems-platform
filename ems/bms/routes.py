@@ -78,6 +78,25 @@ async def bms_locality(locality_id: int, _: dict = Depends(read)) -> list[dict]:
     return out
 
 
+@router.get("/cell/{module_id}/{n}")
+async def cell_history(module_id: str, n: int, hours: float = 24, _: dict = Depends(read)) -> dict:
+    """Uložená historie jednoho článku (bms_cells: 1× za 5 min, při testu/balancování 1× za min): napětí, teplota, průměr bloku."""
+    from ems.api.db import get_pool
+    hours = max(0.5, min(float(hours), 24 * 60))
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT time, mv[$2] AS v, temp[$2] AS tc, (SELECT avg(x) FROM unnest(mv) AS x) AS a "
+            "FROM bms_cells WHERE device_id=$1 AND time > now() - make_interval(secs => $3) ORDER BY time",
+            module_id, int(n), hours * 3600)
+    rows = [r for r in rows if r["v"] is not None]
+    stride = max(1, len(rows) // 3000)
+    rows = rows[::stride]
+    return {"module_id": module_id, "cell": n, "hours": hours,
+            "t": [int(r["time"].timestamp() * 1000) for r in rows], "mv": [r["v"] for r in rows],
+            "temp": [r["tc"] for r in rows], "avg": [round(float(r["a"]), 1) if r["a"] is not None else None for r in rows]}
+
+
 @router.post("/live/{module_id}")
 async def bms_live(module_id: str, _: dict = Depends(read)) -> dict:
     """Okno s články je otevřené → EMSBOX čte články à LIVE_S s ještě HOLD_S sekund (UI volá opakovaně). Jen čtení z BMS."""

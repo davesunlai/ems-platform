@@ -114,6 +114,7 @@ export const api = {
   btEnergy: (loc) => request(`/api/battery-test/${loc}/energy`),
   bmsLocality: (loc) => request(`/api/bms/${loc}`),
   bmsLive: (moduleId) => request(`/api/bms/live/${encodeURIComponent(moduleId)}`, { method: "POST" }),
+  bmsCellHistory: (m, n, hours) => request(`/api/bms/cell/${encodeURIComponent(m)}/${n}?hours=${hours}`),
   balDefaults: (m) => request(`/api/bms-balance/defaults/${encodeURIComponent(m)}`),
   balSaveDefaults: (m, params) => request(`/api/bms-balance/defaults/${encodeURIComponent(m)}`, { method: "PUT", body: { params } }),
   balStart: (body) => request("/api/bms-balance/start", { method: "POST", body }),

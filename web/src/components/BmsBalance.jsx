@@ -128,7 +128,8 @@ function BalanceChart({ S, params, live, changes = [] }) {
     for (const i of ix) { const v = S[l.k][i]; if (v == null) { pen = false; continue; } const x = X(S.t[i]), yy = Yp(p, v);
       d += pen ? (l.step ? `H${x.toFixed(1)}V${yy.toFixed(1)}` : `L${x.toFixed(1)} ${yy.toFixed(1)}`) : `M${x.toFixed(1)} ${yy.toFixed(1)}`; pen = true; py = yy; }
     return [d, py]; };
-  const bands = []; { let s = i0; for (let i = i0 + 1; i <= i1 + 1; i++) if (i > i1 || S.phase[i] !== S.phase[s] || S.cycle[i] !== S.cycle[s]) {
+  const hasPh = S.phase.some((x) => x != null);
+  const bands = []; if (hasPh) { let s = i0; for (let i = i0 + 1; i <= i1 + 1; i++) if (i > i1 || S.phase[i] !== S.phase[s] || S.cycle[i] !== S.cycle[s]) {
     bands.push({ ph: S.phase[s], cy: S.cycle[s], x0: X(S.t[s]), x1: X(S.t[Math.min(i, i1)]) }); s = i; } }
   const step = STEPS.find((s) => (b - a) / s <= Math.max(4, plotW / 95)) || STEPS[STEPS.length - 1];
   const ticks = []; for (let t = Math.ceil(a / step) * step; t <= b; t += step) ticks.push(t);
@@ -172,7 +173,7 @@ function BalanceChart({ S, params, live, changes = [] }) {
           </g>
           {(p.marks || []).map(([v, lab]) => v != null && v * 1000 <= p.r[1] &&
             <text key={lab} x={padL + plotW + 6} y={Yp(p, v * 1000) + 4} fontSize={11} fill="var(--muted)">{lab} {cs(v * 1000, 0)}</text>)}
-          {!(p.marks && p.marks.length) && (() => { const ys = p.lines.map((l) => ({ l, y: path(p, l)[1] })).sort((m, q) => m.y - q.y);
+          {!(p.marks && p.marks.length) && (() => { const ys = p.lines.map((l) => { const [d, yy] = path(p, l); return { l, y: yy, d }; }).filter((x) => x.d).sort((m, q) => m.y - q.y);
             for (let i = 1; i < ys.length; i++) if (ys[i].y - ys[i - 1].y < 13) ys[i].y = ys[i - 1].y + 13;
             return ys.map(({ l, y: yy }) => <g key={l.k}><circle cx={padL + plotW + 7} cy={yy} r={4} fill={l.c} /><text x={padL + plotW + 15} y={yy + 4} fontSize={11.5} fill="var(--fg)">{l.label}</text></g>); })()}
         </g>)}
@@ -191,20 +192,20 @@ function BalanceChart({ S, params, live, changes = [] }) {
         </g>}
       </svg>
       {c != null && <CursorBox pos={pos} width={236} height={200}>
-        <b>{clock(S.t[c])}</b> · {(PH[S.phase[c]] || PH.wait).icon} {(PH[S.phase[c]] || PH.wait).name}, cyklus {S.cycle[c]}
+        <b>{clock(S.t[c])}</b>{S.phase[c] != null && <> · {(PH[S.phase[c]] || PH.wait).icon} {(PH[S.phase[c]] || PH.wait).name}, cyklus {S.cycle[c]}</>}
         <div><span style={{ color: HI }}>●</span> max {cs(S.vmax[c] / 1000, 3)} V <span className="muted">(č. {S.nmax[c]})</span></div>
         <div><span style={{ color: LO }}>●</span> min {cs(S.vmin[c] / 1000, 3)} V <span className="muted">(č. {S.nmin[c]})</span></div>
         <div>průměr {cs(S.vavg[c] / 1000, 3)} V · rozpětí <b>{cs(S.delta[c])} mV</b></div>
         {S.ulim?.[c] != null && <div><span style={{ color: "var(--green)" }}>●</span> strop bodu {cs(S.ulim[c] / 1000, 3)} V <span className="muted">(do stropu {cs(S.ulim[c] - S.vmax[c])} mV)</span></div>}
-        <div>povel {cs(S.p_set[c], 1)} kW · změřeno {cs(S.p_bat[c], 1)} kW</div>
+        <div>{S.p_set[c] != null ? `povel ${cs(S.p_set[c], 1)} kW · ` : ""}změřeno {cs(S.p_bat[c], 2)} kW</div>
         <div className="muted">SoC {cs(S.soc[c], 0)} % · od startu {dur((S.t[c] - t0) / 1000)}</div>
         {marks.filter((ch) => Math.abs(ch.ms - S.t[c]) <= nearTol).map((ch, i) =>
           <div key={i} style={{ marginTop: 4, paddingTop: 4, borderTop: "1px solid var(--border)", whiteSpace: "normal", maxWidth: 300 }}>
             <b>✎ {clock(ch.ms)} změna parametrů</b>{ch.by ? ` (${ch.by})` : ""}<br />{changeText(ch)}</div>)}
       </CursorBox>}
       <div className="muted" style={{ fontSize: 11.5, display: "flex", gap: 14, flexWrap: "wrap", marginTop: 2 }}>
-        {Object.entries(PH).map(([k, v]) => <span key={k}><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: v.c, marginRight: 5, verticalAlign: "-1px" }} />{v.icon} {v.name}</span>)}
-        <span>číslo v pruhu = cyklus</span>
+        {hasPh && Object.entries(PH).map(([k, v]) => <span key={k}><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: v.c, marginRight: 5, verticalAlign: "-1px" }} />{v.icon} {v.name}</span>)}
+        {hasPh && <span>číslo v pruhu = cyklus</span>}
         {changes.length > 0 && <span>✎ = změna parametrů ({changes.length}×)</span>}
         <span style={{ marginLeft: "auto" }}>kolečko = zoom · tažení = posun · ← → = krok po vzorku (Shift = po minutě) · dvojklik = celý průběh
           {view ? <> · <a href="#" onClick={(e) => { e.preventDefault(); setView(null); }}>{live ? "▶ sledovat živě" : "zobrazit vše"}</a></> : live ? " · sleduje živě" : ""}</span>
@@ -213,7 +214,8 @@ function BalanceChart({ S, params, live, changes = [] }) {
 }
 
 /** Pravítko 3,1–3,6 V a pod ním všechny články seřazené od nejvyššího; pozice značky = napětí článku. */
-function CellRuler({ cells, params, energy, limit }) {
+function CellRuler({ cells, params, energy, limit, hover, onHover, onPick }) {
+  const wrap = useRef(null);
   const hasE = !!(energy?.in?.length);
   const V0 = 3100, V1 = 3600, ROW = 19, LAB = hasE ? 422 : 172;
   const ratioOf = (n) => { const i = energy.in[n - 1], o = energy.out[n - 1]; return i > 0.5 ? (o / i) * 100 : null; };
@@ -224,8 +226,14 @@ function CellRuler({ cells, params, energy, limit }) {
   const avg = list.reduce((s, c) => s + c.mv, 0) / (list.length || 1);
   const stop = (params?.delta_stop_v || 0) * 1000;
   const marks = []; for (let v = V0; v <= V1; v += 50) marks.push(v);
+  const hovRank = hover && hover.src !== "ruler" ? list.find((x) => x.n === hover.n)?.rank : null;
+  useEffect(() => {                                   // najetí v tabulce → seznam se posune na řádek článku
+    if (hovRank == null || !wrap.current) return;
+    const el = wrap.current, y = hovRank * ROW;
+    if (y < el.scrollTop + 40 || y > el.scrollTop + el.clientHeight - 60) el.scrollTo({ top: Math.max(0, y - el.clientHeight / 2), behavior: "smooth" });
+  }, [hovRank]);
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto", maxHeight: 560, position: "relative" }}>
+    <div ref={wrap} style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto", maxHeight: 560, position: "relative" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 3, background: "var(--panel, var(--bg))", borderBottom: "1px solid var(--border)", padding: "6px 14px 4px 0", display: "flex" }}>
         <div style={{ width: LAB, flex: "none", fontSize: 11.5, paddingLeft: 10 }} className="muted">článek · box/pozice · mV{hasE && <span title="Energie do článku (nabíjení) a z článku (vybíjení) od začátku balancování; poměr = z článku ÷ do článku. Články jsou v sérii, proud je stejný — rozdíly dělá jen napětí článku."> · ▲ do Wh · ▼ z Wh · poměr</span>}</div>
         <div style={{ position: "relative", flex: 1, height: 30 }}>
@@ -246,7 +254,10 @@ function CellRuler({ cells, params, energy, limit }) {
         </div>
         {list.map((c) => { const top = c.rank === 0, bot = c.rank === list.length - 1; const col = c.mv >= avg ? HI : LO;
           return (
-            <div key={c.n} className="bal-row" style={{ position: "absolute", left: 0, right: 0, top: c.rank * ROW + 3, height: ROW, display: "flex", alignItems: "center" }}>
+            <div key={c.n} className="bal-row" title="klik = průběh článku"
+                 onMouseEnter={onHover ? () => onHover({ n: c.n, src: "ruler" }) : undefined} onMouseLeave={onHover ? () => onHover(null) : undefined} onClick={onPick ? () => onPick(c.n) : undefined}
+                 style={{ position: "absolute", left: 0, right: 0, top: c.rank * ROW + 3, height: ROW, display: "flex", alignItems: "center", cursor: onPick ? "pointer" : undefined,
+                          background: hover?.n === c.n ? "color-mix(in srgb, var(--fg) 16%, transparent)" : undefined, boxShadow: hover?.n === c.n ? "inset 3px 0 0 var(--fg)" : undefined }}>
               <div style={{ width: LAB, flex: "none", paddingLeft: 10, fontSize: 12, fontVariantNumeric: "tabular-nums", fontWeight: top || bot ? 800 : 400, whiteSpace: "nowrap" }}>
                 <span style={{ display: "inline-block", width: 40 }}>#{c.n}</span>
                 <span style={{ display: "inline-block", width: 50, fontSize: 12, color: "var(--muted)" }}>{c.mod}/{c.pos}</span>
@@ -335,7 +346,7 @@ function Report({ run }) {
   </div>);
 }
 
-export default function BmsBalance({ block, open, setOpen }) {
+export default function BmsBalance({ block, open, setOpen, hover, onHover, onPick, localHist }) {
   const { has } = useAuth();
   const canCtl = has("control");
   const mid = block.module_id, c = block.cells;
@@ -457,7 +468,17 @@ export default function BmsBalance({ block, open, setOpen }) {
         {running && <Stat label="Od startu" sub={`SoC ${cs(S.soc[S.t.length - 1])} %`}>{dur((Date.now() - new Date(run.started_at).getTime()) / 1000)}</Stat>}
       </div>}
 
-      {(running || S.t.length > 0) && <BalanceChart S={S} params={p} live={running} changes={st.params_log || []} />}
+      {running && <BalanceChart S={S} params={p} live changes={st.params_log || []} />}
+      {!running && (() => {                        // dočasný graf z živých snímků (jen po dobu otevřeného okna; nic se neukládá navíc)
+        const h = localHist || [], L = EMPTY();
+        for (const x of h) { let mx = -Infinity, mn = Infinity, sum = 0, imx = 0, imn = 0;
+          x.mv.forEach((v, i) => { sum += v; if (v > mx) { mx = v; imx = i; } if (v < mn) { mn = v; imn = i; } });
+          L.t.push(x.t); L.vmax.push(mx); L.vmin.push(mn); L.vavg.push(Math.round((sum / x.mv.length) * 10) / 10); L.delta.push(mx - mn); L.nmax.push(imx + 1); L.nmin.push(imn + 1);
+          L.soc.push(x.soc); L.p_bat.push(x.pw != null ? x.pw / 1000 : null); L.p_set.push(null); L.phase.push(null); L.cycle.push(null); L.ulim.push(null); }
+        return (<div style={{ marginTop: 6 }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5 }}>Živý průběh článků <span className="muted" style={{ fontWeight: 400 }}>— dočasný graf {h.length ? `od ${clock(h[0].t, false)}` : ""}, kreslí se jen z dat načtených po dobu otevřeného okna (po 5 s) a po zavření se zahodí</span></div>
+          {h.length >= 2 ? <BalanceChart S={L} params={{ mode: "vmax" }} live /> : <div className="muted" style={{ fontSize: 13, padding: "18px 0" }}>Graf se začne kreslit po druhém snímku (do 10 s).</div>}
+        </div>); })()}
 
       <details open style={{ margin: "10px 0" }}>
         <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Parametry {running ? "(lze měnit za běhu)" : "pro spuštění"}</summary>
@@ -507,8 +528,8 @@ export default function BmsBalance({ block, open, setOpen }) {
       </details>
 
       {c && <><div style={{ fontWeight: 700, fontSize: 13.5, margin: "12px 0 6px" }}>Články seřazené podle napětí <span className="muted" style={{ fontWeight: 400 }}>
-        — <span style={{ color: HI }}>●</span> nad průměrem, <span style={{ color: LO }}>●</span> pod průměrem; svislice = nejvyšší, nejnižší a průměr (čárkovaně); {isV ? "zelená čára = strop bodu, čárkovaná zelená = strop − hystereze" : "zelené pásmo = mez rozpětí od nejnižšího článku"}</span></div>
-        <CellRuler cells={c} params={p} energy={running ? st.cell_e : null} limit={isV ? limit : null} /></>}
+        — <span style={{ color: HI }}>●</span> nad průměrem, <span style={{ color: LO }}>●</span> pod průměrem; najetí = zvýraznění i v tabulce, klik = průběh článku; svislice = nejvyšší, nejnižší a průměr (čárkovaně); {isV ? "zelená čára = strop bodu, čárkovaná zelená = strop − hystereze" : "zelené pásmo = mez rozpětí od nejnižšího článku"}</span></div>
+        <CellRuler cells={c} params={p} energy={running ? st.cell_e : null} limit={isV ? limit : null} hover={hover} onHover={onHover} onPick={onPick} /></>}
 
       {run && !running && run.result && <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Report posledního běhu #{run.id}</summary><Report run={run} /></details>}
       {running && (st.log || []).length > 0 && <details style={{ marginTop: 10 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Záznam kroků ({st.log.length})</summary>

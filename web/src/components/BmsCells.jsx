@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import BmsBalance from "./BmsBalance";
+import BmsCellDetail from "./BmsCellDetail";
 
 // Mapa všech článků bloku z BMS (Pylontech SC0500 po RS485): řádek = modul, buňka = článek.
 // Barva = odchylka od mediánu bloku (modrá níž, oranžová výš); čísla zůstávají v běžné barvě textu.
@@ -54,7 +55,7 @@ function PowerBadge({ power, current }) {
 }
 
 /** Jedna tabulka 11 × 15: mode "mv" = napětí, "temp" = teploty. big = režim celé obrazovky (větší písmo). */
-function CellTable({ c, mode, big, trend }) {
+function CellTable({ c, mode, big, trend, hover, onHover, onPick }) {
   const fs = big ? 15 : 10.5, pad = big ? "4px 7px" : "1px 2px";
   const temps = c.modules.flatMap((m) => m.temp);
   const tMed = temps.length ? median(temps) : 0;
@@ -78,7 +79,11 @@ function CellTable({ c, mode, big, trend }) {
               const bg = mode === "mv" ? fill(mv - c.median, vSpan) : fill(v - tMed, tSpan);
               return (
                 <td key={i} title={`článek ${n} (modul ${m.idx}, pozice ${i + 1}): ${mv} mV, ${mv - c.median >= 0 ? "+" : ""}${Math.round(mv - c.median)} mV od mediánu${m.temp[i] != null ? `, ${(m.temp[i] / 10).toFixed(1)} °C` : ""}${trend && trend.rate[n - 1] != null ? `, trend ${trend.rate[n - 1] > 0 ? "+" : ""}${trend.rate[n - 1].toFixed(2)} mV/min` : ""}`}
+                    onMouseEnter={onHover ? () => onHover({ n, src: "table" }) : undefined} onMouseLeave={onHover ? () => onHover(null) : undefined}
+                    onClick={onPick ? () => onPick(n) : undefined}
                     style={{ padding: pad, textAlign: "right", border: "1px solid var(--panel, #fff)", borderRadius: 3,
+                             cursor: onPick ? "pointer" : undefined, position: "relative",
+                             outline: hover?.n === n ? "2.5px solid var(--fg)" : undefined, outlineOffset: -2, zIndex: hover?.n === n ? 2 : undefined,
                              background: bg, color: bg === "transparent" ? undefined : "#0b0b0b",
                              fontWeight: mode === "mv" && (n === c.nmin || n === c.nmax) ? 700 : 400 }}>
                   {mode === "mv" ? v : (v / 10).toFixed(big ? 1 : 0)}
@@ -102,6 +107,9 @@ export default function BmsCells({ locId }) {
   const [bal, setBal] = useState(false);              // panel ⚖ balancování v celoobrazovkovém zobrazení
   const [now, setNow] = useState(Date.now());
   const [period, setPeriod] = useState({});          // skutečný rozestup mezi posledními dvěma snímky, podle modulu
+  const [hover, setHover] = useState(null);           // {n, src} článek pod myší (tabulka ↔ seřazený seznam se zvýrazňují navzájem)
+  const [sel, setSel] = useState(null);               // číslo článku s otevřeným detailem
+  const histRef = useRef({});                         // modul → živé snímky po dobu otevřeného okna [{t, mv[], soc, pw}]
   const [balRun, setBalRun] = useState({});          // modul → běží ⚖ balancování (čtení po 5 s pak nezávisí na otevřeném okně)
   // Živé sledování: dokud je okno otevřené, hlásíme to serveru (EMSBOX pak čte články po pár sekundách) a dotahujeme po 5 s.
   useEffect(() => {
@@ -112,6 +120,11 @@ export default function BmsCells({ locId }) {
       (r || []).forEach((b) => {
         const t = b.cells ? Date.parse(b.cells.time) : null;
         if (t && seen[b.module_id] && t > seen[b.module_id]) setPeriod((p) => ({ ...p, [b.module_id]: (t - seen[b.module_id]) / 1000 }));
+        if (t && t !== seen[b.module_id]) {            // nový snímek → do živé historie (dočasný graf, detail článku)
+          const h = (histRef.current[b.module_id] ||= []);
+          h.push({ t, mv: b.cells.modules.flatMap((m) => m.mv), soc: b.summary?.bms_soc ?? null, pw: b.power?.w ?? null });
+          if (h.length > 3000) h.splice(0, h.length - 3000);
+        }
         if (t) seen[b.module_id] = t;
         api.bmsLive(b.module_id).catch(() => {});
         api.balActive(b.module_id).then((x) => alive && setBalRun((m) => (!!m[b.module_id] === !!x ? m : { ...m, [b.module_id]: !!x }))).catch(() => {});
@@ -125,10 +138,10 @@ export default function BmsCells({ locId }) {
   }, [locId]);
   useEffect(() => {
     if (!full) return undefined;
-    const onKey = (e) => { if (e.key === "Escape") setFull(null); };
+    const onKey = (e) => { if (e.key !== "Escape") return; if (sel != null) setSel(null); else setFull(null); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [full]);
+  }, [full, sel]);
   if (!data || !data.length) return null;
 
   const liveBar = (b, c) => {
@@ -196,10 +209,10 @@ export default function BmsCells({ locId }) {
           </div>
           <div style={{ marginBottom: 6 }}>{head(c, s)}</div>
           {liveBar(fb, c)}
-          <BmsBalance key={fb.module_id} block={fb} open={bal} setOpen={setBal} />
+          <BmsBalance key={fb.module_id} block={fb} open={bal} setOpen={setBal} hover={hover} onHover={setHover} onPick={setSel} localHist={histRef.current[fb.module_id]} />
           <h3 style={{ fontSize: 15, margin: "10px 0 4px" }}>Napětí článků (mV)</h3>
-          <CellTable c={c} mode="mv" big trend={fb.trend} />
-          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec V = napětí celého modulu." /></div>
+          <CellTable c={c} mode="mv" big trend={fb.trend} hover={hover} onHover={setHover} onPick={setSel} />
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec V = napětí celého modulu. Najetím se článek zvýrazní i v seřazeném seznamu, kliknutím se otevře jeho průběh." /></div>
           <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
             {fb.trend
               ? <>Šipka u článku = změna jeho napětí za posledních {fb.trend.samples} snímků ({fb.trend.window_s < 120 ? `${fb.trend.window_s} s` : `${Math.round(fb.trend.window_s / 60)} min`}):{" "}
@@ -208,7 +221,8 @@ export default function BmsCells({ locId }) {
               : "Šipky trendu článků se objeví po několika snímcích (do ~20 s od otevření okna)."}
           </div>
           <h3 style={{ fontSize: 15, margin: "18px 0 4px" }}>Teploty u článků (°C)</h3>
-          <CellTable c={c} mode="temp" big />
+          <CellTable c={c} mode="temp" big hover={hover} onHover={setHover} onPick={setSel} />
+          {sel != null && <BmsCellDetail block={fb} n={sel} hist={histRef.current[fb.module_id]} onClose={() => setSel(null)} />}
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${(median(c.modules.flatMap((m) => m.temp)) / 10).toFixed(1)} °C`} what=". Teploty se živě nečtou, obnovují se 1× za minutu. Poslední sloupec = teplota modulu." /></div>
         </div>); })()}
     </div>);
