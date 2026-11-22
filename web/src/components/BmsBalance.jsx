@@ -22,11 +22,30 @@ const FIELDS = [
   ["p_idle_kw", "Výkon při čekání", "kW", 0.05, "Při čekání měnič drží nucené nabíjení tímto malým výkonem, aby baterie nekryla dům."],
   ["max_hours", "Nejdelší běh", "h", 1, "Pojistka: po této době balancování skončí."],
 ];
+// Logika 2 „vmax“: napětí nejvyššího článku, body podle SoC.
+const FIELDS_V = [
+  ["p_in_kw", "Vstupní výkon", "kW", 0.5, "Výkon, kterým začíná nabíjení každého bodu. Hlavní jistič se hlídá zvlášť."],
+  ["chg_ratio", "Poměr následujícího nabíjecího výkonu", "×", 0.05, "Když se nejvyšší článek přiblíží ke stropu bodu (strop − hystereze), výkon se sníží na tento poměr. Opakuje se až k minimu bodu."],
+  ["dis_p_ratio", "Poměr vybíjecího výkonu", "×", 0.05, "Vybíjecí výkon = tento poměr × poslední nabíjecí výkon. 0 = nevybíjet."],
+  ["settle_s", "Prodleva mezi sníženími", "s", 5, "Po snížení výkonu se čeká tuto dobu, než smí přijít další snížení (měnič a články reagují se zpožděním)."],
+  ["cell_vtop", "Strop článku (pojistka)", "V", 0.01, "Nabíjení skončí vždy, když nejvyšší článek dosáhne této hodnoty (nejvýš 3,60 V)."],
+  ["max_hours", "Nejdelší běh", "h", 1, "Pojistka: po této době balancování skončí."],
+];
+const POINT_COLS = [
+  ["soc", "do SoC %", 1, "Bod platí, dokud SoC nedosáhne této hodnoty (a neodjede se minimální počet cyklů)."],
+  ["u_max", "strop článku V", 0.01, "Nejvyšší napětí nejvyššího článku v tomto bodě."],
+  ["cycles", "min. cyklů", 1, "Nejmenší počet cyklů v bodě. Na další bod se jde, až je odjeto tolik cyklů A SoC dosáhlo hodnoty bodu."],
+  ["hyst", "hystereze V", 0.005, "Výkon se začne snižovat při (strop − hystereze). Znaménko minus se ignoruje."],
+  ["dis_t_ratio", "poměr doby vybíjení", 0.05, "Doba vybíjení = tento poměr × doba posledního schodu nabíjení."],
+  ["p_min_kw", "min. výkon kW", 0.1, "Pod tuto hodnotu se nabíjecí výkon v bodě nesnižuje."],
+];
+const MODES = { delta: "Rozpětí článků (max − min)", vmax: "Napětí nejvyššího článku (body podle SoC)" };
+
 const cs = (v, d = 0) => (v == null || Number.isNaN(Number(v)) ? "—" : Number(v).toLocaleString("cs-CZ", { minimumFractionDigits: d, maximumFractionDigits: d }));
 const dur = (s) => { if (s == null) return "—"; s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
   return h ? `${h} h ${String(m).padStart(2, "0")} min` : m ? `${m} min ${String(x).padStart(2, "0")} s` : `${x} s`; };
 const clock = (ms, sec = true) => new Date(ms).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit", ...(sec ? { second: "2-digit" } : {}) });
-const EMPTY = () => ({ t: [], phase: [], cycle: [], p_set: [], p_bat: [], vmax: [], vmin: [], vavg: [], delta: [], nmax: [], nmin: [], soc: [] });
+const EMPTY = () => ({ t: [], phase: [], cycle: [], p_set: [], p_bat: [], vmax: [], vmin: [], vavg: [], delta: [], nmax: [], nmin: [], soc: [], ulim: [] });
 const append = (a, b) => { const o = {}; for (const k of Object.keys(EMPTY())) o[k] = [...(a[k] || []), ...(b[k] || [])]; return o; };
 const STEPS = [5e3, 1e4, 3e4, 6e4, 12e4, 3e5, 6e5, 9e5, 18e5, 36e5, 72e5, 144e5];
 
@@ -56,7 +75,7 @@ function BalanceChart({ S, params, live, changes = [] }) {
   const drag = useRef(null);
   const t0 = n ? S.t[0] : 0, t1 = n ? S.t[n - 1] : 1;
   const a = view ? view[0] : t0, b = view ? view[1] : Math.max(t1, t0 + 6e4);
-  const padL = 58, padR = 70, plotW = Math.max(100, W - padL - padR);
+  const padL = 58, padR = 88, plotW = Math.max(100, W - padL - padR);
   const X = (t) => padL + ((t - a) / (b - a)) * plotW;
   const tAt = (px) => a + ((px - padL) / plotW) * (b - a);
   const idxAt = useCallback((t) => { let lo = 0, hi = n - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (S.t[m] < t) lo = m + 1; else hi = m; }
@@ -88,12 +107,14 @@ function BalanceChart({ S, params, live, changes = [] }) {
     for (const i of ix) for (const k of keys) { const v = S[k][i]; if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; } }
     if (!Number.isFinite(lo)) { lo = 0; hi = 1; } if (floor0) lo = Math.min(0, lo);
     const p = Math.max((hi - lo) * 0.12, pad); return [lo - (floor0 && lo === 0 ? 0 : p), hi + p]; };
+  const hasLim = (S.ulim || []).some((v) => v != null);       // logika „vmax“: strop bodu jako schodová čára místo mezí rozpětí
   const panels = [
-    { key: "v", title: "Napětí článků (V)", h: 150, r: range(["vmax", "vmin"], 4), f: (v) => cs(v / 1000, 3),
-      lines: [{ k: "vmax", c: HI, label: "max" }, { k: "vmin", c: LO, label: "min" }, { k: "vavg", c: "var(--fg)", label: "průměr", dash: "5 4" }] },
+    { key: "v", title: "Napětí článků (V)", h: 150, r: range(hasLim ? ["vmax", "vmin", "ulim"] : ["vmax", "vmin"], 4), f: (v) => cs(v / 1000, 3),
+      lines: [{ k: "vmax", c: HI, label: "max" }, { k: "vmin", c: LO, label: "min" }, { k: "vavg", c: "var(--fg)", label: "průměr", dash: "5 4" },
+              ...(hasLim ? [{ k: "ulim", c: "var(--green)", label: "strop bodu", step: true, dash: "7 3" }] : [])] },
     { key: "d", title: "Rozpětí max − min (mV)", h: 105, r: [0, Math.max(range(["delta"], 2, true)[1], (params?.delta_stop_v || 0) * 1000 * 1.15)], f: (v) => cs(v, 0),
       lines: [{ k: "delta", c: "var(--fg)", label: "rozpětí" }],
-      marks: [[params?.delta_stop_v, "stop", HI], [params?.delta_final_v, "finál", "var(--green)"], [params?.delta_resume_v, "návrat", LO]] },
+      marks: hasLim ? [] : [[params?.delta_stop_v, "stop", HI], [params?.delta_final_v, "finál", "var(--green)"], [params?.delta_resume_v, "návrat", LO]] },
     { key: "p", title: "Výkon baterie (kW, + nabíjení)", h: 105, r: range(["p_set", "p_bat"], 0.3, true), f: (v) => cs(v, 1),
       lines: [{ k: "p_set", c: "var(--fg)", label: "povel", step: true }, { k: "p_bat", c: "var(--green)", label: "změřeno" }] },
     { key: "s", title: "SoC podle BMS (%)", h: 80, r: range(["soc"], 1.5), f: (v) => cs(v, 0),
@@ -151,7 +172,7 @@ function BalanceChart({ S, params, live, changes = [] }) {
           </g>
           {(p.marks || []).map(([v, lab]) => v != null && v * 1000 <= p.r[1] &&
             <text key={lab} x={padL + plotW + 6} y={Yp(p, v * 1000) + 4} fontSize={11} fill="var(--muted)">{lab} {cs(v * 1000, 0)}</text>)}
-          {!p.marks && (() => { const ys = p.lines.map((l) => ({ l, y: path(p, l)[1] })).sort((m, q) => m.y - q.y);
+          {!(p.marks && p.marks.length) && (() => { const ys = p.lines.map((l) => ({ l, y: path(p, l)[1] })).sort((m, q) => m.y - q.y);
             for (let i = 1; i < ys.length; i++) if (ys[i].y - ys[i - 1].y < 13) ys[i].y = ys[i - 1].y + 13;
             return ys.map(({ l, y: yy }) => <g key={l.k}><circle cx={padL + plotW + 7} cy={yy} r={4} fill={l.c} /><text x={padL + plotW + 15} y={yy + 4} fontSize={11.5} fill="var(--fg)">{l.label}</text></g>); })()}
         </g>)}
@@ -174,6 +195,7 @@ function BalanceChart({ S, params, live, changes = [] }) {
         <div><span style={{ color: HI }}>●</span> max {cs(S.vmax[c] / 1000, 3)} V <span className="muted">(č. {S.nmax[c]})</span></div>
         <div><span style={{ color: LO }}>●</span> min {cs(S.vmin[c] / 1000, 3)} V <span className="muted">(č. {S.nmin[c]})</span></div>
         <div>průměr {cs(S.vavg[c] / 1000, 3)} V · rozpětí <b>{cs(S.delta[c])} mV</b></div>
+        {S.ulim?.[c] != null && <div><span style={{ color: "var(--green)" }}>●</span> strop bodu {cs(S.ulim[c] / 1000, 3)} V <span className="muted">(do stropu {cs(S.ulim[c] - S.vmax[c])} mV)</span></div>}
         <div>povel {cs(S.p_set[c], 1)} kW · změřeno {cs(S.p_bat[c], 1)} kW</div>
         <div className="muted">SoC {cs(S.soc[c], 0)} % · od startu {dur((S.t[c] - t0) / 1000)}</div>
         {marks.filter((ch) => Math.abs(ch.ms - S.t[c]) <= nearTol).map((ch, i) =>
@@ -191,7 +213,7 @@ function BalanceChart({ S, params, live, changes = [] }) {
 }
 
 /** Pravítko 3,1–3,6 V a pod ním všechny články seřazené od nejvyššího; pozice značky = napětí článku. */
-function CellRuler({ cells, params, energy }) {
+function CellRuler({ cells, params, energy, limit }) {
   const hasE = !!(energy?.in?.length);
   const V0 = 3100, V1 = 3600, ROW = 19, LAB = hasE ? 422 : 172;
   const ratioOf = (n) => { const i = energy.in[n - 1], o = energy.out[n - 1]; return i > 0.5 ? (o / i) * 100 : null; };
@@ -214,7 +236,10 @@ function CellRuler({ cells, params, energy }) {
       </div>
       <div style={{ position: "relative", height: list.length * ROW + 6, marginRight: 14 }}>
         <div style={{ position: "absolute", left: LAB, right: 0, top: 0, bottom: 0, pointerEvents: "none" }}>
-          {stop > 0 && <div className="bal-move" style={{ position: "absolute", top: 0, bottom: 0, left: pct(cells.min), width: `${(stop / (V1 - V0)) * 100}%`, background: "var(--green)", opacity: 0.09 }}
+          {limit && [[limit.ulim, "solid"], [limit.thr, "dashed"]].map(([v, st2]) =>
+            <div key={st2} className="bal-move" title={st2 === "solid" ? "strop bodu" : "strop − hystereze (od této hodnoty se snižuje výkon)"}
+                 style={{ position: "absolute", top: 0, bottom: 0, left: pct(v), width: 0, borderLeft: `2px ${st2} var(--green)` }} />)}
+          {!limit && stop > 0 && <div className="bal-move" style={{ position: "absolute", top: 0, bottom: 0, left: pct(cells.min), width: `${(stop / (V1 - V0)) * 100}%`, background: "var(--green)", opacity: 0.09 }}
                             title="Pásmo meze rozpětí od nejnižšího článku" />}
           {[[cells.max, HI], [cells.min, LO], [avg, "var(--fg)"]].map(([v, col], i) =>
             <div key={i} className="bal-move" style={{ position: "absolute", top: 0, bottom: 0, left: pct(v), width: 0, borderLeft: `1.5px ${i === 2 ? "dashed" : "solid"} ${col}`, opacity: 0.55 }} />)}
@@ -271,6 +296,7 @@ function CellEnergy({ ce }) {
 
 function Report({ run }) {
   const r = run.result || {}, cyc = run.state?.cycles || [], p = run.params || {};
+  const isV = p.mode === "vmax";
   return (<div style={{ fontSize: 13 }}>
     <div style={{ display: "flex", gap: 22, flexWrap: "wrap", margin: "8px 0 10px" }}>
       <Stat label="Výsledek" color={run.status === "done" ? "var(--green)" : run.status === "aborted" ? "var(--red)" : undefined}>
@@ -285,11 +311,20 @@ function Report({ run }) {
     {r.reason && <div style={{ marginBottom: 8 }}><b>Důvod konce:</b> {r.reason}</div>}
     <div className="muted" style={{ marginBottom: 4 }}>Parametry {run.state?.params_log?.length ? `(na konci; během běhu změněny ${run.state.params_log.length}×)` : ""}</div>
     <div style={{ display: "flex", gap: "4px 18px", flexWrap: "wrap", marginBottom: 10 }}>
-      {FIELDS.map(([k, lab, u]) => <span key={k}>{lab}: <b>{cs(p[k], u === "V" ? 3 : 2)} {u}</b></span>)}
+      <span>Logika: <b>{MODES[p.mode] || MODES.delta}</b></span>
+      {(isV ? FIELDS_V : FIELDS).map(([k, lab, u]) => <span key={k}>{lab}: <b>{cs(p[k], u === "V" ? 3 : 2)} {u}</b></span>)}
     </div>
+    {isV && <div style={{ marginBottom: 10 }}>{(p.points || []).map((pt, i) => <div key={i}>Bod {i + 1}: do <b>{cs(pt.soc)} %</b> SoC · strop <b>{cs(pt.u_max, 3)} V</b> · min. {pt.cycles} cyklů · hystereze {cs(pt.hyst, 3)} V · doba vybíjení × {cs(pt.dis_t_ratio, 2)} · min. výkon {cs(pt.p_min_kw, 2)} kW</div>)}</div>}
     {(run.state?.params_log || []).map((c, i) => <div key={i} className="muted">✎ {clock(new Date(c.t).getTime())} {c.by}: {Object.entries(c.changed).map(([k, [o, nv]]) =>
-      `${(FIELDS.find((f) => f[0] === k) || [k, k])[1]} ${cs(o, 3)} → ${cs(nv, 3)}`).join(", ")}</div>)}
-    {cyc.length > 0 && <div style={{ overflow: "auto", marginTop: 8 }}><table className="tbl" style={{ fontSize: 12.5, borderCollapse: "collapse", minWidth: 640 }}>
+      (k === "points" ? "body upraveny" : `${([...FIELDS, ...FIELDS_V].find((f) => f[0] === k) || [k, k])[1]} ${cs(o, 3)} → ${cs(nv, 3)}`)).join(", ")}</div>)}
+    {isV && cyc.length > 0 && <div style={{ overflow: "auto", marginTop: 8 }}><table className="tbl" style={{ fontSize: 12.5, borderCollapse: "collapse", minWidth: 720 }}>
+      <thead><tr>{["cyklus", "bod", "schody výkonu kW", "doba nabíjení", "poslední schod", "článek při stopu", "strop bodu", "SoC %", "vybíjení kW", "doba vybíjení"].map((h) =>
+        <th key={h} style={{ textAlign: "right", padding: "3px 10px", borderBottom: "1px solid var(--border)", fontWeight: 600 }} className="muted">{h}</th>)}</tr></thead>
+      <tbody>{cyc.map((c) => <tr key={c.n}>{[c.n, c.pt, (c.steps || [c.p_kw]).map((x) => cs(x, 2)).join(" → "), dur(c.t_charge_s), dur(c.t_last_s), `${cs(c.vmax_mv)} mV`, `${cs(c.u_max_mv)} mV`,
+        cs(c.soc), cs(c.p_dis_kw, 2), dur(c.t_discharge_s)].map((v, i) =>
+        <td key={i} style={{ textAlign: "right", padding: "3px 10px", borderBottom: "1px solid var(--border)", fontVariantNumeric: "tabular-nums" }}>{v}</td>)}</tr>)}</tbody>
+    </table></div>}
+    {!isV && cyc.length > 0 && <div style={{ overflow: "auto", marginTop: 8 }}><table className="tbl" style={{ fontSize: 12.5, borderCollapse: "collapse", minWidth: 640 }}>
       <thead><tr>{["cyklus", "nabíjení kW", "doba nabíjení", "zastaveno", "rozpětí při stopu", "doba návratu", "vybíjení kW", "doba vybíjení", "největší rozpětí", "další nabíjení kW"].map((h) =>
         <th key={h} style={{ textAlign: "right", padding: "3px 10px", borderBottom: "1px solid var(--border)", fontWeight: 600 }} className="muted">{h}</th>)}</tr></thead>
       <tbody>{cyc.map((c) => <tr key={c.n}>{[c.n, cs(c.p_kw, 2), dur(c.t_charge_s), c.stop_by, `${cs(c.delta_stop_mv)} mV`,
@@ -306,7 +341,9 @@ export default function BmsBalance({ block, open, setOpen }) {
   const mid = block.module_id, c = block.cells;
   const [run, setRun] = useState(null);
   const [S, setS] = useState(EMPTY);
-  const [form, setForm] = useState(null);
+  const [form, setForm] = useState(null);                // parametry logiky „rozpětí“
+  const [formV, setFormV] = useState(null);              // parametry logiky „napětí nejvyššího článku“
+  const [mode, setMode] = useState("delta");
   const [dirty, setDirty] = useState(false);
   const [hist, setHist] = useState([]);
   const [past, setPast] = useState(null);               // otevřený záznam z historie {run, S}
@@ -315,7 +352,7 @@ export default function BmsBalance({ block, open, setOpen }) {
   dirtyRef.current = dirty;
 
   const loadHist = useCallback(() => api.balHistory(mid).then(setHist).catch(() => {}), [mid]);
-  useEffect(() => { api.balDefaults(mid).then((d) => setForm((f) => f || d.params)).catch(() => {}); loadHist(); }, [mid, loadHist]);
+  useEffect(() => { api.balDefaults(mid).then((d) => { setForm((f) => f || d.params); setFormV((f) => f || d.params_vmax); }).catch(() => {}); loadHist(); }, [mid, loadHist]);
   useEffect(() => {
     let dead = false;
     const tick = async () => {
@@ -328,7 +365,8 @@ export default function BmsBalance({ block, open, setOpen }) {
         if (dead) return;
         if (d.samples.t.length) { last.current = d.samples.t[d.samples.t.length - 1]; setS((s) => append(s, d.samples)); }
         setRun(d.run);
-        if (d.run.status === "running") { setOpen(true); if (!dirtyRef.current) setForm(d.run.params); }
+        if (d.run.status === "running") { setOpen(true); const m = d.run.params.mode === "vmax" ? "vmax" : "delta"; setMode(m);
+          if (!dirtyRef.current) (m === "vmax" ? setFormV : setForm)(d.run.params); }
         else if (act == null) { rid.current = null; loadHist(); }
       } catch { /* další pokus za 5 s */ }
     };
@@ -338,17 +376,28 @@ export default function BmsBalance({ block, open, setOpen }) {
   }, [mid, setOpen, loadHist]);
 
   const running = run?.status === "running";
-  const num = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k, v === "" ? null : Number(String(v).replace(",", "."))]));
+  const n1 = (v) => (v === "" || v == null ? null : Number(String(v).replace(",", ".")));
+  const num = (o) => ({ ...Object.fromEntries(Object.entries(o || {}).filter(([k]) => k !== "mode" && k !== "points").map(([k, v]) => [k, n1(v)])), mode: "delta" });
+  const numV = (o) => ({ ...Object.fromEntries(Object.entries(o || {}).filter(([k]) => k !== "mode" && k !== "points").map(([k, v]) => [k, n1(v)])), mode: "vmax",
+    points: (o?.points || []).map((pt) => Object.fromEntries(Object.entries(pt).map(([k, v]) => [k, n1(v)]))) });
+  const curForm = mode === "vmax" ? formV : form;
+  const cur = mode === "vmax" ? numV(formV) : num(form);
+  const setPoint = (i, k, v) => { setFormV({ ...formV, points: formV.points.map((pt, j) => (j === i ? { ...pt, [k]: v } : pt)) }); setDirty(true); };
   const act = async (fn, ok) => { setMsg(""); try { await fn(); if (ok) setMsg(ok); } catch (e) { setMsg(`⚠ ${e.message}`); } };
-  const start = () => { if (!window.confirm(`Spustit balancování ${block.block_idx ? `B${block.block_idx}` : block.name}?\n\nTERA převezme řízení baterie: nabíjení ze sítě ${cs(form.p_max_kw, 1)} kW v prvním cyklu (každý další × ${cs(form.chg_ratio, 2)}), při čekání baterie nekryje dům, ve vybíjecím kroku jde energie do domu / sítě. Plánovač a pravidla jsou po dobu běhu pozastavené. Měnič řídí všechny zapnuté bloky zároveň.`)) return;
-    act(async () => { const r = await api.balStart({ bms_module_id: mid, params: num(form), confirmed: true }); rid.current = r.id; last.current = 0; setS(EMPTY()); setRun(r); setDirty(false); setPast(null); }); };
+  const start = () => { if (!window.confirm(`Spustit balancování ${block.block_idx ? `B${block.block_idx}` : block.name}?\n\nTERA převezme řízení baterie: logika „${MODES[mode]}“, nabíjení ze sítě až ${cs(mode === "vmax" ? cur.p_in_kw : cur.p_max_kw, 1)} kW, baterie po dobu běhu nekryje dům, ve vybíjecím kroku jde energie do domu / sítě. Plánovač a pravidla jsou po dobu běhu pozastavené. Měnič řídí všechny zapnuté bloky zároveň.`)) return;
+    act(async () => { const r = await api.balStart({ bms_module_id: mid, params: cur, confirmed: true }); rid.current = r.id; last.current = 0; setS(EMPTY()); setRun(r); setDirty(false); setPast(null); }); };
   const stop = () => window.confirm("Zastavit balancování a vrátit měnič do běžného režimu?") && act(async () => setRun(await api.balStop(run.id)), "Zastaveno, měnič se vrací do běžného režimu.");
-  const apply = () => act(async () => { setRun(await api.balParams(run.id, num(form))); setDirty(false); }, "Parametry změněny, platí od dalšího kroku.");
-  const fix = () => act(async () => { await api.balSaveDefaults(mid, num(form)); }, "📌 Zafixováno jako výchozí pro příští balancování.");
+  const apply = () => act(async () => { setRun(await api.balParams(run.id, cur)); setDirty(false); }, "Parametry změněny, platí od dalšího kroku.");
+  const fix = () => act(async () => { await api.balSaveDefaults(mid, cur); }, "📌 Zafixováno jako výchozí pro příští balancování.");
   const openPast = (id) => act(async () => { const d = await api.balRun(id, null); setPast({ run: d.run, S: d.samples }); });
 
   if (!open) return null;
-  const p = running ? run.params : num(form || {});
+  const st0 = run?.status === "running" ? run.state : null;
+  const p = running ? run.params : cur;
+  const isV = p.mode === "vmax";
+  const ptI = isV ? Math.min(Number(st0?.pt ?? 0), (p.points || []).length - 1) : 0;
+  const pt = isV ? (p.points || [])[ptI] : null;
+  const limit = pt && pt.u_max != null ? { ulim: pt.u_max * 1000, thr: (pt.u_max - Math.abs(pt.hyst || 0)) * 1000 } : null;
   const st = run?.state || {}, ph = PH[run?.phase] || PH.wait;
   const lastCyc = (st.cycles || []).filter((x) => x.t_return_s != null).slice(-1)[0];
   const curCyc = (st.cycles || []).slice(-1)[0];
@@ -368,7 +417,7 @@ export default function BmsBalance({ block, open, setOpen }) {
           ? <span className="bal-badge" style={{ background: ph.c, color: "#fff", fontWeight: 800, borderRadius: 999, padding: "4px 13px", fontSize: 13.5 }}>{ph.icon} {ph.name} · cyklus {run.cycle} · {dur(phaseAge)}{run.phase === "discharge" && curCyc?.t_discharge_plan_s > 0 ? ` z ${dur(curCyc.t_discharge_plan_s)}` : ""}</span>
           : <span className="muted" style={{ fontSize: 13 }}>{run && run.status !== "running" ? `poslední běh #${run.id}: ${run.result?.reason || run.status}` : "neběží"}</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          {canCtl && !running && <button className="btn primary" onClick={start} disabled={!form || !c} style={{ fontWeight: 800, padding: "8px 18px", fontSize: 14, borderRadius: 10 }}>▶ Spustit balancování</button>}
+          {canCtl && !running && <button className="btn primary" onClick={start} disabled={!curForm || !c} style={{ fontWeight: 800, padding: "8px 18px", fontSize: 14, borderRadius: 10 }}>▶ Spustit balancování</button>}
           {canCtl && running && <button className="btn danger" onClick={stop} style={{ fontWeight: 800, padding: "8px 18px", fontSize: 14, borderRadius: 10 }}>■ Zastavit</button>}
           {!running && <button className="btn" onClick={() => setOpen(false)}>skrýt</button>}
         </span>
@@ -376,7 +425,18 @@ export default function BmsBalance({ block, open, setOpen }) {
       {msg && <div style={{ fontSize: 13, margin: "6px 0", color: msg.startsWith("⚠") ? "var(--red)" : "var(--green)" }}>{msg}</div>}
 
       {c && <div style={{ display: "flex", gap: 22, flexWrap: "wrap", alignItems: "flex-end", margin: "12px 0 6px" }}>
-        <div style={{ minWidth: 250, flex: "1 1 250px", maxWidth: 420 }}>
+        {isV && limit && <div style={{ minWidth: 250, flex: "1 1 250px", maxWidth: 420 }}>
+          <div className="muted" style={{ fontSize: 11.5 }}>Nejvyšší článek vůči stropu bodu {running ? `${ptI + 1} z ${p.points.length}` : "1"} ({cs(limit.ulim / 1000, 3)} V{running ? `, cíl ${cs(pt.soc)} % SoC, cyklus ${Number(st.pt_cycles || 0) + 1}${pt.cycles ? ` z min. ${pt.cycles}` : ""}` : ""})</div>
+          <div style={{ fontSize: 30, fontWeight: 800, color: c.max >= limit.thr ? HI : "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1.15 }}>{cs(c.max / 1000, 3)} V
+            <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · do stropu {cs(limit.ulim - c.max)} mV</span></div>
+          <div style={{ position: "relative", height: 12, borderRadius: 6, background: "var(--border)", overflow: "hidden", marginTop: 4 }}>
+            <div className={`bal-move${running && run.phase === "charge" ? " bal-flow" : ""}`} style={{ position: "absolute", inset: 0, borderRadius: 6,
+                 width: `${Math.max(0, Math.min(100, ((c.max - (limit.ulim - 60)) / 75) * 100))}%`, backgroundColor: c.max >= limit.thr ? HI : "var(--green)" }} />
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: "80%", width: 2, background: "var(--fg)" }} title="strop bodu" />
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: `${((60 - (limit.ulim - limit.thr)) / 75) * 100}%`, width: 2, background: "var(--green)" }} title="strop − hystereze: odtud se snižuje výkon" />
+          </div>
+        </div>}
+        {!isV && <div style={{ minWidth: 250, flex: "1 1 250px", maxWidth: 420 }}>
           <div className="muted" style={{ fontSize: 11.5 }}>Rozpětí článků max − min (mez {cs(stopMv)} mV)</div>
           <div style={{ fontSize: 30, fontWeight: 800, color: over ? HI : "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1.15 }}>{cs(c.delta)} mV</div>
           <div style={{ position: "relative", height: 12, borderRadius: 6, background: "var(--border)", overflow: "hidden", marginTop: 4 }}>
@@ -384,14 +444,16 @@ export default function BmsBalance({ block, open, setOpen }) {
             <div style={{ position: "absolute", top: 0, bottom: 0, left: "80%", width: 2, background: "var(--fg)" }} title="mez zastavení nabíjení" />
             {p.delta_final_v != null && stopMv > 0 && <div style={{ position: "absolute", top: 0, bottom: 0, left: `${((p.delta_final_v * 1000) / stopMv) * 80}%`, width: 2, background: "var(--green)" }} title="finální rozpětí" />}
           </div>
-        </div>
+        </div>}
+        {isV && <Stat label="Rozpětí článků">{cs(c.delta)} mV</Stat>}
         <Stat label="Nejvyšší článek" sub={`č. ${c.nmax} · box ${Math.ceil(c.nmax / c.per_module)}/${((c.nmax - 1) % c.per_module) + 1}`} color={HI}>{cs(c.max / 1000, 3)} V</Stat>
         <Stat label="Nejnižší článek" sub={`č. ${c.nmin} · box ${Math.ceil(c.nmin / c.per_module)}/${((c.nmin - 1) % c.per_module) + 1}`} color={LO}>{cs(c.min / 1000, 3)} V</Stat>
         <Stat label="Průměr článků">{cs(c.modules.reduce((s, m) => s + m.avg * m.mv.length, 0) / c.count / 1000, 3)} V</Stat>
-        {running && <Stat label="Výkon cyklu" sub={`povel teď ${cs(S.p_set[S.t.length - 1], 1)} kW`}>{cs(st.p_kw, 2)} kW</Stat>}
+        {running && <Stat label={isV ? "Nabíjecí výkon" : "Výkon cyklu"} sub={`povel teď ${cs(S.p_set[S.t.length - 1], 1)} kW`}>{cs(st.p_kw, 2)} kW</Stat>}
         {running && run.phase === "discharge" && curCyc?.t_discharge_plan_s > 0 &&
-          <Stat label="Vybíjení — zbývá" color={HI} sub={`${cs(curCyc.p_dis_kw, 2)} kW · celkem ${dur(curCyc.t_discharge_plan_s)} (${cs(p.dis_t_ratio, 2)} × ${dur(curCyc.t_charge_s)})`}>{dur(Math.max(0, curCyc.t_discharge_plan_s - phaseAge))}</Stat>}
-        {running && <Stat label="Doba návratu (posl.)" sub={`další nabíjení ${cs((st.p_kw || 0) * (p.chg_ratio ?? 0.5), 2)} kW`}>{lastCyc ? dur(lastCyc.t_return_s) : "—"}</Stat>}
+          <Stat label="Vybíjení — zbývá" color={HI} sub={`${cs(curCyc.p_dis_kw, 2)} kW · celkem ${dur(curCyc.t_discharge_plan_s)} (${cs(isV ? pt?.dis_t_ratio : p.dis_t_ratio, 2)} × ${dur(isV ? curCyc.t_last_s : curCyc.t_charge_s)})`}>{dur(Math.max(0, curCyc.t_discharge_plan_s - phaseAge))}</Stat>}
+        {running && !isV && <Stat label="Doba návratu (posl.)" sub={`další nabíjení ${cs((st.p_kw || 0) * (p.chg_ratio ?? 0.5), 2)} kW`}>{lastCyc ? dur(lastCyc.t_return_s) : "—"}</Stat>}
+        {running && isV && pt && <Stat label="Další schod výkonu" sub={`minimum bodu ${cs(pt.p_min_kw, 2)} kW`}>{Number(st.p_kw) <= pt.p_min_kw + 1e-6 ? "na minimu" : `${cs(Math.max(pt.p_min_kw, (st.p_kw || 0) * p.chg_ratio), 2)} kW`}</Stat>}
         {running && <Stat label="Od startu" sub={`SoC ${cs(S.soc[S.t.length - 1])} %`}>{dur((Date.now() - new Date(run.started_at).getTime()) / 1000)}</Stat>}
       </div>}
 
@@ -399,7 +461,36 @@ export default function BmsBalance({ block, open, setOpen }) {
 
       <details open style={{ margin: "10px 0" }}>
         <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Parametry {running ? "(lze měnit za běhu)" : "pro spuštění"}</summary>
-        {form && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(215px, 1fr))", gap: "8px 16px", marginTop: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "8px 0 2px" }}>
+          <span className="muted" style={{ fontSize: 12.5 }}>Logika balancování:</span>
+          {Object.entries(MODES).map(([k, lab]) => <button key={k} type="button" className="btn" disabled={running || !canCtl} onClick={() => { setMode(k); setDirty(false); }}
+            title={running ? "Logiku lze změnit jen před spuštěním" : ""}
+            style={{ fontWeight: mode === k ? 800 : 400, background: mode === k ? "#2a78d6" : undefined, color: mode === k ? "#fff" : undefined, borderRadius: 999, padding: "5px 14px" }}>{mode === k ? "● " : "○ "}{lab}</button>)}
+        </div>
+        {mode === "vmax" && formV && <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(215px, 1fr))", gap: "8px 16px", marginTop: 8 }}>
+            {FIELDS_V.map(([k, lab, u, stp, tip]) => <label key={k} title={tip} style={{ fontSize: 12.5 }}>
+              <div className="muted">{lab}</div>
+              <input className="bal-in" type="number" step={stp} value={formV[k] ?? ""} disabled={!canCtl} onChange={(e) => { setFormV({ ...formV, [k]: e.target.value }); setDirty(true); }} /> {u}
+            </label>)}
+          </div>
+          <div style={{ overflow: "auto", marginTop: 10 }}><table style={{ borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead><tr><th className="muted" style={{ textAlign: "left", padding: "2px 8px 2px 0", fontWeight: 600 }}>bod</th>
+              {POINT_COLS.map(([k, lab, , tip]) => <th key={k} title={tip} className="muted" style={{ textAlign: "left", padding: "2px 8px", fontWeight: 600 }}>{lab}</th>)}<th /></tr></thead>
+            <tbody>{(formV.points || []).map((ptR, i) => <tr key={i} style={{ background: running && isV && i === ptI ? "color-mix(in srgb, var(--green) 14%, transparent)" : undefined }}>
+              <td style={{ padding: "2px 8px 2px 0", fontWeight: 700, whiteSpace: "nowrap" }}>{i + 1}{running && isV && i === ptI ? " ◀ teď" : ""}</td>
+              {POINT_COLS.map(([k, , stp]) => <td key={k} style={{ padding: "2px 8px" }}>
+                <input className="bal-in" style={{ width: 84 }} type="number" step={stp} value={ptR[k] ?? ""} disabled={!canCtl} onChange={(e) => setPoint(i, k, e.target.value)} /></td>)}
+              <td>{canCtl && formV.points.length > 1 && <button type="button" className="btn" style={{ padding: "1px 7px" }} title="odebrat bod"
+                    onClick={() => { setFormV({ ...formV, points: formV.points.filter((_, j) => j !== i) }); setDirty(true); }}>✕</button>}</td>
+            </tr>)}</tbody></table></div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+            {canCtl && (formV.points || []).length < 8 && <button type="button" className="btn" onClick={() => { const l = formV.points[formV.points.length - 1] || {};
+              setFormV({ ...formV, points: [...formV.points, { ...l, soc: Math.min(100, Number(l.soc || 0) + 5), u_max: Math.min(3.6, Number(l.u_max || 3.3) + 0.03).toFixed(2) }] }); setDirty(true); }}>+ přidat bod</button>}
+            <span className="muted" style={{ fontSize: 12 }}>Začíná se bodem podle aktuálního SoC. Na další bod se jde, až je odjetý min. počet cyklů a SoC dosáhlo hodnoty bodu. Poslední bod končí celé balancování.</span>
+          </div>
+        </>}
+        {mode === "delta" && form && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(215px, 1fr))", gap: "8px 16px", marginTop: 8 }}>
           {FIELDS.map(([k, lab, u, stp, tip]) => <label key={k} title={tip} style={{ fontSize: 12.5 }}>
             <div className="muted">{lab}</div>
             <input className="bal-in" type="number" step={stp} value={form[k] ?? ""} disabled={!canCtl}
@@ -411,13 +502,13 @@ export default function BmsBalance({ block, open, setOpen }) {
           {running && <button className="btn primary" onClick={apply} disabled={!dirty} style={{ fontWeight: 800 }}
                               title={dirty ? "Zapíše upravené hodnoty do běžícího balancování; platí od dalšího kroku" : "Nejdřív uprav některou hodnotu"}>✎ Změnit parametry balancování</button>}
           <button className="btn" onClick={fix}>📌 Zafixovat pro příští balancování</button>
-          {dirty && running && <button className="btn" onClick={() => { setForm(run.params); setDirty(false); }}>vrátit</button>}
+          {dirty && running && <button className="btn" onClick={() => { (isV ? setFormV : setForm)(run.params); setDirty(false); }}>vrátit</button>}
         </div>}
       </details>
 
       {c && <><div style={{ fontWeight: 700, fontSize: 13.5, margin: "12px 0 6px" }}>Články seřazené podle napětí <span className="muted" style={{ fontWeight: 400 }}>
-        — <span style={{ color: HI }}>●</span> nad průměrem, <span style={{ color: LO }}>●</span> pod průměrem; svislice = nejvyšší, nejnižší a průměr (čárkovaně); zelené pásmo = mez rozpětí od nejnižšího článku</span></div>
-        <CellRuler cells={c} params={p} energy={running ? st.cell_e : null} /></>}
+        — <span style={{ color: HI }}>●</span> nad průměrem, <span style={{ color: LO }}>●</span> pod průměrem; svislice = nejvyšší, nejnižší a průměr (čárkovaně); {isV ? "zelená čára = strop bodu, čárkovaná zelená = strop − hystereze" : "zelené pásmo = mez rozpětí od nejnižšího článku"}</span></div>
+        <CellRuler cells={c} params={p} energy={running ? st.cell_e : null} limit={isV ? limit : null} /></>}
 
       {run && !running && run.result && <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Report posledního běhu #{run.id}</summary><Report run={run} /></details>}
       {running && (st.log || []).length > 0 && <details style={{ marginTop: 10 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Záznam kroků ({st.log.length})</summary>
@@ -427,13 +518,14 @@ export default function BmsBalance({ block, open, setOpen }) {
         <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Historie balancování ({hist.length})</summary>
         {hist.length === 0 ? <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>Zatím žádný běh.</div>
           : <div style={{ overflow: "auto", marginTop: 6 }}><table style={{ fontSize: 12.5, borderCollapse: "collapse", minWidth: 720 }}>
-            <thead><tr>{["#", "začátek", "trvání", "výsledek", "cyklů", "rozpětí mV", "výkon kW", "mez stop / návrat / finál mV", "spustil", ""].map((h) =>
+            <thead><tr>{["#", "začátek", "trvání", "výsledek", "cyklů", "rozpětí mV", "výkon kW", "logika · meze", "spustil", ""].map((h) =>
               <th key={h} className="muted" style={{ textAlign: "left", padding: "3px 10px", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>{h}</th>)}</tr></thead>
             <tbody>{hist.map((h) => { const r = h.result || {}; return <tr key={h.id} style={{ background: past?.run.id === h.id ? "var(--border)" : undefined }}>
               {[h.id, new Date(h.started_at).toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }), dur(r.duration_s),
                 { done: "✓ dokončeno", stopped: "■ zastaveno", aborted: "⚠ přerušeno", running: "… běží" }[h.status] || h.status, cs(r.cycles ?? h.cycle),
                 `${cs(r.delta_start_mv)} → ${cs(r.delta_end_mv)}`, `${cs(r.p_first_kw, 1)} → ${cs(r.p_last_kw, 1)}`,
-                `${cs(h.params.delta_stop_v * 1000)} / ${cs(h.params.delta_resume_v * 1000)} / ${cs((h.params.delta_final_v ?? 0) * 1000)}`, h.created_by || "—"].map((v, i) =>
+                h.params.mode === "vmax" ? `napětí · ${(h.params.points || []).length} bodů do ${cs((h.params.points || []).slice(-1)[0]?.u_max, 2)} V`
+                  : `rozpětí · ${cs(h.params.delta_stop_v * 1000)} / ${cs(h.params.delta_resume_v * 1000)} / ${cs((h.params.delta_final_v ?? 0) * 1000)} mV`, h.created_by || "—"].map((v, i) =>
                 <td key={i} style={{ padding: "3px 10px", borderBottom: "1px solid var(--border)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{v}</td>)}
               <td style={{ padding: "3px 10px", borderBottom: "1px solid var(--border)" }}><button className="btn" style={{ padding: "1px 9px" }} onClick={() => (past?.run.id === h.id ? setPast(null) : openPast(h.id))}>{past?.run.id === h.id ? "zavřít" : "křivka a report"}</button></td>
             </tr>; })}</tbody></table></div>}

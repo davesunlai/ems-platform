@@ -1,3 +1,19 @@
+## v1.13.0 — balancování: druhá logika „napětí nejvyššího článku“ (body podle SoC)
+
+- Přepínač logiky před spuštěním: **Rozpětí článků** (dosavadní) / **Napětí nejvyššího článku (body podle SoC)**.
+- Nová logika — globálně: vstupní výkon, poměr následujícího nabíjecího výkonu (0,75), poměr vybíjecího výkonu (0,2),
+  prodleva mezi sníženími (30 s). Body (1–8): do SoC %, strop článku V, min. cyklů, hystereze V, poměr doby vybíjení, min. výkon.
+  Výchozí: 50 % / 3,35 V · 85 % / 3,40 V · 95 % / 3,45 V · 98 % / 3,49 V · 100 % / 3,52 V.
+- Průběh: začne se bodem podle aktuálního SoC. Nabíjí se vstupním výkonem; když nejvyšší článek dojde na (strop − hystereze),
+  výkon se sníží poměrem (není to cyklus), nejníž na minimum bodu. Na minimu a při dosažení stropu přijde vybíjení
+  (poměr výkonu × poslední nabíjecí výkon, po dobu poměr doby × doba posledního schodu nabíjení) — konec cyklu.
+  Další cykly téhož bodu pokračují posledním výkonem. Na další bod (znovu vstupním výkonem) se jde, až je odjetý min. počet
+  cyklů A SoC dosáhlo hodnoty bodu. Poslední bod ukončí balancování (SoC bodu, u 100 % od 99,5 %).
+- Graf: strop bodu jako zelená schodová čára v panelu napětí; meze stop/návrat/finál se v této logice nekreslí. Ukazatel
+  „nejvyšší článek vůči stropu bodu“, v pravítku čára stropu a (strop − hystereze). Report: tabulka cyklů se schody výkonu.
+- Fáze čekání v této logice není. Pojistky (3,60 V, 2,80–3,65 V, výpadek dat, nejdelší běh, jistič) platí stejně.
+- DB: `bms_balance_samples.ulim`; zafixované parametry se ukládají zvlášť pro každou logiku.
+
 ## v1.12.13 — bateriové bloky: kapacita se počítá sama
 
 - V modulu měniče → 🔋 Bateriové bloky se po změně počtu modulů nebo kWh / modul kapacita bloku hned přepočítá

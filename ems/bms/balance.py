@@ -56,16 +56,88 @@ LIMITS = {"delta_stop_v": (0.005, 0.5), "delta_resume_v": (0.001, 0.4), "delta_f
 PHASES = {"charge": "Nabíjení", "wait": "Čekání na návrat", "discharge": "Vybíjení"}
 
 
+# --- logika 2 (v1.13.0): „vmax“ = podle napětí nejvyššího článku, body podle SoC -------------------------------------
+# Bod: do jakého SoC platí, strop nejvyššího článku, nejmenší počet cyklů, hystereze, poměr doby vybíjení, minimální výkon.
+# Nabíjení: jakmile nejvyšší článek dojde na (strop − hystereze), výkon se sníží poměrem `chg_ratio` (to není cyklus),
+# nejníž na minimum bodu. Na minimu a při dosažení stropu → vybíjení `dis_p_ratio` × poslední nabíjecí výkon po dobu
+# `dis_t_ratio` bodu × doba posledního schodu nabíjení → konec cyklu. Další bod: odjetý min. počet cyklů A SoC ≥ SoC bodu.
+POINT_DEFAULT = {"soc": 100.0, "u_max": 3.52, "cycles": 4, "hyst": 0.01, "dis_t_ratio": 0.1, "p_min_kw": 1.0}
+DEFAULTS_V = {
+    "p_in_kw": 10.0,            # vstupní výkon: první nabíjení každého bodu
+    "chg_ratio": 0.75,          # další schod nabíjecího výkonu = chg_ratio × aktuální
+    "dis_p_ratio": 0.2,         # vybíjecí výkon = dis_p_ratio × poslední nabíjecí výkon
+    "settle_s": 30.0,           # prodleva po snížení výkonu, než smí přijít další snížení
+    "cell_vtop": 3.60, "p_idle_kw": 0.1, "max_hours": 24.0,
+    "points": [{**POINT_DEFAULT, "soc": 50.0, "u_max": 3.35}, {**POINT_DEFAULT, "soc": 85.0, "u_max": 3.40},
+               {**POINT_DEFAULT, "soc": 95.0, "u_max": 3.45}, {**POINT_DEFAULT, "soc": 98.0, "u_max": 3.49},
+               {**POINT_DEFAULT, "soc": 100.0, "u_max": 3.52, "cycles": 0}],
+}
+LIMITS_V = {"p_in_kw": (0.2, 50), "chg_ratio": (0.1, 0.99), "dis_p_ratio": (0.0, 2.0), "settle_s": (5, 600),
+            "cell_vtop": (3.40, 3.60), "p_idle_kw": (0.0, 1.0), "max_hours": (0.2, 72)}
+POINT_LIMITS = {"soc": (1, 100), "u_max": (3.20, 3.60), "cycles": (0, 50), "hyst": (0.001, 0.1),
+                "dis_t_ratio": (0.0, 3.0), "p_min_kw": (0.05, 20)}
+
+
+def _num(v, name: str, lo: float, hi: float) -> float:
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name}: neplatné číslo")
+    if not (lo <= x <= hi):
+        raise ValueError(f"{name} = {x:g} je mimo rozsah {lo:g}–{hi:g}")
+    return x
+
+
+def _clean_vmax(raw: dict | None, base: dict | None) -> dict:
+    b = dict(base or {})
+    out = {"mode": "vmax"}
+    for k, (lo, hi) in LIMITS_V.items():
+        v = (raw or {}).get(k)
+        out[k] = _num(v if v is not None else b.get(k, DEFAULTS_V[k]), k, lo, hi)
+    pts_in = (raw or {}).get("points") or b.get("points") or DEFAULTS_V["points"]
+    if not isinstance(pts_in, list) or not (1 <= len(pts_in) <= 8):
+        raise ValueError("Body: zadej 1 až 8 bodů")
+    pts = []
+    for i, pt in enumerate(pts_in):
+        row = {}
+        for k, (lo, hi) in POINT_LIMITS.items():
+            v = (pt or {}).get(k)
+            v = POINT_DEFAULT[k] if v is None or v == "" else v
+            if k == "hyst":                      # hystereze se zadává i se znaménkem minus (−0,01 V) → bere se velikost
+                v = abs(_num(v, f"Bod {i + 1} · hystereze", -0.1, 0.1))
+            x = _num(v, f"Bod {i + 1} · {k}", lo, hi)
+            row[k] = int(x) if k == "cycles" else x
+        pts.append(row)
+    for i in range(1, len(pts)):
+        if pts[i]["soc"] <= pts[i - 1]["soc"]:
+            raise ValueError(f"Bod {i + 1}: SoC musí být vyšší než u bodu {i}")
+        if pts[i]["u_max"] < pts[i - 1]["u_max"]:
+            raise ValueError(f"Bod {i + 1}: strop článku nesmí být nižší než u bodu {i}")
+    for i, pt in enumerate(pts):
+        if pt["u_max"] > out["cell_vtop"]:
+            raise ValueError(f"Bod {i + 1}: strop {pt['u_max']:g} V je nad stropem článku {out['cell_vtop']:g} V")
+    out["points"] = pts
+    return out
+
+
 def norm(params: dict | None) -> dict:
     """Doplní výchozí hodnoty a převede starší záznam (do 1.12.6: `dis_ratio` = poměr DOBY vybíjení)."""
     src = dict(params or {})
+    if src.get("mode") == "vmax":
+        try:
+            return _clean_vmax(None, src)
+        except ValueError:
+            return {"mode": "vmax", **{k: src.get(k, v) for k, v in DEFAULTS_V.items()}}
     if "dis_t_ratio" not in src and src.get("dis_ratio") is not None:
         src["dis_t_ratio"] = src["dis_ratio"]
-    return {k: src.get(k, v) for k, v in DEFAULTS.items()}
+    return {"mode": "delta", **{k: src.get(k, v) for k, v in DEFAULTS.items()}}
 
 
 def clean_params(raw: dict | None, base: dict | None = None) -> dict:
-    out = norm(base)
+    mode = (raw or {}).get("mode") or (base or {}).get("mode") or "delta"
+    if mode == "vmax":
+        return _clean_vmax(raw, base if (base or {}).get("mode") == "vmax" else None)
+    out = norm({k: v for k, v in (base or {}).items() if k != "mode"} if (base or {}).get("mode") != "vmax" else None)
     for k, (lo, hi) in LIMITS.items():
         if raw and raw.get(k) is not None:
             try:
@@ -98,6 +170,7 @@ async def ensure_schema() -> None:
             CREATE TABLE IF NOT EXISTS bms_balance_samples (
                 balance_id INTEGER NOT NULL, t TIMESTAMPTZ NOT NULL, phase TEXT, cycle INTEGER, p_set REAL, p_bat REAL,
                 vmax INTEGER, vmin INTEGER, vavg REAL, delta INTEGER, nmax INTEGER, nmin INTEGER, soc REAL);
+            ALTER TABLE bms_balance_samples ADD COLUMN IF NOT EXISTS ulim INTEGER;
             CREATE INDEX IF NOT EXISTS bms_balance_samples_idx ON bms_balance_samples (balance_id, t);
             CREATE TABLE IF NOT EXISTS bms_balance_defaults (bms_module_id TEXT PRIMARY KEY, params JSONB NOT NULL,
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_by TEXT);""")
@@ -156,23 +229,28 @@ async def samples(bid: int, since: datetime | None = None) -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT t, phase, cycle, p_set, p_bat, vmax, vmin, vavg, delta, nmax, nmin, soc FROM bms_balance_samples "
+            "SELECT t, phase, cycle, p_set, p_bat, vmax, vmin, vavg, delta, nmax, nmin, soc, ulim FROM bms_balance_samples "
             "WHERE balance_id=$1 AND ($2::timestamptz IS NULL OR t > $2) ORDER BY t", bid, since)
-    cols = ["phase", "cycle", "p_set", "p_bat", "vmax", "vmin", "vavg", "delta", "nmax", "nmin", "soc"]
+    cols = ["phase", "cycle", "p_set", "p_bat", "vmax", "vmin", "vavg", "delta", "nmax", "nmin", "soc", "ulim"]
     out = {"t": [int(r["t"].timestamp() * 1000) for r in rows]}
     for c in cols:
         out[c] = [r[c] for r in rows]
     return out
 
 
-async def saved_defaults(bms_module_id: str) -> dict:
+def _defaults_key(bms_module_id: str, mode: str) -> str:
+    return bms_module_id if mode != "vmax" else f"{bms_module_id}#vmax"
+
+
+async def saved_defaults(bms_module_id: str, mode: str = "delta") -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        r = await conn.fetchval("SELECT params FROM bms_balance_defaults WHERE bms_module_id=$1", bms_module_id)
+        r = await conn.fetchval("SELECT params FROM bms_balance_defaults WHERE bms_module_id=$1", _defaults_key(bms_module_id, mode))
+    stored = json.loads(r) if isinstance(r, str) else (r or {})
     try:
-        return clean_params(json.loads(r) if isinstance(r, str) else (r or {}))
+        return clean_params({**stored, "mode": mode})
     except ValueError:
-        return dict(DEFAULTS)
+        return clean_params({"mode": mode})
 
 
 async def _announce(locality_id, title: str, detail: str) -> None:
@@ -307,7 +385,9 @@ async def _tick_one(b: dict, now: datetime) -> None:
         key, tot, wh = ("in" if float(p_bat) > 0 else "out"), float(sum(mv)), abs(float(p_bat)) * dt / 3600.0
         ce[key] = [round(e + wh * v / tot, 4) for e, v in zip(ce[key], mv)]
     phase, cycle = b["phase"], b["cycle"]
-    p_kw = float(st.get("p_kw") or p["p_max_kw"])
+    is_v = p.get("mode") == "vmax"
+    p_kw = float(st.get("p_kw") or (p["p_in_kw"] if is_v else p["p_max_kw"]))
+    ulim = None
     t_phase = _secs(st.get("phase_at"), now)
     p_set = 0.0
     st["cycle_dmax"] = max(int(st.get("cycle_dmax") or 0), delta)      # největší rozpětí v běžícím cyklu
@@ -321,7 +401,13 @@ async def _tick_one(b: dict, now: datetime) -> None:
         log.append({"t": now.isoformat(), "text": text})
         del log[:-400]
 
-    if phase == "charge":
+    if is_v:
+        cycle, p_set, ulim, end = await _vmax_step(b, p, st, now, phase, cycle, p_kw, vmax, soc, t_phase, inv, go, cycles)
+        if end:
+            await _update(bid, phase=phase, cycle=cycle, state=st)
+            b["state"] = st
+            return await _finish(b, "done", end, now)
+    elif phase == "charge":
         hit_delta = delta >= float(p["delta_stop_v"]) * 1000
         hit_top = vmax >= float(p["cell_vtop"]) * 1000
         hit_full = soc is not None and soc >= 99.5 and t_phase > 180     # BMS hlásí plno → dál se nenabije
@@ -389,11 +475,107 @@ async def _tick_one(b: dict, now: datetime) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO bms_balance_samples (balance_id,t,phase,cycle,p_set,p_bat,vmax,vmin,vavg,delta,nmax,nmin,soc) "
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+            "INSERT INTO bms_balance_samples (balance_id,t,phase,cycle,p_set,p_bat,vmax,vmin,vavg,delta,nmax,nmin,soc,ulim) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
             bid, now, phase, cycle, p_set, (float(p_bat) / 1000 if p_bat is not None else None), vmax, vmin, round(vavg, 2), delta,
-            mv.index(vmax) + 1, mv.index(vmin) + 1, soc)
+            mv.index(vmax) + 1, mv.index(vmin) + 1, soc, ulim)
     await _update(bid, phase=phase, cycle=cycle, state=st)
+
+
+def _start_point(points: list[dict], soc: float | None) -> int:
+    """Bod, kterým se začíná: první, jehož SoC je nad aktuálním SoC (jinak poslední)."""
+    for i, pt in enumerate(points):
+        if soc is None or soc < float(pt["soc"]):
+            return i
+    return len(points) - 1
+
+
+async def _vmax_step(b, p, st, now, phase, cycle, p_kw, vmax, soc, t_phase, inv, go, cycles):
+    """Jeden krok logiky „vmax“. Vrací (cyklus, povel kW, strop bodu mV, důvod konce | None)."""
+    pts = p["points"]
+    if "pt" not in st:
+        st.update({"pt": _start_point(pts, soc), "pt_cycles": 0, "p_kw": float(p["p_in_kw"]), "step_at": now.isoformat(),
+                   "cyc_at": now.isoformat(), "cyc_steps": [float(p["p_in_kw"])]})
+        p_kw = float(p["p_in_kw"])
+        st["log"].append({"t": now.isoformat(), "text": f"Začínám bodem {st['pt'] + 1} (SoC {soc if soc is not None else '?'} %, "
+                                                        f"cíl {pts[st['pt']]['soc']:g} %, strop {pts[st['pt']]['u_max']:g} V)"})
+    i = min(int(st["pt"]), len(pts) - 1)
+    pt, last_pt = pts[i], i == len(pts) - 1
+    ulim = int(round(pt["u_max"] * 1000))
+    thr = ulim - int(round(pt["hyst"] * 1000))
+    p_min = float(pt["p_min_kw"])
+    target_soc = min(float(pt["soc"]), 99.5)
+    p_set = 0.0
+    if phase not in ("charge", "discharge"):
+        go("charge", "Pokračuji nabíjením")
+        phase = "charge"
+    if phase == "charge":
+        t_step = _secs(st.get("step_at"), now)
+        at_min = p_kw <= p_min + 1e-6
+        hit_top = vmax >= float(p["cell_vtop"]) * 1000
+        full = soc is not None and soc >= 99.5 and t_phase > 180
+        if (vmax >= ulim and at_min) or hit_top or full:
+            t_dis = round(t_step * float(pt["dis_t_ratio"]))
+            p_dis = round(p_kw * float(p["dis_p_ratio"]), 2)
+            c = {"n": cycle, "pt": i + 1, "p_start_kw": (st.get("cyc_steps") or [p_kw])[0], "p_kw": p_kw, "steps": list(st.get("cyc_steps") or []),
+                 "t_charge_s": round(_secs(st.get("cyc_at"), now)), "t_last_s": round(t_step), "vmax_mv": vmax, "soc": soc,
+                 "u_max_mv": ulim, "stop_by": "strop článku 3,60 V" if hit_top and vmax < ulim else ("plné nabití" if full and vmax < ulim else "strop bodu"),
+                 "p_dis_kw": p_dis, "t_discharge_plan_s": t_dis}
+            cycles.append(c)
+            del cycles[:-300]
+            if last_pt and soc is not None and soc >= target_soc and int(st.get("pt_cycles") or 0) + 1 >= int(pt["cycles"]):
+                c["t_discharge_plan_s"] = 0
+                return cycle, 0.0, ulim, f"nabito na {soc:g} % při stropu článku {pt['u_max']:g} V (bod {i + 1}, cyklus {cycle})"
+            msg = f"Bod {i + 1} · cyklus {cycle}: článek {vmax} mV na stropu {ulim} mV při {p_kw:g} kW"
+            if t_dis >= TICK_S and p_dis >= 0.05 and (soc is None or soc > SOC_DIS_FLOOR):
+                go("discharge", msg + f" → vybíjení {p_dis:g} kW na {t_dis} s ({pt['dis_t_ratio']:g} × {round(t_step)} s)")
+                await _force(b, "force_discharge", p_dis, f"bod {i + 1} cyklus {cycle} vybíjení")
+                p_set = -p_dis
+            else:
+                c["t_discharge_plan_s"] = 0
+                go("discharge", msg + " → vybíjení přeskočeno")
+        elif vmax >= thr and not at_min and t_step >= (10 if vmax >= ulim else float(p["settle_s"])):
+            new_p = max(p_min, round(p_kw * float(p["chg_ratio"]), 2))
+            st["p_kw"], st["step_at"] = new_p, now.isoformat()
+            st.setdefault("cyc_steps", []).append(new_p)
+            st["log"].append({"t": now.isoformat(), "text": f"Bod {i + 1}: článek {vmax} mV ≥ {thr} mV → výkon {p_kw:g} → {new_p:g} kW"
+                                                            + (" (minimum bodu)" if new_p <= p_min + 1e-6 else "")})
+            p_set = await _breaker_cap(b, new_p, inv)
+            await _force(b, "force_charge", p_set, f"bod {i + 1} cyklus {cycle} nabíjení")
+        else:
+            p_set = await _breaker_cap(b, p_kw, inv)
+            await _force(b, "force_charge", p_set, f"bod {i + 1} cyklus {cycle} nabíjení")
+    elif phase == "discharge":
+        c = cycles[-1] if cycles else {}
+        plan = float(c.get("t_discharge_plan_s") or 0)
+        if t_phase >= plan or (soc is not None and soc <= SOC_DIS_FLOOR):
+            c["t_discharge_s"] = round(min(t_phase, plan)) if plan else 0
+            st["pt_cycles"] = int(st.get("pt_cycles") or 0) + 1
+            reached = soc is not None and soc >= target_soc and st["pt_cycles"] >= int(pt["cycles"])
+            if reached and last_pt:
+                return cycle, 0.0, ulim, f"nabito na {soc:g} % při stropu článku {pt['u_max']:g} V (bod {i + 1}, {st['pt_cycles']} cyklů)"
+            cycle += 1
+            if reached:
+                st.update({"pt": i + 1, "pt_cycles": 0, "p_kw": float(p["p_in_kw"])})
+                nxt = pts[i + 1]
+                txt = (f"Bod {i + 2}: SoC {soc:g} % ≥ {pt['soc']:g} % a odjeto {int(pt['cycles'])}+ cyklů → strop {nxt['u_max']:g} V, "
+                       f"cíl {nxt['soc']:g} %, nabíjení {p['p_in_kw']:g} kW")
+                ulim = int(round(nxt["u_max"] * 1000))
+            else:
+                why = [] if st["pt_cycles"] >= int(pt["cycles"]) else [f"cyklus {st['pt_cycles']} z min. {int(pt['cycles'])}"]
+                if soc is None or soc < target_soc:
+                    why.append(f"SoC {soc if soc is not None else '?'} % < {pt['soc']:g} %")
+                txt = f"Bod {i + 1} · cyklus {cycle}: nabíjení {float(st['p_kw']):g} kW ({', '.join(why)})"
+            st["step_at"] = st["cyc_at"] = now.isoformat()
+            st["cyc_steps"] = [float(st["p_kw"])]
+            go("charge", txt)
+            p_set = await _breaker_cap(b, float(st["p_kw"]), inv)
+            await _force(b, "force_charge", p_set, f"bod {int(st['pt']) + 1} cyklus {cycle} nabíjení")
+        else:
+            p_dis = float(c.get("p_dis_kw") or 0)
+            p_set = -p_dis
+            await _force(b, "force_discharge", p_dis, f"bod {i + 1} cyklus {cycle} vybíjení")
+    return cycle, p_set, ulim, None
 
 
 async def run_loop() -> None:
@@ -472,7 +654,8 @@ async def _context(bms_module_id: str) -> dict:
 
 @router.get("/defaults/{bms_module_id}")
 async def get_defaults(bms_module_id: str, _: dict = Depends(read)) -> dict:
-    return {"params": await saved_defaults(bms_module_id), "builtin": DEFAULTS, "limits": LIMITS}
+    return {"params": await saved_defaults(bms_module_id), "params_vmax": await saved_defaults(bms_module_id, "vmax"),
+            "builtin": DEFAULTS, "limits": LIMITS, "point_default": POINT_DEFAULT}
 
 
 @router.put("/defaults/{bms_module_id}")
@@ -486,7 +669,7 @@ async def put_defaults(bms_module_id: str, body: ParamsBody, user: dict = Depend
         await conn.execute(
             "INSERT INTO bms_balance_defaults (bms_module_id, params, updated_by) VALUES ($1,$2::jsonb,$3) "
             "ON CONFLICT (bms_module_id) DO UPDATE SET params=EXCLUDED.params, updated_at=now(), updated_by=EXCLUDED.updated_by",
-            bms_module_id, json.dumps(params), user.get("username"))
+            _defaults_key(bms_module_id, params.get("mode", "delta")), json.dumps(params), user.get("username"))
     return {"params": params}
 
 
@@ -496,7 +679,8 @@ async def start(body: StartBody, user: dict = Depends(controller)) -> dict:
         raise HTTPException(status_code=400, detail="Spuštění vyžaduje potvrzení.")
     ctx = await _context(body.bms_module_id)
     try:
-        params = clean_params(body.params, await saved_defaults(body.bms_module_id))
+        mode = "vmax" if (body.params or {}).get("mode") == "vmax" else "delta"
+        params = clean_params({**body.params, "mode": mode}, await saved_defaults(body.bms_module_id, mode))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     from ems.battest import db as bt_db
@@ -504,8 +688,10 @@ async def start(body: StartBody, user: dict = Depends(controller)) -> dict:
         raise HTTPException(status_code=409, detail="Měnič je právě obsazený testem baterie nebo jiným balancováním.")
     lv = live.latest(body.bms_module_id)
     now = datetime.now(timezone.utc)
-    state = {"p_kw": params["p_max_kw"], "phase_at": now.isoformat(), "cycles": [], "params_log": [],
-             "log": [{"t": now.isoformat(), "text": f"Spuštěno ({user.get('username')}), nabíjení {params['p_max_kw']:g} kW"}],
+    p0 = params["p_in_kw"] if mode == "vmax" else params["p_max_kw"]
+    state = {"p_kw": p0, "phase_at": now.isoformat(), "cycles": [], "params_log": [],
+             "log": [{"t": now.isoformat(), "text": f"Spuštěno ({user.get('username')}), logika "
+                      f"{'napětí nejvyššího článku (body podle SoC)' if mode == 'vmax' else 'rozpětí článků'}, nabíjení {p0:g} kW"}],
              "had_live": bool(lv)}
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -518,9 +704,12 @@ async def start(body: StartBody, user: dict = Depends(controller)) -> dict:
     await _announce(ctx["locality_id"], f"⚖ Balancování B{ctx['block_idx']} spuštěno",
                     f"Spustil {user.get('username')}. Po dobu balancování je řízení baterie NADŘAZENO všemu ostatnímu — plánovač, "
                     f"časový plán, pravidla i ruční povely k měniči jsou pozastavené. Baterie se cyklicky nabíjí (až "
-                    f"{params['p_max_kw']:g} kW ze sítě), čeká a vybíjí; během čekání nekryje spotřebu domu. Jednotlivé kroky "
-                    f"se neoznamují, další zpráva přijde po skončení. Meze: stop {params['delta_stop_v'] * 1000:g} mV, návrat "
-                    f"{params['delta_resume_v'] * 1000:g} mV, finál {params['delta_final_v'] * 1000:g} mV, nejdéle {params['max_hours']:g} h.")
+                    f"{p0:g} kW ze sítě), čeká a vybíjí; baterie během toho nekryje spotřebu domu. Jednotlivé kroky "
+                    f"se neoznamují, další zpráva přijde po skončení. "
+                    + (f"Logika: napětí nejvyššího článku, {len(params['points'])} bodů až do {params['points'][-1]['soc']:g} % SoC / "
+                       f"{params['points'][-1]['u_max']:g} V, nejdéle {params['max_hours']:g} h." if mode == "vmax" else
+                       f"Meze: stop {params['delta_stop_v'] * 1000:g} mV, návrat {params['delta_resume_v'] * 1000:g} mV, "
+                       f"finál {params['delta_final_v'] * 1000:g} mV, nejdéle {params['max_hours']:g} h."))
     return _row(r)
 
 
@@ -556,12 +745,14 @@ async def change_params(bid: int, body: ParamsBody, user: dict = Depends(control
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     old = norm(b["params"])
-    changed = {k: [old.get(k), v] for k, v in params.items() if old.get(k) != v}
+    changed = {k: [old.get(k), v] for k, v in params.items() if old.get(k) != v and k != "points"}
+    if params.get("mode") == "vmax" and old.get("points") != params.get("points"):
+        changed["points"] = [len(old.get("points") or []), len(params["points"])]
     if changed:
         now = datetime.now(timezone.utc).isoformat()
         st = b["state"]
         st.setdefault("params_log", []).append({"t": now, "by": user.get("username"), "changed": changed})
-        txt = ", ".join(f"{k} {a:g} → {v:g}" for k, (a, v) in changed.items())
+        txt = ", ".join("body upraveny" if k == "points" else f"{k} {a:g} → {v:g}" for k, (a, v) in changed.items())
         st.setdefault("log", []).append({"t": now, "text": f"Změna parametrů ({user.get('username')}): {txt}"})
         if "p_max_kw" in changed and float(st.get("p_kw") or 0) > params["p_max_kw"]:
             st["p_kw"] = params["p_max_kw"]

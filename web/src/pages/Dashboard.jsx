@@ -152,7 +152,9 @@ function ControlBanners({ deviceIds, localityId }) {
                                          background: "color-mix(in srgb, var(--amber) 10%, transparent)", fontSize: 12.5 }}>
           <span style={{ fontWeight: 700 }}>⚖ Běží balancování baterie B{r.block_idx} #{r.id}</span> · cyklus {r.cycle} · {BAL_PHASE[r.phase] || r.phase}
           {r.state?.p_kw != null && <span> · výkon cyklu {Number(r.state.p_kw).toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} kW</span>}
-          {r.cells && <span> · rozpětí článků {r.cells.delta} mV (mez {Math.round(r.params.delta_stop_v * 1000)} mV)</span>}
+          {r.cells && (r.params.mode === "vmax"
+            ? <span> · bod {Number(r.state?.pt ?? 0) + 1} z {(r.params.points || []).length}, nejvyšší článek {(r.cells.max / 1000).toLocaleString("cs-CZ", { minimumFractionDigits: 3 })} V (strop {Number((r.params.points || [])[Math.min(Number(r.state?.pt ?? 0), (r.params.points || []).length - 1)]?.u_max).toLocaleString("cs-CZ", { minimumFractionDigits: 2 })} V)</span>
+            : <span> · rozpětí článků {r.cells.delta} mV (mez {Math.round(r.params.delta_stop_v * 1000)} mV)</span>)}
           <span className="muted"> · od {new Date(r.started_at).toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
           <div className="muted" style={{ marginTop: 2 }}>Řízení baterie je nadřazeno všemu ostatnímu — plánovač, časový plán i ruční povely pro modul {r.inverter_id} jsou pozastavené; při čekání baterie nekryje dům. Průběh a zastavení v 🔋 Články baterie → ⛶ celá obrazovka → ⚖ Balancování.</div>
         </div>))}
