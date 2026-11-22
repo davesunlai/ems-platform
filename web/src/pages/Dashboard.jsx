@@ -92,11 +92,21 @@ function ControlBanners({ deviceIds, localityId }) {
   const [outputs, setOutputs] = useState([]);
   const [plans, setPlans] = useState([]);
   const [bt, setBt] = useState(null);          // 🧪 běžící test baterie
+  const [bal, setBal] = useState([]);          // ⚖ běžící balancování bloků (podle BMS modulů lokality)
   const key = deviceIds.join(",");
   useEffect(() => {
     if (!deviceIds.length && !localityId) return;
     let alive = true;
+    let n = 0;
+    const loadBal = async () => {              // BMS moduly lokality → běží u některého balancování?
+      try {
+        const mods = await api.bmsLocality(localityId);
+        const runs = await Promise.all((mods || []).map((m) => api.balActive(m.module_id).then((r) => (r ? { ...r, cells: m.cells } : null)).catch(() => null)));
+        if (alive) setBal(runs.filter(Boolean));
+      } catch { /* bez BMS nic nezobrazujeme */ }
+    };
     const load = () => {
+      if (localityId && n++ % 3 === 0) loadBal();          // à 15 s
       if (deviceIds.length) api.controlStates(key).then((r) => alive && setStates(r.states || {})).catch(() => {});
       api.listOutputs().then((list) => alive && setOutputs(list || [])).catch(() => {});
       api.spotPlan().then((r) => alive && setPlans(r.plans || [])).catch(() => {});
@@ -112,7 +122,8 @@ function ControlBanners({ deviceIds, localityId }) {
   const items = deviceIds.map((id) => ({ id, st: states[id] }))
     .filter(({ st }) => st && st.action && st.action !== "idle");
   const onOutputs = (outputs || []).filter((o) => o.is_on && (localityId == null || o.locality_id === localityId));
-  if (!items.length && !onOutputs.length && !myPlans.length && !bt) return null;
+  if (!items.length && !onOutputs.length && !myPlans.length && !bt && !bal.length) return null;
+  const BAL_PHASE = { charge: "▲ nabíjení", wait: "● čekání na návrat rozpětí", discharge: "▼ vybíjení" };
   const BT_PHASE = { preparing: "Krok 0 · Příprava", discharge0: "Krok 1 · Předvybití na dno", charge: "Krok 2 · Nabíjení", hold: "Krok 3 · Výdrž na stropu", discharge: "Krok 4 · Vybíjení" };
   const btSnap = bt?.snapshots?.length ? bt.snapshots[bt.snapshots.length - 1] : null;
 
@@ -136,6 +147,15 @@ function ControlBanners({ deviceIds, localityId }) {
           <div style={{ marginTop: 6 }}><StepBar status={bt.status} size={12} /></div>
           <div className="muted" style={{ marginTop: 2 }}>Plánovač, časový plán i ruční řízení baterie jsou pro modul {bt.module_id} zablokované — průběh a přerušení v 🔋 Články baterie → 🧪.</div>
         </div>)}
+      {bal.map((r) => (
+        <div key={`bal${r.id}`} style={{ marginBottom: 6, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--amber)",
+                                         background: "color-mix(in srgb, var(--amber) 10%, transparent)", fontSize: 12.5 }}>
+          <span style={{ fontWeight: 700 }}>⚖ Běží balancování baterie B{r.block_idx} #{r.id}</span> · cyklus {r.cycle} · {BAL_PHASE[r.phase] || r.phase}
+          {r.state?.p_kw != null && <span> · výkon cyklu {Number(r.state.p_kw).toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} kW</span>}
+          {r.cells && <span> · rozpětí článků {r.cells.delta} mV (mez {Math.round(r.params.delta_stop_v * 1000)} mV)</span>}
+          <span className="muted"> · od {new Date(r.started_at).toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+          <div className="muted" style={{ marginTop: 2 }}>Řízení baterie je nadřazeno všemu ostatnímu — plánovač, časový plán i ruční povely pro modul {r.inverter_id} jsou pozastavené; při čekání baterie nekryje dům. Průběh a zastavení v 🔋 Články baterie → ⛶ celá obrazovka → ⚖ Balancování.</div>
+        </div>))}
       {myPlans.map((p) => (
         <div key={`plan${p.module_id}`} style={{ marginBottom: 6, padding: "8px 12px", borderRadius: 10,
           border: "1px dashed var(--border)", background: "color-mix(in srgb, var(--blue) 8%, transparent)", fontSize: 12.5 }}>

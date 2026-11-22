@@ -41,7 +41,11 @@ function useWidth(ref) {
 }
 
 /** Graf průběhu: tři panely nad společnou časovou osou (napětí článků · rozpětí · výkon), pruhy = kroky cyklu. */
-function BalanceChart({ S, params, live }) {
+const changeText = (ch) => Object.entries(ch.changed || {}).map(([k, [o, nv]]) => {
+  const f = FIELDS.find((x) => x[0] === k) || [k, k, ""]; const d = f[2] === "V" ? 3 : 2;
+  return `${f[1]} ${cs(o, d)} → ${cs(nv, d)} ${f[2]}`; }).join(", ");
+
+function BalanceChart({ S, params, live, changes = [] }) {
   const box = useRef(null);
   const W = useWidth(box);
   const n = S.t.length;
@@ -107,6 +111,8 @@ function BalanceChart({ S, params, live }) {
   const step = STEPS.find((s) => (b - a) / s <= Math.max(4, plotW / 95)) || STEPS[STEPS.length - 1];
   const ticks = []; for (let t = Math.ceil(a / step) * step; t <= b; t += step) ticks.push(t);
   const clipX = (x) => Math.max(padL, Math.min(padL + plotW, x));
+  const marks = changes.map((ch) => ({ ...ch, ms: new Date(ch.t).getTime() })).filter((ch) => ch.ms >= a && ch.ms <= b);
+  const nearTol = Math.max(5000, ((b - a) / plotW) * 7);          // změna „pod kurzorem“ = do 7 px
   const move = (e) => { const r = box.current.getBoundingClientRect(); const px = e.clientX - r.left;
     if (drag.current) { const dt = ((drag.current.x - e.clientX) / plotW) * (drag.current.b - drag.current.a);
       return setView([drag.current.a + dt, drag.current.b + dt]); }
@@ -148,6 +154,12 @@ function BalanceChart({ S, params, live }) {
             for (let i = 1; i < ys.length; i++) if (ys[i].y - ys[i - 1].y < 13) ys[i].y = ys[i - 1].y + 13;
             return ys.map(({ l, y: yy }) => <g key={l.k}><circle cx={padL + plotW + 7} cy={yy} r={4} fill={l.c} /><text x={padL + plotW + 15} y={yy + 4} fontSize={11.5} fill="var(--fg)">{l.label}</text></g>); })()}
         </g>)}
+        {marks.map((ch, i) => <g key={`ch${i}`}>
+          <title>{`${clock(ch.ms)} · změna parametrů${ch.by ? ` (${ch.by})` : ""}: ${changeText(ch)}`}</title>
+          <line x1={X(ch.ms)} x2={X(ch.ms)} y1={TOP - 12} y2={H - 26} stroke="var(--fg)" strokeWidth={1.4} strokeDasharray="2 4" />
+          <circle cx={X(ch.ms)} cy={TOP - 14} r={8} fill="var(--fg)" />
+          <text x={X(ch.ms)} y={TOP - 10} textAnchor="middle" fontSize={11} fontWeight={800} fill="var(--panel, #fff)">✎</text>
+        </g>)}
         {ticks.map((t) => <g key={t}><line x1={X(t)} x2={X(t)} y1={H - 26} y2={H - 21} stroke="var(--muted)" />
           <text x={X(t)} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--muted)">{clock(t, step < 6e4)}</text></g>)}
         {c != null && S.t[c] >= a && S.t[c] <= b && <g>
@@ -163,10 +175,14 @@ function BalanceChart({ S, params, live }) {
         <div>průměr {cs(S.vavg[c] / 1000, 3)} V · rozpětí <b>{cs(S.delta[c])} mV</b></div>
         <div>povel {cs(S.p_set[c], 1)} kW · změřeno {cs(S.p_bat[c], 1)} kW</div>
         <div className="muted">SoC {cs(S.soc[c], 0)} % · od startu {dur((S.t[c] - t0) / 1000)}</div>
+        {marks.filter((ch) => Math.abs(ch.ms - S.t[c]) <= nearTol).map((ch, i) =>
+          <div key={i} style={{ marginTop: 4, paddingTop: 4, borderTop: "1px solid var(--border)", whiteSpace: "normal", maxWidth: 300 }}>
+            <b>✎ {clock(ch.ms)} změna parametrů</b>{ch.by ? ` (${ch.by})` : ""}<br />{changeText(ch)}</div>)}
       </CursorBox>}
       <div className="muted" style={{ fontSize: 11.5, display: "flex", gap: 14, flexWrap: "wrap", marginTop: 2 }}>
         {Object.entries(PH).map(([k, v]) => <span key={k}><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: v.c, marginRight: 5, verticalAlign: "-1px" }} />{v.icon} {v.name}</span>)}
         <span>číslo v pruhu = cyklus</span>
+        {changes.length > 0 && <span>✎ = změna parametrů ({changes.length}×)</span>}
         <span style={{ marginLeft: "auto" }}>kolečko = zoom · tažení = posun · ← → = krok po vzorku (Shift = po minutě) · dvojklik = celý průběh
           {view ? <> · <a href="#" onClick={(e) => { e.preventDefault(); setView(null); }}>{live ? "▶ sledovat živě" : "zobrazit vše"}</a></> : live ? " · sleduje živě" : ""}</span>
       </div>
@@ -347,7 +363,7 @@ export default function BmsBalance({ block, open, setOpen }) {
         {running && <Stat label="Od startu" sub={`SoC ${cs(S.soc[S.t.length - 1])} %`}>{dur((Date.now() - new Date(run.started_at).getTime()) / 1000)}</Stat>}
       </div>}
 
-      {(running || S.t.length > 0) && <BalanceChart S={S} params={p} live={running} />}
+      {(running || S.t.length > 0) && <BalanceChart S={S} params={p} live={running} changes={st.params_log || []} />}
 
       <details open style={{ margin: "10px 0" }}>
         <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Parametry {running ? "(lze měnit za běhu)" : "pro spuštění"}</summary>
@@ -391,7 +407,7 @@ export default function BmsBalance({ block, open, setOpen }) {
             </tr>; })}</tbody></table></div>}
         {past && <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
           <b style={{ fontSize: 14 }}>Běh #{past.run.id} · {new Date(past.run.started_at).toLocaleString("cs-CZ")}</b>
-          <BalanceChart S={past.S} params={past.run.params} live={false} />
+          <BalanceChart S={past.S} params={past.run.params} live={false} changes={past.run.state?.params_log || []} />
           <Report run={past.run} />
           {(past.run.state?.log || []).length > 0 && <details style={{ marginTop: 6 }}><summary style={{ cursor: "pointer", fontSize: 13 }}>Záznam kroků ({past.run.state.log.length})</summary>
             <div style={{ fontSize: 12.5, maxHeight: 220, overflow: "auto" }}>{past.run.state.log.map((l, i) => <div key={i}><span className="muted">{clock(new Date(l.t).getTime())}</span> {l.text}</div>)}</div></details>}

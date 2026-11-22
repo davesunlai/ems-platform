@@ -1,3 +1,15 @@
+## v1.12.6 — graf balancování: značky změn parametrů; balancování na dashboardu
+
+- Každá změna parametrů za běhu má v grafu svislou tečkovanou stopu se značkou ✎ (živě i v historii); po najetí kurzorem
+  bublina ukáže čas, kdo změnil a co z jaké hodnoty na jakou. Jen web.
+- Dashboard: pruh „⚖ Běží balancování baterie B1“ (cyklus, krok, výkon, rozpětí článků vůči mezi) s upozorněním, že řízení
+  baterie je nadřazeno plánovači, časovému plánu i ručním povelům. Jen web.
+
+## v1.12.5 — ukazatel živého čtení zná balancování
+
+- Během ⚖ balancování čte box články po 5 s bez ohledu na otevřené okno; řádek „Živě“ to teď říká
+  („běží balancování, čtení pokračuje i po zavření okna až do jeho konce“). Jen web.
+
 ## v1.12.4 — graf balancování: čtvrtý panel SoC
 
 - Pod výkonem je panel „SoC podle BMS (%)“ na stejné časové ose (živě i v historii; data se ukládala už od 1.12.0).

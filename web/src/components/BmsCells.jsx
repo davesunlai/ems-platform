@@ -102,6 +102,7 @@ export default function BmsCells({ locId }) {
   const [bal, setBal] = useState(false);              // panel ⚖ balancování v celoobrazovkovém zobrazení
   const [now, setNow] = useState(Date.now());
   const [period, setPeriod] = useState({});          // skutečný rozestup mezi posledními dvěma snímky, podle modulu
+  const [balRun, setBalRun] = useState({});          // modul → běží ⚖ balancování (čtení po 5 s pak nezávisí na otevřeném okně)
   // Živé sledování: dokud je okno otevřené, hlásíme to serveru (EMSBOX pak čte články po pár sekundách) a dotahujeme po 5 s.
   useEffect(() => {
     let alive = true;
@@ -113,6 +114,7 @@ export default function BmsCells({ locId }) {
         if (t && seen[b.module_id] && t > seen[b.module_id]) setPeriod((p) => ({ ...p, [b.module_id]: (t - seen[b.module_id]) / 1000 }));
         if (t) seen[b.module_id] = t;
         api.bmsLive(b.module_id).catch(() => {});
+        api.balActive(b.module_id).then((x) => alive && setBalRun((m) => (!!m[b.module_id] === !!x ? m : { ...m, [b.module_id]: !!x }))).catch(() => {});
       });
       setData(r || []);
     }).catch(() => alive && setData([]));
@@ -137,7 +139,9 @@ export default function BmsCells({ locId }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, margin: "0 0 5px" }}>
         <span style={{ width: 8, height: 8, borderRadius: 4, background: fresh ? "#0ca30c" : "#fab219", flex: "0 0 auto" }} />
         <span>{fresh
-          ? <><b>Živě</b> — napětí článků se čtou každých {per < 9.5 ? per.toFixed(0) : Math.round(per)} s, jen dokud je toto okno otevřené</>
+          ? <><b>Živě</b> — napětí článků se čtou každých {per < 9.5 ? per.toFixed(0) : Math.round(per)} s{balRun[b.module_id]
+            ? <> — <b>běží ⚖ balancování</b>, čtení pokračuje i po zavření okna až do jeho konce</>
+            : ", jen dokud je toto okno otevřené"}</>
           : <><b>Čekám na živá data z boxu…</b> poslední snímek je {age < 90 ? `${Math.round(age)} s` : `${Math.round(age / 60)} min`} starý</>}</span>
         <span className="muted" style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>{fresh ? `další čtení za ${Math.max(0, Math.ceil(per - age))} s` : ""}</span>
         {fresh && <span className="bms-bar" title="čas do dalšího čtení" style={{ width: 90, height: 5, borderRadius: 3, background: "var(--border, #ddd)", overflow: "hidden", flex: "0 0 auto" }}>
