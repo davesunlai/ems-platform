@@ -77,6 +77,10 @@ async def lifespan(app: FastAPI):
         await _eb_db.ensure_schema()
         from ems.bms import db as _bms_db
         await _bms_db.ensure_schema()
+        from ems.bms import balance as _bms_balance
+        await _bms_balance.ensure_schema()
+        import asyncio as _aio
+        app.state.bms_balance_task = _aio.create_task(_bms_balance.run_loop())   # ⚖ řídicí smyčka balancování (à 5 s)
         from ems.contact import db as contact_db
         await contact_db.ensure_schema()
         from ems.alerts import db as alerts_db
@@ -95,7 +99,7 @@ async def lifespan(app: FastAPI):
     await db.close_pool()
 
 
-app = FastAPI(title="EMS Platform API", version="1.11.8", lifespan=lifespan)
+app = FastAPI(title="EMS Platform API", version="1.12.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -224,6 +228,8 @@ from ems.battest.routes import router as battest_router  # noqa: E402
 app.include_router(battest_router)
 from ems.bms.routes import router as bms_router  # noqa: E402
 app.include_router(bms_router)
+from ems.bms.balance import router as bms_balance_router  # noqa: E402
+app.include_router(bms_balance_router)
 from ems.energyhist.routes import router as energyhist_router  # noqa: E402
 app.include_router(energyhist_router)
 from ems.datadiag.routes import router as datadiag_router  # noqa: E402

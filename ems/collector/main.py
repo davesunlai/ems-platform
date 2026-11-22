@@ -464,6 +464,11 @@ async def run() -> None:
                 await battest_engine.tick(state)         # 🧪 test baterie (zámek řízení modulu)
             except Exception as exc:
                 logger.debug("battest tick: %s", exc)
+            try:
+                from ems.bms import balance as bms_balance
+                await bms_balance.watchdog()             # ⚖ balancování: řídicí smyčka (API) bez tepu → měnič zpět do Self-Use
+            except Exception as exc:
+                logger.debug("balance watchdog: %s", exc)
             await tick_planner(state)
             await tick_alerts()
             await tick_force_keepalive(state)

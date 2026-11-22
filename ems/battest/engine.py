@@ -22,7 +22,7 @@ SRC = "battery_test"
 # Názvy kroků (slovo „fáze“ je vyhrazené pro L1–L3): klíč stavu → popisek
 STEP_NAMES = {"preparing": "Krok 0 · Příprava", "discharge0": "Krok 1 · Předvybití", "charge": "Krok 2 · Nabíjení",
               "hold": "Krok 3 · Výdrž", "discharge": "Krok 4 · Vybíjení", "done": "Vyhodnocení", "aborted": "Přerušeno"}
-ALLOWED_SOURCES = {SRC, "keepalive", "export_guard", "self-heal", "target"}   # kdo smí do fronty modulu během testu
+ALLOWED_SOURCES = {SRC, "bms_balance", "keepalive", "export_guard", "self-heal", "target"}   # kdo smí do fronty modulu během testu
 TICK_S = 20
 COMM_LOSS_S = 120
 CELL_VMIN, CELL_VMAX, T_MAX = 2.80, 3.65, 50.0

@@ -1,3 +1,23 @@
+## v1.12.0 — ⚖ balancování bloku podle článků z BMS
+
+- **Nové: balancování** (celá obrazovka článků → tlačítko „⚖ Balancování“). TERA převezme řízení baterie a opakuje cyklus:
+  nabíjení výkonem P, dokud rozpětí článků (max − min) nedosáhne meze (výchozí 0,05 V) → čekání bez krytí domu, dokud rozpětí
+  neklesne pod mez návratu (výchozí 0,002 V) → vybíjení stejným výkonem po dobu poměr × doba nabíjení (výchozí 0,5) → další cyklus
+  s výkonem upraveným poměrem cílová / změřená doba návratu (cíl výchozí 10 min, krok 0,25× až 2×, strop = plný výkon).
+- **Konec**: hotovo, když proběhne celý cyklus, ve kterém rozpětí nepřekročilo finální rozpětí (výchozí 0,03 V). Záložně: výkon dalšího
+  cyklu pod minimem, nejdelší běh (12 h), ruční stop. Pojistky: článek mimo 2,80–3,65 V, BMS bez dat > 180 s, strop článku 3,60 V
+  ukončí nabíjení cyklu, hlavní jistič omezuje nabíjecí výkon, vybíjení se přeskočí pod 10 % SoC.
+- **Zobrazení**: ukazatele (rozpětí vůči mezi, nejvyšší/nejnižší článek, výkon cyklu, doba návratu), graf o třech panelech nad společným
+  časem (napětí max/min/průměr · rozpětí s mezemi · výkon povel/změřeno) s pruhy kroků a čísly cyklů; kolečko = zoom, tažení = posun,
+  šipky = krok po 5s vzorku. Pravítko 3,1–3,6 V a pod ním všechny články seřazené podle napětí (číslo, box/pozice), řádky se animovaně
+  přeskupují.
+- **Parametry** lze měnit za běhu (zapisují se do záznamu), „📌 zafixovat“ je uloží jako výchozí. **Historie** s reportem, tabulkou cyklů,
+  parametry a celou křivkou.
+- Technicky: řídicí smyčka à 5 s běží v API (má živé snímky článků), povely jdou frontou se zdrojem `bms_balance`, modul měniče je zamčený
+  jako při testu baterie; kolektor hlídá tep smyčky a při výpadku vrátí měnič do Self-Use. Tabulky `bms_balance`, `bms_balance_samples`,
+  `bms_balance_defaults`. BMS se jen čte. Agent na boxu se nemění.
+- Neověřeno na živém měniči: chování Solisu při nuceném nabíjení 0,1 kW ve fázi čekání.
+
 ## v1.11.8 — nový modul se ukládá i s EMSBOXem a portem
 
 - **Moduly**: „Přidat modul“ ukládal jen základ — EMSBOX, transport a sériový port se zahodily (uměla je jen úprava), takže box o novém

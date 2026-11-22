@@ -87,7 +87,14 @@ async def running(module_id: str | None = None) -> list[dict]:
 
 
 async def running_modules() -> set[str]:
-    return {t["module_id"] for t in await running()}
+    """Moduly měniče se zámkem řízení: běžící test baterie + běžící ⚖ balancování bloku."""
+    mods = {t["module_id"] for t in await running()}
+    try:
+        from ems.bms import balance as _bal
+        mods |= await _bal.running_modules()
+    except Exception:
+        pass
+    return mods
 
 
 async def create(locality_id: int, module_id: str, params: dict, saved: dict, created_by: str | None) -> dict:

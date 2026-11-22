@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import BmsBalance from "./BmsBalance";
 
 // Mapa všech článků bloku z BMS (Pylontech SC0500 po RS485): řádek = modul, buňka = článek.
 // Barva = odchylka od mediánu bloku (modrá níž, oranžová výš); čísla zůstávají v běžné barvě textu.
@@ -98,6 +99,7 @@ export default function BmsCells({ locId }) {
   const [data, setData] = useState(null);
   const [mode, setMode] = useState("mv");
   const [full, setFull] = useState(null);             // module_id zobrazený přes celou obrazovku
+  const [bal, setBal] = useState(false);              // panel ⚖ balancování v celoobrazovkovém zobrazení
   const [now, setNow] = useState(Date.now());
   const [period, setPeriod] = useState({});          // skutečný rozestup mezi posledními dvěma snímky, podle modulu
   // Živé sledování: dokud je okno otevřené, hlásíme to serveru (EMSBOX pak čte články po pár sekundách) a dotahujeme po 5 s.
@@ -184,10 +186,13 @@ export default function BmsCells({ locId }) {
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
             <b style={{ fontSize: 19 }}>🔬 Články {fb.block_idx ? `B${fb.block_idx}` : fb.name} (BMS)</b>
             <PowerBadge power={fb.power} current={s.bms_current} />
+            <button className="btn" onClick={() => setBal(!bal)} title="Řízené cyklické nabíjení a vybíjení podle rozpětí napětí článků"
+                    style={{ fontWeight: 800, padding: "8px 16px", fontSize: 14, borderRadius: 10, background: bal ? "var(--border)" : "#2a78d6", color: bal ? "var(--fg)" : "#fff" }}>⚖ Balancování</button>
             <button className="btn" onClick={() => setFull(null)} style={{ marginLeft: "auto", fontWeight: 800, padding: "8px 16px", fontSize: 14, borderRadius: 10 }}>✕ Zavřít (Esc)</button>
           </div>
           <div style={{ marginBottom: 6 }}>{head(c, s)}</div>
           {liveBar(fb, c)}
+          <BmsBalance key={fb.module_id} block={fb} open={bal} setOpen={setBal} />
           <h3 style={{ fontSize: 15, margin: "10px 0 4px" }}>Napětí článků (mV)</h3>
           <CellTable c={c} mode="mv" big trend={fb.trend} />
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec V = napětí celého modulu." /></div>
