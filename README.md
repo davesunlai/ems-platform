@@ -1,3 +1,9 @@
+## v1.12.13 — bateriové bloky: kapacita se počítá sama
+
+- V modulu měniče → 🔋 Bateriové bloky se po změně počtu modulů nebo kWh / modul kapacita bloku hned přepočítá
+  (modulů × kWh / modul). Ruční přepis zůstává možný; když se liší od výpočtu, nabídne se „↺ dle modulů“.
+  Uloží se až tlačítkem „💾 Uložit bloky“ (součet se propíše do plánovače jako dosud).
+
 ## v1.12.12 — energie článků na 3 desetinná místa
 
 - Wh u článků (řádky pod pravítkem, bubliny v reportu, uložený výsledek) na 3 desetinná místa, poměr na 2.
