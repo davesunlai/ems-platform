@@ -347,7 +347,7 @@ export default function BmsBalance({ block, open, setOpen }) {
 
       {(running || S.t.length > 0) && <BalanceChart S={S} params={p} live={running} />}
 
-      <details open={!running} style={{ margin: "10px 0" }}>
+      <details open style={{ margin: "10px 0" }}>
         <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Parametry {running ? "(lze měnit za běhu)" : "pro spuštění"}</summary>
         {form && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(215px, 1fr))", gap: "8px 16px", marginTop: 8 }}>
           {FIELDS.map(([k, lab, u, stp, tip]) => <label key={k} title={tip} style={{ fontSize: 12.5 }}>
@@ -358,7 +358,8 @@ export default function BmsBalance({ block, open, setOpen }) {
           </label>)}
         </div>}
         {canCtl && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-          {running && <button className="btn primary" onClick={apply} disabled={!dirty}>Použít změny v běžícím balancování</button>}
+          {running && <button className="btn primary" onClick={apply} disabled={!dirty} style={{ fontWeight: 800 }}
+                              title={dirty ? "Zapíše upravené hodnoty do běžícího balancování; platí od dalšího kroku" : "Nejdřív uprav některou hodnotu"}>✎ Změnit parametry balancování</button>}
           <button className="btn" onClick={fix}>📌 Zafixovat pro příští balancování</button>
           {dirty && running && <button className="btn" onClick={() => { setForm(run.params); setDirty(false); }}>vrátit</button>}
         </div>}

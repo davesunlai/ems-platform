@@ -1,3 +1,8 @@
+## v1.12.1 — balancování: parametry stále rozbalené, tlačítko „Změnit parametry balancování“
+
+- Blok parametrů je vidět i za běhu (dřív sbalený); tlačítko pro zápis změn do běžícího balancování se jmenuje
+  „✎ Změnit parametry balancování“, vedle něj „📌 Zafixovat pro příští balancování“.
+
 ## v1.12.0 — ⚖ balancování bloku podle článků z BMS
 
 - **Nové: balancování** (celá obrazovka článků → tlačítko „⚖ Balancování“). TERA převezme řízení baterie a opakuje cyklus:
