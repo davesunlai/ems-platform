@@ -1,3 +1,11 @@
+## v1.12.11 — balancování: energie do/z každého článku a jejich poměr
+
+- Pro každý článek se od začátku balancování sčítá energie do článku (nabíjení) a z článku (vybíjení):
+  E += P_bloku × U_článku / ΣU_článků × Δt (články v sérii → stejný proud; P_bloku = `battery_power_N` z měniče).
+- Na řádku článku pod pravítkem: ▲ do Wh · ▼ z Wh · poměr (z ÷ do). V reportu mapa poměrů všech článků po boxech,
+  průměr, nejnižší a nejvyšší článek.
+- Přesnost: výkon bloku přichází z měniče ~1× za 30 s (napětí článků à 5 s); proud přes balanční odpory BMS se nevidí.
+
 ## v1.12.10 — balancování přes EMSBOX: bez e-mailů o krocích, zámek řízení
 
 - Oznámení „Vynucené nabíjení / Vybíjení do sítě“ vzniká na DVOU místech: v kolektoru (přímo čtené moduly) a v příjmu výsledků

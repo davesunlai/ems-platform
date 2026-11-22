@@ -250,6 +250,14 @@ async def _finish(b: dict, status: str, reason: str, now: datetime) -> None:
               "p_first_kw": cyc[0]["p_kw"] if cyc else None, "p_last_kw": cyc[-1]["p_kw"] if cyc else None,
               "t_return_avg_s": round(sum(rets) / len(rets)) if rets else None,
               "t_return_last_s": rets[-1] if rets else None}
+    ce = st.get("cell_e") or {}
+    if ce.get("in"):
+        ratio = [round(o / i * 100, 2) if i > 0.5 else None for i, o in zip(ce["in"], ce["out"])]
+        ok = [(r, n + 1) for n, r in enumerate(ratio) if r is not None]
+        result["cell_energy"] = {"in_wh": [round(x, 2) for x in ce["in"]], "out_wh": [round(x, 2) for x in ce["out"]],
+                                 "ratio_pct": ratio, "per_module": st.get("per_module"),
+                                 "ratio_min": min(ok) if ok else None, "ratio_max": max(ok) if ok else None,
+                                 "ratio_avg": round(sum(r for r, _ in ok) / len(ok), 2) if ok else None}
     await _update(b["id"], status=status, state=st, result=result, ended_at=now)
     await _release(b["inverter_id"], reason)
     word = {"done": "dokončeno", "stopped": "zastaveno", "aborted": "PŘERUŠENO"}.get(status, status)
@@ -286,6 +294,18 @@ async def _tick_one(b: dict, now: datetime) -> None:
     bms = await bt_db.latest_metrics(b["bms_module_id"], ["bms_soc"], 600)
     soc = bms.get("bms_soc")
     p_bat = inv.get(f"battery_power_{b['block_idx'] or 1}", inv.get("battery_power"))
+    # v1.12.11: energie do/z každého článku. Články jsou v sérii → stejný proud; podíl článku na výkonu bloku = U_článku / ΣU.
+    # E_článku += P_bloku × U_článku / ΣU × Δt  (P_bloku z měniče, + nabíjení / − vybíjení; mrtvé pásmo ±30 W).
+    ce = st.get("cell_e")
+    if not ce or len(ce.get("in") or []) != len(mv):
+        ce = st["cell_e"] = {"in": [0.0] * len(mv), "out": [0.0] * len(mv)}
+    dt = min(15.0, _secs(st.get("e_at"), now)) if st.get("e_at") else float(TICK_S)
+    st["e_at"] = now.isoformat()
+    n_mod = len((lv[1].get("bms_modules_cv") if lv else None) or []) or 1
+    st["per_module"] = max(1, len(mv) // n_mod)
+    if p_bat is not None and abs(float(p_bat)) >= 30:
+        key, tot, wh = ("in" if float(p_bat) > 0 else "out"), float(sum(mv)), abs(float(p_bat)) * dt / 3600.0
+        ce[key] = [round(e + wh * v / tot, 4) for e, v in zip(ce[key], mv)]
     phase, cycle = b["phase"], b["cycle"]
     p_kw = float(st.get("p_kw") or p["p_max_kw"])
     t_phase = _secs(st.get("phase_at"), now)

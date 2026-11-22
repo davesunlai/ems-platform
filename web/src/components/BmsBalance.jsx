@@ -191,8 +191,10 @@ function BalanceChart({ S, params, live, changes = [] }) {
 }
 
 /** Pravítko 3,1–3,6 V a pod ním všechny články seřazené od nejvyššího; pozice značky = napětí článku. */
-function CellRuler({ cells, params }) {
-  const V0 = 3100, V1 = 3600, ROW = 19, LAB = 172;
+function CellRuler({ cells, params, energy }) {
+  const hasE = !!(energy?.in?.length);
+  const V0 = 3100, V1 = 3600, ROW = 19, LAB = hasE ? 372 : 172;
+  const ratioOf = (n) => { const i = energy.in[n - 1], o = energy.out[n - 1]; return i > 0.5 ? (o / i) * 100 : null; };
   const list = useMemo(() => { const out = []; let n = 0;
     for (const m of cells.modules) m.mv.forEach((mv, i) => out.push({ n: ++n, mod: m.idx, pos: i + 1, mv }));
     const order = [...out].sort((p, q) => q.mv - p.mv || p.n - q.n); order.forEach((c, r) => { c.rank = r; }); return out; }, [cells]);
@@ -203,7 +205,7 @@ function CellRuler({ cells, params }) {
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto", maxHeight: 560, position: "relative" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 3, background: "var(--panel, var(--bg))", borderBottom: "1px solid var(--border)", padding: "6px 14px 4px 0", display: "flex" }}>
-        <div style={{ width: LAB, flex: "none", fontSize: 11.5, paddingLeft: 10 }} className="muted">článek · box/pozice · mV</div>
+        <div style={{ width: LAB, flex: "none", fontSize: 11.5, paddingLeft: 10 }} className="muted">článek · box/pozice · mV{hasE && <span title="Energie do článku (nabíjení) a z článku (vybíjení) od začátku balancování; poměr = z článku ÷ do článku. Články jsou v sérii, proud je stejný — rozdíly dělá jen napětí článku."> · ▲ do Wh · ▼ z Wh · poměr</span>}</div>
         <div style={{ position: "relative", flex: 1, height: 30 }}>
           {marks.map((v) => <div key={v} style={{ position: "absolute", left: pct(v), top: 0, transform: "translateX(-50%)", textAlign: "center", fontSize: v % 100 ? 10.5 : 12, fontWeight: v % 100 ? 400 : 700 }}>
             <div>{v % 100 ? "" : cs(v / 1000, 1)}{v % 100 ? cs(v / 1000, 2) : ""}</div>
@@ -222,7 +224,13 @@ function CellRuler({ cells, params }) {
             <div key={c.n} className="bal-row" style={{ position: "absolute", left: 0, right: 0, top: c.rank * ROW + 3, height: ROW, display: "flex", alignItems: "center" }}>
               <div style={{ width: LAB, flex: "none", paddingLeft: 10, fontSize: 12, fontVariantNumeric: "tabular-nums", fontWeight: top || bot ? 800 : 400, whiteSpace: "nowrap" }}>
                 <span style={{ display: "inline-block", width: 40 }}>#{c.n}</span>
-                <span style={{ display: "inline-block", width: 50, fontSize: 12, color: "var(--muted)" }}>{c.mod}/{c.pos}</span>{cs(c.mv)}
+                <span style={{ display: "inline-block", width: 50, fontSize: 12, color: "var(--muted)" }}>{c.mod}/{c.pos}</span>
+                <span style={{ display: "inline-block", width: 46 }}>{cs(c.mv)}</span>
+                {hasE && <span style={{ fontWeight: 400 }}>
+                  <span style={{ display: "inline-block", width: 64, textAlign: "right", color: LO }}>▲ {cs(energy.in[c.n - 1], 1)}</span>
+                  <span style={{ display: "inline-block", width: 64, textAlign: "right", color: HI }}>▼ {cs(energy.out[c.n - 1], 1)}</span>
+                  <span style={{ display: "inline-block", width: 62, textAlign: "right", fontWeight: 700 }}>{ratioOf(c.n) == null ? "—" : `${cs(ratioOf(c.n), 1)} %`}</span>
+                </span>}
               </div>
               <div style={{ position: "relative", flex: 1, height: "100%" }}>
                 <div style={{ position: "absolute", left: 0, right: 0, top: "50%", height: 1, background: "var(--border)" }} />
@@ -239,6 +247,25 @@ function Stat({ label, children, sub, color }) {
     <div className="muted" style={{ fontSize: 11.5 }}>{label}</div>
     <div style={{ fontSize: 21, fontWeight: 700, color: color || "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1.25 }}>{children}</div>
     {sub && <div className="muted" style={{ fontSize: 11.5 }}>{sub}</div>}
+  </div>);
+}
+
+/** Poměr energie z článku ÷ do článku pro každý článek (řádek = box), podbarvení podle odchylky od průměru. */
+function CellEnergy({ ce }) {
+  const per = ce.per_module || 15, rows = [];
+  for (let i = 0; i < ce.ratio_pct.length; i += per) rows.push(ce.ratio_pct.slice(i, i + per).map((r, k) => ({ r, n: i + k + 1 })));
+  const vals = ce.ratio_pct.filter((x) => x != null), avg = ce.ratio_avg ?? 0;
+  const span = Math.max(0.05, ...vals.map((x) => Math.abs(x - avg)));
+  const bg = (r) => { if (r == null) return "transparent"; const a = Math.abs(r - avg) / span; return a < 0.25 ? "transparent" : `color-mix(in srgb, ${r < avg ? HI : LO} ${Math.round(18 + a * 40)}%, transparent)`; };
+  return (<div style={{ marginTop: 10 }}>
+    <div style={{ fontWeight: 700, marginBottom: 2 }}>Energie článků: poměr z článku ÷ do článku (%)</div>
+    <div className="muted" style={{ marginBottom: 6 }}>Průměr {cs(ce.ratio_avg, 2)} % · nejnižší {ce.ratio_min ? `${cs(ce.ratio_min[0], 2)} % (č. ${ce.ratio_min[1]})` : "—"} · nejvyšší {ce.ratio_max ? `${cs(ce.ratio_max[0], 2)} % (č. ${ce.ratio_max[1]})` : "—"}.
+      Články jsou v sérii, teče jimi stejný proud; rozdíl v poměru je dán jen napětím článku při nabíjení a vybíjení. <span style={{ color: HI }}>■</span> pod průměrem (článek se při nabíjení zvedá a při vybíjení propadá víc než ostatní), <span style={{ color: LO }}>■</span> nad průměrem. Najetím na buňku uvidíš Wh.</div>
+    <div style={{ overflow: "auto" }}><table style={{ borderCollapse: "collapse", fontSize: 12, fontVariantNumeric: "tabular-nums" }}><tbody>
+      {rows.map((row, m) => <tr key={m}><td className="muted" style={{ padding: "2px 8px 2px 0", whiteSpace: "nowrap" }}>box {m + 1}</td>
+        {row.map((c) => <td key={c.n} title={`článek ${c.n}: do ${cs(ce.in_wh[c.n - 1], 1)} Wh, z ${cs(ce.out_wh[c.n - 1], 1)} Wh`}
+                            style={{ padding: "2px 6px", textAlign: "right", background: bg(c.r), border: "1px solid var(--border)", fontWeight: c.n === ce.ratio_min?.[1] || c.n === ce.ratio_max?.[1] ? 800 : 400 }}>{c.r == null ? "—" : cs(c.r, 1)}</td>)}</tr>)}
+    </tbody></table></div>
   </div>);
 }
 
@@ -269,6 +296,7 @@ function Report({ run }) {
         c.t_return_s == null ? "—" : `${dur(c.t_return_s)}${c.return_timeout ? " (limit)" : ""}`, cs(c.p_dis_kw ?? c.p_kw, 2), dur(c.t_discharge_s), c.delta_max_mv == null ? "—" : `${cs(c.delta_max_mv)} mV`, cs(c.p_next_kw, 2)].map((v, i) =>
         <td key={i} style={{ textAlign: "right", padding: "3px 10px", borderBottom: "1px solid var(--border)", fontVariantNumeric: "tabular-nums" }}>{v}</td>)}</tr>)}</tbody>
     </table></div>}
+    {r.cell_energy?.ratio_pct?.length > 0 && <CellEnergy ce={r.cell_energy} />}
   </div>);
 }
 
@@ -389,7 +417,7 @@ export default function BmsBalance({ block, open, setOpen }) {
 
       {c && <><div style={{ fontWeight: 700, fontSize: 13.5, margin: "12px 0 6px" }}>Články seřazené podle napětí <span className="muted" style={{ fontWeight: 400 }}>
         — <span style={{ color: HI }}>●</span> nad průměrem, <span style={{ color: LO }}>●</span> pod průměrem; svislice = nejvyšší, nejnižší a průměr (čárkovaně); zelené pásmo = mez rozpětí od nejnižšího článku</span></div>
-        <CellRuler cells={c} params={p} /></>}
+        <CellRuler cells={c} params={p} energy={running ? st.cell_e : null} /></>}
 
       {run && !running && run.result && <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Report posledního běhu #{run.id}</summary><Report run={run} /></details>}
       {running && (st.log || []).length > 0 && <details style={{ marginTop: 10 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13.5 }}>Záznam kroků ({st.log.length})</summary>
