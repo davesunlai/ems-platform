@@ -2,8 +2,8 @@
 
 Cyklus:  NABÍJENÍ výkonem P, dokud rozpětí článků (max − min) nedosáhne meze `delta_stop_v`
        → ČEKÁNÍ (baterie stojí, dům nekryje), dokud rozpětí neklesne pod `delta_resume_v`  → změří se „doba návratu“
-       → VYBÍJENÍ stejným výkonem P po dobu `dis_ratio` × doba nabíjení
-       → další cyklus s výkonem P × (cílová doba návratu / změřená doba návratu).
+       → VYBÍJENÍ výkonem P × `dis_p_ratio` po dobu `dis_t_ratio` × doba nabíjení (v1.12.7)
+       → další cyklus s nabíjecím výkonem P × `chg_ratio` (vždy z předchozího cyklu; doba návratu se jen měří a zobrazuje).
 Konec (hotovo): proběhl celý cyklus, během kterého rozpětí článků ani jednou nepřekročilo `delta_final_v`.
 Záložní konce: výkon dalšího cyklu < `p_min_kw`, uplynulo `max_hours`, ruční stop, pojistka.
 
@@ -40,8 +40,9 @@ DEFAULTS = {
     "delta_stop_v": 0.050,        # rozpětí článků, při kterém se nabíjení zastaví
     "delta_resume_v": 0.002,      # rozpětí, pod které musí články klesnout, než se pokračuje
     "delta_final_v": 0.030,       # hotovo = celý cyklus, ve kterém rozpětí tuto hodnotu ani jednou nepřekročilo
-    "t_return_min": 10.0,         # cílová doba návratu (min)
-    "dis_ratio": 0.5,             # doba vybíjení = dis_ratio × doba nabíjení
+    "chg_ratio": 0.5,             # nabíjecí výkon dalšího cyklu = chg_ratio × nabíjecí výkon tohoto cyklu
+    "dis_p_ratio": 0.5,           # vybíjecí výkon = dis_p_ratio × nabíjecí výkon tohoto cyklu
+    "dis_t_ratio": 0.5,           # doba vybíjení = dis_t_ratio × doba nabíjení tohoto cyklu
     "p_max_kw": 10.0,             # „plný výkon“ prvního cyklu a strop dalších
     "p_min_kw": 0.3,              # pod tímto výkonem balancování končí
     "p_idle_kw": 0.1,             # výkon ve fázi čekání (nucené nabíjení minimem = baterie nekryje dům)
@@ -49,14 +50,22 @@ DEFAULTS = {
     "cell_vtop": 3.60,            # strop článku — nabíjení se zastaví i když rozpětí mez nedosáhlo
     "max_hours": 12.0,
 }
-LIMITS = {"delta_stop_v": (0.005, 0.5), "delta_resume_v": (0.001, 0.4), "delta_final_v": (0.002, 0.5), "t_return_min": (0.5, 240), "dis_ratio": (0.0, 2.0),
+LIMITS = {"delta_stop_v": (0.005, 0.5), "delta_resume_v": (0.001, 0.4), "delta_final_v": (0.002, 0.5), "chg_ratio": (0.05, 1.5), "dis_p_ratio": (0.0, 2.0), "dis_t_ratio": (0.0, 3.0),
           "p_max_kw": (0.2, 50), "p_min_kw": (0.05, 20), "p_idle_kw": (0.0, 1.0), "max_wait_min": (1, 600),
           "cell_vtop": (3.40, 3.60), "max_hours": (0.2, 72)}
 PHASES = {"charge": "Nabíjení", "wait": "Čekání na návrat", "discharge": "Vybíjení"}
 
 
+def norm(params: dict | None) -> dict:
+    """Doplní výchozí hodnoty a převede starší záznam (do 1.12.6: `dis_ratio` = poměr DOBY vybíjení)."""
+    src = dict(params or {})
+    if "dis_t_ratio" not in src and src.get("dis_ratio") is not None:
+        src["dis_t_ratio"] = src["dis_ratio"]
+    return {k: src.get(k, v) for k, v in DEFAULTS.items()}
+
+
 def clean_params(raw: dict | None, base: dict | None = None) -> dict:
-    out = dict(base or DEFAULTS)
+    out = norm(base)
     for k, (lo, hi) in LIMITS.items():
         if raw and raw.get(k) is not None:
             try:
@@ -101,6 +110,8 @@ def _row(r) -> dict | None:
     for k in ("params", "state", "result"):
         if isinstance(d.get(k), str):
             d[k] = json.loads(d[k])
+    if isinstance(d.get("params"), dict):
+        d["params"] = norm(d["params"])
     for k in ("started_at", "ended_at", "heartbeat_at"):
         if d.get(k) is not None:
             d[k] = d[k].isoformat()
@@ -212,11 +223,9 @@ def _secs(iso: str | None, now: datetime) -> float:
     return (now - datetime.fromisoformat(iso)).total_seconds() if iso else 0.0
 
 
-def next_power(p_kw: float, t_return_s: float, params: dict) -> float:
-    """Výkon dalšího cyklu: poměrem cílová / změřená doba návratu (0,25× až 2×), nejvýš p_max."""
-    target = float(params["t_return_min"]) * 60
-    k = max(0.25, min(2.0, target / max(1.0, t_return_s)))
-    return round(min(float(params["p_max_kw"]), p_kw * k), 2)
+def next_power(p_kw: float, params: dict) -> float:
+    """Nabíjecí výkon dalšího cyklu = výkon tohoto cyklu × chg_ratio, nejvýš p_max."""
+    return round(min(float(params["p_max_kw"]), p_kw * float(params["chg_ratio"])), 2)
 
 
 async def _finish(b: dict, status: str, reason: str, now: datetime) -> None:
@@ -254,7 +263,7 @@ async def _finish(b: dict, status: str, reason: str, now: datetime) -> None:
 
 async def _tick_one(b: dict, now: datetime) -> None:
     from ems.battest import db as bt_db
-    p, st, bid = b["params"], b["state"], b["id"]
+    p, st, bid = norm(b["params"]), b["state"], b["id"]
     live.touch(b["bms_module_id"])                                   # EMSBOX čte články à 5 s po celou dobu
     lv = live.latest(b["bms_module_id"])
     mv = [int(round(x)) for x in ((lv[1].get("bms_cells_mv") if lv else None) or [])]
@@ -314,14 +323,16 @@ async def _tick_one(b: dict, now: datetime) -> None:
         if back or timeout:
             c = cycles[-1] if cycles else {}
             c.update({"t_return_s": round(t_phase), "return_timeout": bool(timeout and not back), "delta_resume_mv": delta})
-            t_dis = round(float(c.get("t_charge_s") or 0) * float(p["dis_ratio"]))
-            c["t_discharge_plan_s"] = t_dis
+            t_dis = round(float(c.get("t_charge_s") or 0) * float(p["dis_t_ratio"]))
+            p_dis = round(p_kw * float(p["dis_p_ratio"]), 2)
+            c["t_discharge_plan_s"], c["p_dis_kw"] = t_dis, p_dis
             msg = (f"Cyklus {cycle}: návrat pod {p['delta_resume_v'] * 1000:g} mV za {round(t_phase)} s" if back
                    else f"Cyklus {cycle}: rozpětí {delta} mV se do {p['max_wait_min']:g} min pod mez nevrátilo")
-            if t_dis >= TICK_S and (soc is None or soc > SOC_DIS_FLOOR):
-                go("discharge", msg + f" → vybíjení {p_kw:g} kW na {t_dis} s")
-                await _force(b, "force_discharge", p_kw, f"cyklus {cycle} vybíjení")
-                p_set = -p_kw
+            if t_dis >= TICK_S and p_dis >= 0.05 and (soc is None or soc > SOC_DIS_FLOOR):
+                go("discharge", msg + f" → vybíjení {p_dis:g} kW ({p['dis_p_ratio']:g} × {p_kw:g}) na {t_dis} s "
+                                      f"({p['dis_t_ratio']:g} × {c.get('t_charge_s')} s)")
+                await _force(b, "force_discharge", p_dis, f"cyklus {cycle} vybíjení")
+                p_set = -p_dis
             else:
                 go("discharge", msg + " → vybíjení přeskočeno")
                 c["t_discharge_plan_s"] = 0
@@ -332,7 +343,7 @@ async def _tick_one(b: dict, now: datetime) -> None:
         plan = float(c.get("t_discharge_plan_s") or 0)
         if t_phase >= plan or (soc is not None and soc <= SOC_DIS_FLOOR):
             c["t_discharge_s"] = round(min(t_phase, plan)) if plan else 0
-            nxt = next_power(p_kw, float(c.get("t_return_s") or 0) or float(p["t_return_min"]) * 60, p)
+            nxt = next_power(p_kw, p)
             c["p_next_kw"] = nxt
             c["delta_max_mv"] = int(st.get("cycle_dmax") or 0)
             if c["delta_max_mv"] <= float(p["delta_final_v"]) * 1000:
@@ -347,12 +358,13 @@ async def _tick_one(b: dict, now: datetime) -> None:
                 return await _finish(b, "done", f"výkon dalšího cyklu {nxt:g} kW je pod minimem {p['p_min_kw']:g} kW", now)
             st["p_kw"] = nxt
             cycle += 1
-            go("charge", f"Cyklus {cycle}: nabíjení {nxt:g} kW (předchozí {p_kw:g} kW, doba návratu {c.get('t_return_s')} s, cíl {p['t_return_min'] * 60:g} s)")
+            go("charge", f"Cyklus {cycle}: nabíjení {nxt:g} kW ({p['chg_ratio']:g} × {p_kw:g} kW; doba návratu minule {c.get('t_return_s')} s)")
             p_set = await _breaker_cap(b, nxt, inv)
             await _force(b, "force_charge", p_set, f"cyklus {cycle} nabíjení")
         else:
-            p_set = -p_kw
-            await _force(b, "force_discharge", p_kw, f"cyklus {cycle} vybíjení")
+            p_dis = float(c.get("p_dis_kw") or p_kw)
+            p_set = -p_dis
+            await _force(b, "force_discharge", p_dis, f"cyklus {cycle} vybíjení")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -523,7 +535,8 @@ async def change_params(bid: int, body: ParamsBody, user: dict = Depends(control
         params = clean_params(body.params, b["params"])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    changed = {k: [b["params"].get(k), v] for k, v in params.items() if b["params"].get(k) != v}
+    old = norm(b["params"])
+    changed = {k: [old.get(k), v] for k, v in params.items() if old.get(k) != v}
     if changed:
         now = datetime.now(timezone.utc).isoformat()
         st = b["state"]

@@ -1,3 +1,17 @@
+## v1.12.8 — balancování: výchozí poměr vybíjecího výkonu 0,5
+
+- `dis_p_ratio` výchozí 0,5 (dřív 1,0). Uložené („zafixované“) hodnoty a běžící balancování se nemění.
+
+## v1.12.7 — balancování: tři poměry místo doby návratu
+
+- Výkony a časy se počítají vždy z právě proběhlého nabíjení:
+  nabíjení dalšího cyklu = `chg_ratio` × nabíjecí výkon tohoto cyklu (výchozí 0,5);
+  vybíjecí výkon = `dis_p_ratio` × nabíjecí výkon tohoto cyklu (výchozí 1,0);
+  doba vybíjení = `dis_t_ratio` × doba nabíjení tohoto cyklu (výchozí 0,5).
+- Doba návratu se dál měří a ukazuje, ale výkon už neřídí; parametr „cílová doba návratu“ zrušen.
+- Při vybíjení je vidět, kolik zbývá a z čeho se doba spočítala. Tabulka cyklů má zvlášť nabíjecí a vybíjecí výkon.
+- Starší záznamy: dřívější `dis_ratio` (poměr doby) se čte jako `dis_t_ratio`.
+
 ## v1.12.6 — graf balancování: značky změn parametrů; balancování na dashboardu
 
 - Každá změna parametrů za běhu má v grafu svislou tečkovanou stopu se značkou ✎ (živě i v historii); po najetí kurzorem

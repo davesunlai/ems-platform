@@ -12,8 +12,9 @@ const FIELDS = [
   ["delta_stop_v", "Mez rozpětí — stop nabíjení", "V", 0.001, "Nabíjení se zastaví, jakmile rozdíl mezi nejvyšším a nejnižším článkem dosáhne této hodnoty."],
   ["delta_resume_v", "Mez návratu", "V", 0.001, "Po zastavení se čeká, dokud rozdíl neklesne pod tuto hodnotu. Čas, který to trvá, je „doba návratu“."],
   ["delta_final_v", "Finální rozpětí (hotovo)", "V", 0.001, "Balancování skončí, když proběhne celý cyklus, ve kterém rozdíl tuto hodnotu ani jednou nepřekročil."],
-  ["t_return_min", "Cílová doba návratu", "min", 0.5, "Výkon dalšího cyklu se upraví poměrem cílová / změřená doba návratu."],
-  ["dis_ratio", "Vybíjení : nabíjení", "×", 0.05, "Po návratu se vybíjí stejným výkonem po dobu = tento poměr × doba nabíjení. 0 = nevybíjet."],
+  ["chg_ratio", "Poměr nabíjení (další cyklus)", "×", 0.05, "Nabíjecí výkon dalšího cyklu = tento poměr × nabíjecí výkon právě běžícího cyklu. 0,5 = každý cyklus poloviční."],
+  ["dis_p_ratio", "Poměr vybíjecího výkonu", "×", 0.05, "Vybíjecí výkon = tento poměr × nabíjecí výkon téhož cyklu. 0,1 při nabíjení 10 kW = vybíjení 1 kW. 0 = nevybíjet."],
+  ["dis_t_ratio", "Poměr doby vybíjení", "×", 0.05, "Doba vybíjení = tento poměr × doba nabíjení téhož cyklu. 0 = nevybíjet."],
   ["p_max_kw", "Plný výkon", "kW", 0.5, "Výkon prvního cyklu a nejvyšší výkon dalších cyklů. Hlavní jistič se hlídá zvlášť."],
   ["p_min_kw", "Minimální výkon", "kW", 0.1, "Když by další cyklus vyšel pod tento výkon, balancování skončí."],
   ["max_wait_min", "Nejdelší čekání", "min", 5, "Když se rozdíl do této doby pod mez návratu nevrátí, pokračuje se a doba návratu se bere jako tato."],
@@ -262,10 +263,10 @@ function Report({ run }) {
     {(run.state?.params_log || []).map((c, i) => <div key={i} className="muted">✎ {clock(new Date(c.t).getTime())} {c.by}: {Object.entries(c.changed).map(([k, [o, nv]]) =>
       `${(FIELDS.find((f) => f[0] === k) || [k, k])[1]} ${cs(o, 3)} → ${cs(nv, 3)}`).join(", ")}</div>)}
     {cyc.length > 0 && <div style={{ overflow: "auto", marginTop: 8 }}><table className="tbl" style={{ fontSize: 12.5, borderCollapse: "collapse", minWidth: 640 }}>
-      <thead><tr>{["cyklus", "výkon kW", "nabíjení", "zastaveno", "rozpětí při stopu", "doba návratu", "vybíjení", "největší rozpětí", "další výkon kW"].map((h) =>
+      <thead><tr>{["cyklus", "nabíjení kW", "doba nabíjení", "zastaveno", "rozpětí při stopu", "doba návratu", "vybíjení kW", "doba vybíjení", "největší rozpětí", "další nabíjení kW"].map((h) =>
         <th key={h} style={{ textAlign: "right", padding: "3px 10px", borderBottom: "1px solid var(--border)", fontWeight: 600 }} className="muted">{h}</th>)}</tr></thead>
       <tbody>{cyc.map((c) => <tr key={c.n}>{[c.n, cs(c.p_kw, 2), dur(c.t_charge_s), c.stop_by, `${cs(c.delta_stop_mv)} mV`,
-        c.t_return_s == null ? "—" : `${dur(c.t_return_s)}${c.return_timeout ? " (limit)" : ""}`, dur(c.t_discharge_s), c.delta_max_mv == null ? "—" : `${cs(c.delta_max_mv)} mV`, cs(c.p_next_kw, 2)].map((v, i) =>
+        c.t_return_s == null ? "—" : `${dur(c.t_return_s)}${c.return_timeout ? " (limit)" : ""}`, cs(c.p_dis_kw ?? c.p_kw, 2), dur(c.t_discharge_s), c.delta_max_mv == null ? "—" : `${cs(c.delta_max_mv)} mV`, cs(c.p_next_kw, 2)].map((v, i) =>
         <td key={i} style={{ textAlign: "right", padding: "3px 10px", borderBottom: "1px solid var(--border)", fontVariantNumeric: "tabular-nums" }}>{v}</td>)}</tr>)}</tbody>
     </table></div>}
   </div>);
@@ -311,7 +312,7 @@ export default function BmsBalance({ block, open, setOpen }) {
   const running = run?.status === "running";
   const num = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k, v === "" ? null : Number(String(v).replace(",", "."))]));
   const act = async (fn, ok) => { setMsg(""); try { await fn(); if (ok) setMsg(ok); } catch (e) { setMsg(`⚠ ${e.message}`); } };
-  const start = () => { if (!window.confirm(`Spustit balancování ${block.block_idx ? `B${block.block_idx}` : block.name}?\n\nTERA převezme řízení baterie: nabíjení ze sítě až ${cs(form.p_max_kw, 1)} kW, při čekání baterie nekryje dům, ve vybíjecím kroku jde energie do domu / sítě. Plánovač a pravidla jsou po dobu běhu pozastavené. Měnič řídí všechny zapnuté bloky zároveň.`)) return;
+  const start = () => { if (!window.confirm(`Spustit balancování ${block.block_idx ? `B${block.block_idx}` : block.name}?\n\nTERA převezme řízení baterie: nabíjení ze sítě ${cs(form.p_max_kw, 1)} kW v prvním cyklu (každý další × ${cs(form.chg_ratio, 2)}), při čekání baterie nekryje dům, ve vybíjecím kroku jde energie do domu / sítě. Plánovač a pravidla jsou po dobu běhu pozastavené. Měnič řídí všechny zapnuté bloky zároveň.`)) return;
     act(async () => { const r = await api.balStart({ bms_module_id: mid, params: num(form), confirmed: true }); rid.current = r.id; last.current = 0; setS(EMPTY()); setRun(r); setDirty(false); setPast(null); }); };
   const stop = () => window.confirm("Zastavit balancování a vrátit měnič do běžného režimu?") && act(async () => setRun(await api.balStop(run.id)), "Zastaveno, měnič se vrací do běžného režimu.");
   const apply = () => act(async () => { setRun(await api.balParams(run.id, num(form))); setDirty(false); }, "Parametry změněny, platí od dalšího kroku.");
@@ -322,6 +323,7 @@ export default function BmsBalance({ block, open, setOpen }) {
   const p = running ? run.params : num(form || {});
   const st = run?.state || {}, ph = PH[run?.phase] || PH.wait;
   const lastCyc = (st.cycles || []).filter((x) => x.t_return_s != null).slice(-1)[0];
+  const curCyc = (st.cycles || []).slice(-1)[0];
   const phaseAge = st.phase_at ? (Date.now() - new Date(st.phase_at).getTime()) / 1000 : null;
   const stopMv = (p.delta_stop_v || 0) * 1000, ratio = c && stopMv ? Math.min(1.25, c.delta / stopMv) : 0;
   const over = c && stopMv && c.delta >= stopMv;
@@ -335,7 +337,7 @@ export default function BmsBalance({ block, open, setOpen }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <b style={{ fontSize: 17 }}>⚖ Balancování {block.block_idx ? `B${block.block_idx}` : block.name}</b>
         {running
-          ? <span className="bal-badge" style={{ background: ph.c, color: "#fff", fontWeight: 800, borderRadius: 999, padding: "4px 13px", fontSize: 13.5 }}>{ph.icon} {ph.name} · cyklus {run.cycle} · {dur(phaseAge)}</span>
+          ? <span className="bal-badge" style={{ background: ph.c, color: "#fff", fontWeight: 800, borderRadius: 999, padding: "4px 13px", fontSize: 13.5 }}>{ph.icon} {ph.name} · cyklus {run.cycle} · {dur(phaseAge)}{run.phase === "discharge" && curCyc?.t_discharge_plan_s > 0 ? ` z ${dur(curCyc.t_discharge_plan_s)}` : ""}</span>
           : <span className="muted" style={{ fontSize: 13 }}>{run && run.status !== "running" ? `poslední běh #${run.id}: ${run.result?.reason || run.status}` : "neběží"}</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {canCtl && !running && <button className="btn primary" onClick={start} disabled={!form || !c} style={{ fontWeight: 800, padding: "8px 18px", fontSize: 14, borderRadius: 10 }}>▶ Spustit balancování</button>}
@@ -359,7 +361,9 @@ export default function BmsBalance({ block, open, setOpen }) {
         <Stat label="Nejnižší článek" sub={`č. ${c.nmin} · box ${Math.ceil(c.nmin / c.per_module)}/${((c.nmin - 1) % c.per_module) + 1}`} color={LO}>{cs(c.min / 1000, 3)} V</Stat>
         <Stat label="Průměr článků">{cs(c.modules.reduce((s, m) => s + m.avg * m.mv.length, 0) / c.count / 1000, 3)} V</Stat>
         {running && <Stat label="Výkon cyklu" sub={`povel teď ${cs(S.p_set[S.t.length - 1], 1)} kW`}>{cs(st.p_kw, 2)} kW</Stat>}
-        {running && <Stat label="Doba návratu (posl.)" sub={`cíl ${dur(p.t_return_min * 60)}`}>{lastCyc ? dur(lastCyc.t_return_s) : "—"}</Stat>}
+        {running && run.phase === "discharge" && curCyc?.t_discharge_plan_s > 0 &&
+          <Stat label="Vybíjení — zbývá" color={HI} sub={`${cs(curCyc.p_dis_kw, 2)} kW · celkem ${dur(curCyc.t_discharge_plan_s)} (${cs(p.dis_t_ratio, 2)} × ${dur(curCyc.t_charge_s)})`}>{dur(Math.max(0, curCyc.t_discharge_plan_s - phaseAge))}</Stat>}
+        {running && <Stat label="Doba návratu (posl.)" sub={`další nabíjení ${cs((st.p_kw || 0) * (p.chg_ratio ?? 0.5), 2)} kW`}>{lastCyc ? dur(lastCyc.t_return_s) : "—"}</Stat>}
         {running && <Stat label="Od startu" sub={`SoC ${cs(S.soc[S.t.length - 1])} %`}>{dur((Date.now() - new Date(run.started_at).getTime()) / 1000)}</Stat>}
       </div>}
 
