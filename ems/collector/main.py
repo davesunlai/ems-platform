@@ -1107,7 +1107,9 @@ async def tick_inverter_state(state: dict) -> None:
             # v1.10.7: každý jiný alarmový stav 0x1xxx (hex = kód alarmu Solis, např. 4114 = 0x1012 = OV-G-F)
             # → událost při začátku a při návratu (s dobou trvání). 4121 má vlastní větev výše.
             alarm = state.setdefault("invstate_alarm", {})
-            is_alarm = (val & 0xF000) == 0x1000 and val != 4121
+            # v1.12.9: kód alarmu Solis je „desítkový v hexu“ (1012, 1019…). Stav 4220 = 0x107C, který měnič hlásí při
+            # nuceném nabíjení/vybíjení, alarm není (číslice C) → dřív chodilo „alarm 107C“ + „zpět v normálu“ při každém kroku.
+            is_alarm = (val & 0xF000) == 0x1000 and val != 4121 and format(val, "X").isdigit()
             cur = alarm.get(dev)
             if is_alarm and (cur is None or cur["val"] != val):
                 alarm[dev] = {"val": val, "since": now}

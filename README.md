@@ -1,3 +1,9 @@
+## v1.12.9 — stav 4220 při nuceném režimu už není „alarm“
+
+- Kolektor bral každé stavové slovo 0x1xxx jako alarm. Stav 4220 (0x107C), který Solis hlásí při nuceném nabíjení/vybíjení,
+  tak při každém přepnutí kroku vytvořil události „⚠ Solis alarm 107C“ a „✓ Solis zpět v normálu“ (a e-maily). Alarm je teď jen
+  kód, jehož hex zápis tvoří samé číslice (1012 OV-G-F, 1019 IGFOL-F…).
+
 ## v1.12.8 — balancování: výchozí poměr vybíjecího výkonu 0,5
 
 - `dis_p_ratio` výchozí 0,5 (dřív 1,0). Uložené („zafixované“) hodnoty a běžící balancování se nemění.
