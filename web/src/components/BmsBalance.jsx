@@ -39,7 +39,7 @@ const POINT_COLS = [
   ["dis_t_ratio", "poměr doby vybíjení", 0.05, "Doba vybíjení = tento poměr × doba posledního schodu nabíjení."],
   ["p_min_kw", "min. výkon kW", 0.1, "Pod tuto hodnotu se nabíjecí výkon v bodě nesnižuje."],
 ];
-const MODES = { delta: "Rozpětí článků (max − min)", vmax: "Napětí nejvyššího článku (body podle SoC)" };
+const MODES = { vmax: "Napětí nejvyššího článku (body podle SoC)", delta: "Rozpětí článků (max − min)" };
 
 const cs = (v, d = 0) => (v == null || Number.isNaN(Number(v)) ? "—" : Number(v).toLocaleString("cs-CZ", { minimumFractionDigits: d, maximumFractionDigits: d }));
 const dur = (s) => { if (s == null) return "—"; s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
@@ -354,7 +354,7 @@ export default function BmsBalance({ block, open, setOpen, hover, onHover, onPic
   const [S, setS] = useState(EMPTY);
   const [form, setForm] = useState(null);                // parametry logiky „rozpětí“
   const [formV, setFormV] = useState(null);              // parametry logiky „napětí nejvyššího článku“
-  const [mode, setMode] = useState("delta");
+  const [mode, setMode] = useState("vmax");             // výchozí logika = napětí nejvyššího článku (body podle SoC), v1.13.3
   const [dirty, setDirty] = useState(false);
   const [hist, setHist] = useState([]);
   const [past, setPast] = useState(null);               // otevřený záznam z historie {run, S}

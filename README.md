@@ -1,3 +1,7 @@
+## v1.13.3 — balancování: výchozí logika „napětí nejvyššího článku (body podle SoC)“
+
+- Přepínač logiky je předvolený na body podle SoC a je uvedený jako první; „rozpětí článků“ zůstává jako druhá volba. Jen web.
+
 ## v1.13.2 — články přes celou obrazovku: napětí bloků vedle sebe
 
 - V hlavičce (vedle výkonu baterie) napětí celého bloku pro všechny BMS lokality (B1, B2…), průměr na článek, SoC a rozdíl
