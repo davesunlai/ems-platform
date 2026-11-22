@@ -91,6 +91,8 @@ function BalanceChart({ S, params, live }) {
       marks: [[params?.delta_stop_v, "stop", HI], [params?.delta_final_v, "finál", "var(--green)"], [params?.delta_resume_v, "návrat", LO]] },
     { key: "p", title: "Výkon baterie (kW, + nabíjení)", h: 105, r: range(["p_set", "p_bat"], 0.3, true), f: (v) => cs(v, 1),
       lines: [{ k: "p_set", c: "var(--fg)", label: "povel", step: true }, { k: "p_bat", c: "var(--green)", label: "změřeno" }] },
+    { key: "s", title: "SoC podle BMS (%)", h: 80, r: range(["soc"], 1.5), f: (v) => cs(v, 0),
+      lines: [{ k: "soc", c: "var(--fg)", label: "SoC" }] },
   ];
   const GAP = 26, TOP = 40;
   let y = TOP; for (const p of panels) { p.y = y; y += p.h + GAP; }

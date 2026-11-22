@@ -164,6 +164,15 @@ async def saved_defaults(bms_module_id: str) -> dict:
         return dict(DEFAULTS)
 
 
+async def _announce(locality_id, title: str, detail: str) -> None:
+    """Událost do provozního deníku → e-mail odběratelům lokality (rozešle kolektor). Kroky cyklů se neoznamují."""
+    try:
+        from ems.alerts import db as alerts_db
+        await alerts_db.record_event(locality_id, "control", title, detail)
+    except Exception as exc:
+        logger.debug("balancování oznámení: %s", exc)
+
+
 # ---------------------------------------------------------------- povely měniči
 async def _force(b: dict, action: str, power_kw: float, reason: str) -> None:
     """Drží na měniči požadovaný režim; nový povel jen když se stav liší (jako test baterie)."""
@@ -234,6 +243,12 @@ async def _finish(b: dict, status: str, reason: str, now: datetime) -> None:
               "t_return_last_s": rets[-1] if rets else None}
     await _update(b["id"], status=status, state=st, result=result, ended_at=now)
     await _release(b["inverter_id"], reason)
+    word = {"done": "dokončeno", "stopped": "zastaveno", "aborted": "PŘERUŠENO"}.get(status, status)
+    await _announce(b.get("locality_id"), f"⚖ Balancování B{b.get('block_idx') or '?'} {word}",
+                    f"{reason}. Trvání {result['duration_s'] // 60} min, cyklů {result['cycles']}, rozpětí článků "
+                    f"{result['delta_start_mv']} → {result['delta_end_mv']} mV, nabito {result['e_charged_kwh']} kWh, vybito "
+                    f"{result['e_discharged_kwh']} kWh. Řízení baterie se vrací plánovači a pravidlům; oznámení o vynuceném "
+                    f"nabíjení a vybíjení se opět posílají.")
     logger.info("balancování #%s: %s (%s)", b["id"], status, reason)
 
 
@@ -372,9 +387,13 @@ async def watchdog() -> None:
         rows = await conn.fetch(
             "UPDATE bms_balance SET status='aborted', ended_at=now(), "
             "result = jsonb_build_object('status','aborted','reason','řídicí smyčka neodpovídala (restart serveru?)') "
-            "WHERE status='running' AND heartbeat_at < now() - make_interval(secs => $1) RETURNING id, inverter_id", WATCHDOG_S)
+            "WHERE status='running' AND heartbeat_at < now() - make_interval(secs => $1) "
+            "RETURNING id, inverter_id, locality_id, block_idx", WATCHDOG_S)
     for r in rows:
         await _release(r["inverter_id"], "řídicí smyčka neodpovídala")
+        await _announce(r["locality_id"], f"⚖ Balancování B{r['block_idx'] or '?'} PŘERUŠENO",
+                        "Řídicí smyčka neodpovídala (restart serveru?). Měnič se vrací do běžného režimu, řízení baterie má opět "
+                        "plánovač a pravidla; oznámení o vynuceném nabíjení a vybíjení se opět posílají.")
         logger.warning("balancování #%s: bez tepu > %s s → stop", r["id"], WATCHDOG_S)
 
 
@@ -464,6 +483,12 @@ async def start(body: StartBody, user: dict = Depends(controller)) -> dict:
             body.bms_module_id, ctx["inverter_id"], ctx["locality_id"], ctx["block_idx"], json.dumps(params), json.dumps(state),
             user.get("username"))
     live.touch(body.bms_module_id)
+    await _announce(ctx["locality_id"], f"⚖ Balancování B{ctx['block_idx']} spuštěno",
+                    f"Spustil {user.get('username')}. Po dobu balancování je řízení baterie NADŘAZENO všemu ostatnímu — plánovač, "
+                    f"časový plán, pravidla i ruční povely k měniči jsou pozastavené. Baterie se cyklicky nabíjí (až "
+                    f"{params['p_max_kw']:g} kW ze sítě), čeká a vybíjí; během čekání nekryje spotřebu domu. Jednotlivé kroky "
+                    f"se neoznamují, další zpráva přijde po skončení. Meze: stop {params['delta_stop_v'] * 1000:g} mV, návrat "
+                    f"{params['delta_resume_v'] * 1000:g} mV, finál {params['delta_final_v'] * 1000:g} mV, nejdéle {params['max_hours']:g} h.")
     return _row(r)
 
 

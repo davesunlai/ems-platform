@@ -1,3 +1,18 @@
+## v1.12.4 — graf balancování: čtvrtý panel SoC
+
+- Pod výkonem je panel „SoC podle BMS (%)“ na stejné časové ose (živě i v historii; data se ukládala už od 1.12.0).
+
+## v1.12.3 — balancování: e-mail při spuštění a po skončení
+
+- Při spuštění balancování přijde oznámení, že řízení baterie je po dobu běhu nadřazeno plánovači, pravidlům i ručním povelům;
+  po skončení (dokončeno / zastaveno / přerušeno, i pojistkou kolektoru) přijde oznámení s výsledkem. Kroky cyklů se neoznamují;
+  oznámení o vynuceném nabíjení/vybíjení z ostatních zdrojů chodí dál.
+
+## v1.12.2 — balancování neposílá oznámení o každém kroku
+
+- Povely se zdrojem `bms_balance` (nabíjení / čekání / vybíjení / návrat do Self-Use) už nevytvářejí událost ani e-mail
+  „Vynucené nabíjení / Vybíjení do sítě“. Ostatní zdroje (ručně, plánovač, časový plán, test baterie) oznamují dál.
+
 ## v1.12.1 — balancování: parametry stále rozbalené, tlačítko „Změnit parametry balancování“
 
 - Blok parametrů je vidět i za běhu (dřív sbalený); tlačítko pro zápis změn do běžícího balancování se jmenuje

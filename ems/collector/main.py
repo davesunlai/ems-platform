@@ -300,7 +300,9 @@ async def process_queue(active: dict) -> None:
                 except Exception:
                     pass
                 # notifikace operace (spuštění režimu i návrat do Self-Use)
-                if c["action"] in ("force_charge", "force_discharge", "spiral", "stop"):
+                # ⚖ balancování střídá nabíjení/čekání/vybíjení po minutách → jeho kroky se neoznamují (v1.12.2)
+                if c["action"] in ("force_charge", "force_discharge", "spiral", "stop") \
+                        and (c["params"] or {}).get("source") != "bms_balance":
                     try:
                         from ems.alerts import db as alerts_db
                         loc_id = next((d.get("locality_id") for d in await list_devices()
