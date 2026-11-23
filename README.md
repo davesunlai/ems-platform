@@ -1,3 +1,8 @@
+## v1.13.11 — tabulka článků: číslo boxu u napětí modulu
+
+- Poslední sloupec: barevný štítek s číslem boxu, napětí modulu na mV a proužek polohy mezi nejnižším a nejvyšším boxem
+  (oranžová nad mediánem boxů, modrá pod). Jen web.
+
 ## v1.13.10 — tabulka článků: živé řazení boxů podle napětí
 
 - Články přes celou obrazovku: výrazné tlačítko „⇅ Seřadit boxy podle celkového napětí“. Řádky tabulky napětí i teplot se

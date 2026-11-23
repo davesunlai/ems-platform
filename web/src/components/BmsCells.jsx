@@ -59,6 +59,7 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
   // sortV: řádky (boxy) seřazené podle celkového napětí modulu, nejvyšší nahoře; přepočítá se s každým snímkem
   const sumOf = (m) => m.mv.reduce((x, y) => x + y, 0);
   const rows = sortV ? [...c.modules].sort((a, b) => sumOf(b) - sumOf(a) || a.idx - b.idx) : c.modules;
+  const sums = c.modules.map(sumOf), sMin = Math.min(...sums), sMax = Math.max(...sums), sMed = median(sums);
   const fs = big ? 15 : 10.5, pad = big ? "4px 7px" : "1px 2px";
   const temps = c.modules.flatMap((m) => m.temp);
   const tMed = temps.length ? median(temps) : 0;
@@ -71,7 +72,7 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
           <th style={{ textAlign: "left", padding: "1px 6px 1px 0" }} className="muted">modul</th>
           {Array.from({ length: c.per_module }, (_, i) => <th key={i} className="muted" style={{ fontWeight: 400, padding: pad }}>{i + 1}</th>)}
           <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>{mode === "mv" ? "průměr" : "modul"}</th>
-          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }} title="Napětí modulu = součet jeho článků, na mV">V modulu</th>}
+          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }} title="Číslo boxu a napětí modulu = součet jeho článků, na mV. Proužek = poloha mezi nejnižším a nejvyšším boxem.">box · V modulu</th>}
         </tr></thead>
         <tbody>{rows.map((m, ri) => (
           <tr key={m.idx}>
@@ -94,9 +95,23 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
                 </td>);
             })}
             <td style={{ padding: "1px 6px", textAlign: "right" }}>{mode === "mv" ? m.avg.toFixed(0) : (m.temp_module != null ? `${m.temp_module.toFixed(1)} °C` : "—")}</td>
-            {mode === "mv" && <td style={{ padding: "1px 6px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                                  title={`součet napětí ${m.mv.length} článků modulu${m.voltage != null ? ` · BMS hlásí modul ${m.voltage.toFixed(2)} V (rozlišení 10 mV)` : ""}`}>
-              {(m.mv.reduce((x, y) => x + y, 0) / 1000).toFixed(3)}</td>}
+            {mode === "mv" && (() => {             // číslo boxu + napětí modulu na mV + proužek polohy mezi nejnižším a nejvyšším boxem
+              const sv = sumOf(m), rel = sMax > sMin ? (sv - sMin) / (sMax - sMin) : 0.5, hi = sv >= sMed;
+              const col = hi ? HIGH[2] : LOW[2];
+              return (
+                <td style={{ padding: big ? "3px 8px" : "1px 6px", whiteSpace: "nowrap" }}
+                    title={`box ${m.idx}: součet napětí ${m.mv.length} článků = ${(sv / 1000).toFixed(3)} V, ${sv - sMed >= 0 ? "+" : ""}${Math.round(sv - sMed)} mV od mediánu boxů${m.voltage != null ? ` · BMS hlásí modul ${m.voltage.toFixed(2)} V (rozlišení 10 mV)` : ""}`}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: big ? 8 : 5 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: big ? 30 : 20, height: big ? 22 : 15, padding: "0 5px",
+                                   borderRadius: 999, background: col, color: "#fff", fontWeight: 800, fontSize: big ? 13 : 9.5, lineHeight: 1 }}>{m.idx}</span>
+                    <span style={{ display: "inline-block", textAlign: "right" }}>
+                      <span style={{ display: "block", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{(sv / 1000).toFixed(3)}</span>
+                      <span style={{ display: "block", height: big ? 4 : 3, width: big ? 76 : 46, borderRadius: 2, background: "var(--border, #ddd)", position: "relative", marginTop: 1 }}>
+                        <i style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: `${Math.max(6, rel * 100)}%`, borderRadius: 2, background: col, transition: "width .6s ease" }} />
+                      </span>
+                    </span>
+                  </span>
+                </td>); })()}
           </tr>))}</tbody>
       </table>
     </div>);
@@ -243,7 +258,7 @@ export default function BmsCells({ locId }) {
             {sortV && <span className="muted" style={{ fontSize: 12 }}>nejvyšší napětí nahoře · číslo za tečkou = pořadí · rozdíl mezi prvním a posledním boxem {(() => { const v = c.modules.map((m) => m.mv.reduce((x, y) => x + y, 0)); return (Math.max(...v) - Math.min(...v)).toLocaleString("cs-CZ"); })()} mV</span>}
           </div>
           <CellTable c={c} mode="mv" big trend={fb.trend} hover={hover} onHover={setHover} onPick={setSel} sortV={sortV} />
-          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec „V modulu“ = součet napětí článků modulu na mV. Najetím se článek zvýrazní i v seřazeném seznamu, kliknutím se otevře jeho průběh." /></div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Poslední sloupec = číslo boxu a součet napětí jeho článků na mV; proužek ukazuje, kde box leží mezi nejnižším a nejvyšším (oranžová nad mediánem boxů, modrá pod). Najetím se článek zvýrazní i v seřazeném seznamu, kliknutím se otevře jeho průběh." /></div>
           <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
             {fb.trend
               ? <>Šipka u článku = změna jeho napětí za posledních {fb.trend.samples} snímků ({fb.trend.window_s < 120 ? `${fb.trend.window_s} s` : `${Math.round(fb.trend.window_s / 60)} min`}):{" "}
