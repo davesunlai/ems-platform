@@ -1,3 +1,16 @@
+## v1.13.6 — balancování (body podle SoC): bod se posune, když SoC přeroste a strop neomezuje
+
+- Chyba: na další bod se přecházelo jen na konci cyklu. Když článek ke stropu bodu nedošel (žádný cyklus), balancování zůstalo
+  v bodě „do 50 %“ i při SoC 65 % a nabíjelo dál se stropem 3,35 V. Teď: SoC ≥ SoC bodu a nejvyšší článek pod (strop − hystereze)
+  → hned další bod (vstupním výkonem). Když strop omezuje, platí dál minimální počet cyklů.
+- Stejně se opraví i start bez známého SoC (první takt bez dat z BMS začínal bodem 1).
+
+## v1.13.5 — pruh vynuceného nabíjení/vybíjení ukazuje skutečný výkon baterie
+
+- Dashboard: u „Vynucené nabíjení / vybíjení“ je vedle požadovaného výkonu i skutečný výkon baterie z měniče (obnova à 10 s).
+  Když baterie plní méně než 85 % požadavku, jde opačným směrem nebo stojí, pruh to napíše (a kolik bloků je zapojeno);
+  při datech starších než 3 min napíše, že skutečný výkon není znám. Jen web.
+
 ## v1.13.4 — ruční řízení: plynulý výkon od 0,01 kW, tlačítko „Klid baterie“
 
 - Ruční nabíjení/vybíjení bere výkon s desetinnou čárkou i tečkou (dřív čárka = neplatné číslo poslané do měniče), ukazuje

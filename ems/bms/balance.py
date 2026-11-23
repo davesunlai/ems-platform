@@ -61,6 +61,7 @@ PHASES = {"charge": "Nabíjení", "wait": "Čekání na návrat", "discharge": "
 # Nabíjení: jakmile nejvyšší článek dojde na (strop − hystereze), výkon se sníží poměrem `chg_ratio` (to není cyklus),
 # nejníž na minimum bodu. Na minimu a při dosažení stropu → vybíjení `dis_p_ratio` × poslední nabíjecí výkon po dobu
 # `dis_t_ratio` bodu × doba posledního schodu nabíjení → konec cyklu. Další bod: odjetý min. počet cyklů A SoC ≥ SoC bodu.
+# Když SoC přeroste hodnotu bodu a článek je přitom pod (strop − hystereze), přejde se na další bod i bez cyklů (v1.13.6).
 POINT_DEFAULT = {"soc": 100.0, "u_max": 3.52, "cycles": 4, "hyst": 0.01, "dis_t_ratio": 0.1, "p_min_kw": 1.0}
 DEFAULTS_V = {
     "p_in_kw": 10.0,            # vstupní výkon: první nabíjení každého bodu
@@ -509,6 +510,17 @@ async def _vmax_step(b, p, st, now, phase, cycle, p_kw, vmax, soc, t_phase, inv,
     if phase not in ("charge", "discharge"):
         go("charge", "Pokračuji nabíjením")
         phase = "charge"
+    if phase == "charge" and not last_pt and soc is not None and soc >= float(pt["soc"]) and vmax < thr:
+        # v1.13.6: SoC už je nad hodnotou bodu a jeho strop přitom nabíjení neomezuje (článek je pod strop − hystereze)
+        # → bod nemá co balancovat, jde se dál. Dřív se čekalo na dokončený cyklus, který při nedosaženém stropu nikdy nepřišel.
+        nxt = pts[i + 1]
+        st.update({"pt": i + 1, "pt_cycles": 0, "p_kw": float(p["p_in_kw"]), "step_at": now.isoformat()})
+        st.setdefault("cyc_steps", []).append(float(p["p_in_kw"]))
+        st["log"].append({"t": now.isoformat(), "text": f"Bod {i + 2}: SoC {soc:g} % ≥ {pt['soc']:g} % a strop bodu {i + 1} neomezoval "
+                          f"(článek {vmax} mV < {thr} mV) → strop {nxt['u_max']:g} V, cíl {nxt['soc']:g} %, nabíjení {p['p_in_kw']:g} kW"})
+        p_set = await _breaker_cap(b, float(p["p_in_kw"]), inv)
+        await _force(b, "force_charge", p_set, f"bod {i + 2} cyklus {cycle} nabíjení")
+        return cycle, p_set, int(round(nxt["u_max"] * 1000)), None
     if phase == "charge":
         t_step = _secs(st.get("step_at"), now)
         at_min = p_kw <= p_min + 1e-6

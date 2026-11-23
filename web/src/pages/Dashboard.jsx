@@ -93,6 +93,7 @@ function ControlBanners({ deviceIds, localityId }) {
   const [plans, setPlans] = useState([]);
   const [bt, setBt] = useState(null);          // 🧪 běžící test baterie
   const [bal, setBal] = useState([]);          // ⚖ běžící balancování bloků (podle BMS modulů lokality)
+  const [real, setReal] = useState({});        // modul → skutečný výkon baterie z měniče (W, + nabíjení) a jeho stáří
   const key = deviceIds.join(",");
   useEffect(() => {
     if (!deviceIds.length && !localityId) return;
@@ -105,7 +106,13 @@ function ControlBanners({ deviceIds, localityId }) {
         if (alive) setBal(runs.filter(Boolean));
       } catch { /* bez BMS nic nezobrazujeme */ }
     };
+    const loadReal = () => deviceIds.forEach((id) => api.latest(id).then((l) => {
+      const m = l.metrics?.battery_power;
+      if (alive && m) setReal((r) => ({ ...r, [id]: { w: Number(m.value), at: new Date(m.time).getTime(),
+        packs: [1, 2, 3, 4].filter((k) => Math.abs(Number(l.metrics?.[`battery_power_${k}`]?.value ?? 0)) > 50 || Number(l.metrics?.[`battery_voltage_${k}`]?.value ?? 0) > 100).length } }));
+    }).catch(() => {}));
     const load = () => {
+      if (n % 2 === 0) loadReal();                         // skutečný výkon baterie à 10 s
       if (localityId && n++ % 3 === 0) loadBal();          // à 15 s
       if (deviceIds.length) api.controlStates(key).then((r) => alive && setStates(r.states || {})).catch(() => {});
       api.listOutputs().then((list) => alive && setOutputs(list || [])).catch(() => {});
@@ -181,7 +188,21 @@ function ControlBanners({ deviceIds, localityId }) {
         return (
           <div key={id} className="ems-active-bar" style={{ color: act.color, background: `color-mix(in srgb, ${act.color} 14%, transparent)`, marginBottom: 6 }}>
             <span className="ems-pulse" style={{ fontSize: 16 }}>{act.icon}</span>
-            <span>{act.label}{actPower != null ? ` · požadováno ${(actPower / 100).toFixed(1)} kW` : ""}
+            <span>{act.label}{actPower != null ? ` · požadováno ${(actPower / 100).toLocaleString("cs-CZ", { maximumFractionDigits: 2 })} kW` : ""}
+              {(() => {                              // v1.13.5: vedle povelu i to, co baterie skutečně dělá (z měniče)
+                const r = real[id];
+                if (!r || !["force_charge", "force_discharge"].includes(st.action)) return null;
+                const age = (Date.now() - r.at) / 1000, kw = r.w / 1000, want = (actPower ?? 0) / 100;
+                if (age > 180) return <b> · skutečný výkon neznámý (data z měniče stará {Math.round(age / 60)} min)</b>;
+                const dirOk = st.action === "force_charge" ? kw > 0.05 : kw < -0.05;
+                const pct = want > 0 ? Math.abs(kw) / want : 1;
+                const fk = Math.abs(kw).toLocaleString("cs-CZ", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                return (<>
+                  <b> · skutečně {kw >= 0 ? "nabíjí" : "vybíjí"} {fk} kW</b>
+                  {want >= 0.5 && !dirOk && <span> ⚠ baterie povel neplní (jde opačným směrem nebo stojí)</span>}
+                  {want >= 0.5 && dirOk && pct < 0.85 && <span> ⚠ jen {Math.round(pct * 100)} % požadavku — výkon omezuje BMS nebo měnič{r.packs ? ` (zapojeno bloků: ${r.packs})` : ""}</span>}
+                </>);
+              })()}
               {st.params?.power_req != null && st.params.power_req !== actPower ? ` (pravidlo ${(st.params.power_req / 100).toFixed(1)} kW, sníženo stropem exportu)` : ""}
               {st.params?.target_soc != null ? ` · cíl ${st.params.target_soc} %` : ""}</span>
             <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.85, marginLeft: "auto" }}>
