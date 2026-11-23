@@ -55,7 +55,10 @@ function PowerBadge({ power, current }) {
 }
 
 /** Jedna tabulka 11 × 15: mode "mv" = napětí, "temp" = teploty. big = režim celé obrazovky (větší písmo). */
-function CellTable({ c, mode, big, trend, hover, onHover, onPick }) {
+function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
+  // sortV: řádky (boxy) seřazené podle celkového napětí modulu, nejvyšší nahoře; přepočítá se s každým snímkem
+  const sumOf = (m) => m.mv.reduce((x, y) => x + y, 0);
+  const rows = sortV ? [...c.modules].sort((a, b) => sumOf(b) - sumOf(a) || a.idx - b.idx) : c.modules;
   const fs = big ? 15 : 10.5, pad = big ? "4px 7px" : "1px 2px";
   const temps = c.modules.flatMap((m) => m.temp);
   const tMed = temps.length ? median(temps) : 0;
@@ -70,9 +73,9 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick }) {
           <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>{mode === "mv" ? "průměr" : "modul"}</th>
           {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }} title="Napětí modulu = součet jeho článků, na mV">V modulu</th>}
         </tr></thead>
-        <tbody>{c.modules.map((m) => (
+        <tbody>{rows.map((m, ri) => (
           <tr key={m.idx}>
-            <td style={{ padding: "1px 6px 1px 0", fontWeight: 600 }}>{m.idx}</td>
+            <td style={{ padding: "1px 6px 1px 0", fontWeight: 600, whiteSpace: "nowrap" }}>{m.idx}{sortV && <span className="muted" style={{ fontWeight: 400, fontSize: "0.8em" }}> · {ri + 1}.</span>}</td>
             {(mode === "mv" ? m.mv : m.temp).map((v, i) => {
               const n = (m.idx - 1) * c.per_module + i + 1;
               const mv = m.mv[i];
@@ -112,6 +115,7 @@ export default function BmsCells({ locId }) {
   const [hover, setHover] = useState(null);           // {n, src} článek pod myší (tabulka ↔ seřazený seznam se zvýrazňují navzájem)
   const [sel, setSel] = useState(null);               // číslo článku s otevřeným detailem
   const histRef = useRef({});                         // modul → živé snímky po dobu otevřeného okna [{t, mv[], soc, pw}]
+  const [sortV, setSortV] = useState(false);          // řádky tabulek seřazené podle napětí boxu (živě)
   const [balRun, setBalRun] = useState({});          // modul → běží ⚖ balancování (čtení po 5 s pak nezávisí na otevřeném okně)
   // Živé sledování: dokud je okno otevřené, hlásíme to serveru (EMSBOX pak čte články po pár sekundách) a dotahujeme po 5 s.
   useEffect(() => {
@@ -231,8 +235,14 @@ export default function BmsCells({ locId }) {
           <div style={{ marginBottom: 6 }}>{head(c, s)}</div>
           {liveBar(fb, c)}
           <BmsBalance key={fb.module_id} block={fb} open={bal} setOpen={setBal} hover={hover} onHover={setHover} onPick={setSel} localHist={histRef.current[fb.module_id]} />
-          <h3 style={{ fontSize: 15, margin: "10px 0 4px" }}>Napětí článků (mV)</h3>
-          <CellTable c={c} mode="mv" big trend={fb.trend} hover={hover} onHover={setHover} onPick={setSel} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "10px 0 4px" }}>
+            <h3 style={{ fontSize: 15, margin: 0 }}>Napětí článků (mV)</h3>
+            <button className="btn" onClick={() => setSortV(!sortV)} title="Řádky (boxy) se průběžně řadí podle součtu napětí článků, nejvyšší nahoře. Platí pro tabulku napětí i teplot."
+                    style={{ fontWeight: 800, padding: "7px 16px", fontSize: 14, borderRadius: 10, background: sortV ? "#eb6834" : "#2a78d6", color: "#fff" }}>
+              {sortV ? "● Řazeno podle napětí boxu (živě) — vrátit pořadí 1, 2, 3…" : "⇅ Seřadit boxy podle celkového napětí"}</button>
+            {sortV && <span className="muted" style={{ fontSize: 12 }}>nejvyšší napětí nahoře · číslo za tečkou = pořadí · rozdíl mezi prvním a posledním boxem {(() => { const v = c.modules.map((m) => m.mv.reduce((x, y) => x + y, 0)); return (Math.max(...v) - Math.min(...v)).toLocaleString("cs-CZ"); })()} mV</span>}
+          </div>
+          <CellTable c={c} mode="mv" big trend={fb.trend} hover={hover} onHover={setHover} onPick={setSel} sortV={sortV} />
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec „V modulu“ = součet napětí článků modulu na mV. Najetím se článek zvýrazní i v seřazeném seznamu, kliknutím se otevře jeho průběh." /></div>
           <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
             {fb.trend
@@ -242,7 +252,7 @@ export default function BmsCells({ locId }) {
               : "Šipky trendu článků se objeví po několika snímcích (do ~20 s od otevření okna)."}
           </div>
           <h3 style={{ fontSize: 15, margin: "18px 0 4px" }}>Teploty u článků (°C)</h3>
-          <CellTable c={c} mode="temp" big hover={hover} onHover={setHover} onPick={setSel} />
+          <CellTable c={c} mode="temp" big hover={hover} onHover={setHover} onPick={setSel} sortV={sortV} />
           {sel != null && <BmsCellDetail block={fb} n={sel} hist={histRef.current[fb.module_id]} onClose={() => setSel(null)} />}
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${(median(c.modules.flatMap((m) => m.temp)) / 10).toFixed(1)} °C`} what=". Teploty se živě nečtou, obnovují se 1× za minutu. Poslední sloupec = teplota modulu." /></div>
         </div>); })()}

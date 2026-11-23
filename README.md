@@ -1,3 +1,9 @@
+## v1.13.10 — tabulka článků: živé řazení boxů podle napětí
+
+- Články přes celou obrazovku: výrazné tlačítko „⇅ Seřadit boxy podle celkového napětí“. Řádky tabulky napětí i teplot se
+  průběžně řadí podle součtu napětí článků modulu (nejvyšší nahoře), u čísla boxu je pořadí a vedle tlačítka rozdíl mezi
+  nejvyšším a nejnižším boxem v mV. Druhým klikem zpět na pořadí 1, 2, 3… Jen web.
+
 ## v1.13.9 — tabulka článků: napětí modulu na mV
 
 - Poslední sloupec tabulky napětí ukazuje napětí modulu na tři desetinná místa (např. 51,548 → 51.548 V) jako součet napětí
