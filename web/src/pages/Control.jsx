@@ -519,7 +519,15 @@ function SolisControl({ mod }) {
 
   const force = async (action, label) => {
     if (!ask(`Opravdu poslat do měniče ${mod.id}: ${label}?`)) return;
-    setBusy(true); await runCommand(mod.id, action, { power: Math.round(Number(power) * 100) }, setStatus, label); setBusy(false);
+    if (!Number.isFinite(pKw) || pKw < 0) { setStatus({ state: "error", text: "Výkon musí být číslo ≥ 0 (např. 2,5 nebo 0,01)." }); return; }
+    setBusy(true); await runCommand(mod.id, action, { power: pReg }, setStatus, label); setBusy(false);
+  };
+  // v1.13.4: výkon lze zadat plynule od 0,01 kW (= 10 W, nejmenší krok registru měniče); desetinná čárka i tečka.
+  const pKw = Number(String(power).replace(",", ".").trim());
+  const pReg = Math.round(pKw * 100);
+  const hold = async () => {
+    if (!ask(`Držet baterii měniče ${mod.id} v klidu?\n\nPošle vynucené vybíjení 0,01 kW (10 W). Baterie pak nekryje spotřebu domu ani se nenabíjí z přebytků; dům jede ze sítě / FVE. Ruší se tlačítkem Stop. Záloha při výpadku sítě funguje dál.`)) return;
+    setBusy(true); await runCommand(mod.id, "force_discharge", { power: 1 }, setStatus, "Klid baterie (vybíjení 0,01 kW)"); setBusy(false);
   };
   const stop = async () => {
     if (!ask(`Vrátit měnič ${mod.id} do normálu (Self-Use)?`)) return;
@@ -589,11 +597,15 @@ function SolisControl({ mod }) {
       <div className="ctl-sect">
         <div className="ctl-h">🎛 Ruční řízení</div>
         <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ fontSize: 12 }}>výkon <span className="muted">(kW, celé úložiště)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 80 }} /></label>
+          <label style={{ fontSize: 12 }}>výkon <span className="muted">(kW, celé úložiště)</span> <input value={power} onChange={(e) => setPower(e.target.value)} style={{ ...fld, width: 80 }} inputMode="decimal" /></label>
+          <span className="muted" style={{ fontSize: 11.5 }} title="Měnič bere výkon v krocích po 10 W. Nejmenší nenulová hodnota je 0,01 kW.">
+            {Number.isFinite(pKw) && pKw >= 0 ? `= ${(pReg * 10).toLocaleString("cs-CZ")} W${pKw > 0 && pReg === 0 ? " (pod nejmenším krokem 10 W → 0)" : ""}` : "neplatné číslo"}</span>
           {has("force_charge") && <button className="btn" disabled={busy} onClick={() => force("force_charge", `Nabíjet teď (${power} kW)`)}>⚡ Nabíjet teď</button>}
           {has("force_discharge") && <button className="btn" disabled={busy} onClick={() => force("force_discharge", `Vybíjet teď (${power} kW)`)}>🔻 Vybíjet teď</button>}
+          {has("force_discharge") && <button className="btn" disabled={busy} onClick={hold} title="Vynucené vybíjení 0,01 kW: baterie prakticky stojí, nekryje dům a nenabíjí se z přebytků">⏸ Klid baterie</button>}
           <button className="btn" disabled={busy} style={{ color: "#e06c75" }} onClick={stop}>⏹ Stop</button>
         </div>
+        <div className="muted" style={{ fontSize: 11.5, marginTop: 3 }}>Výkon lze zadat plynule od 0,01 kW (10 W) po desetinách i setinách, s čárkou nebo tečkou.</div>
       </div>
 
       <div className="ctl-sect">

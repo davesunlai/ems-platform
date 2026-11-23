@@ -1,3 +1,9 @@
+## v1.13.4 — ruční řízení: plynulý výkon od 0,01 kW, tlačítko „Klid baterie“
+
+- Ruční nabíjení/vybíjení bere výkon s desetinnou čárkou i tečkou (dřív čárka = neplatné číslo poslané do měniče), ukazuje
+  přepočet na W a nejmenší krok měniče (10 W). Neplatná hodnota se neodešle.
+- „⏸ Klid baterie“ = vynucené vybíjení 0,01 kW (registr 1): baterie nekryje dům a nenabíjí se z přebytků; ruší Stop. Jen web.
+
 ## v1.13.3 — balancování: výchozí logika „napětí nejvyššího článku (body podle SoC)“
 
 - Přepínač logiky je předvolený na body podle SoC a je uvedený jako první; „rozpětí článků“ zůstává jako druhá volba. Jen web.
