@@ -1,0 +1,4 @@
+sunlai.teraself.com {
+        encode gzip
+        reverse_proxy sunlai-app:3000
+}

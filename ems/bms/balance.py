@@ -59,10 +59,12 @@ PHASES = {"charge": "Nabíjení", "wait": "Čekání na návrat", "discharge": "
 # --- logika 2 (v1.13.0): „vmax“ = podle napětí nejvyššího článku, body podle SoC -------------------------------------
 # Bod: do jakého SoC platí, strop nejvyššího článku, nejmenší počet cyklů, hystereze, poměr doby vybíjení, minimální výkon.
 # Nabíjení: jakmile nejvyšší článek dojde na (strop − hystereze), výkon se sníží poměrem `chg_ratio` (to není cyklus),
-# nejníž na minimum bodu. Na minimu a při dosažení stropu → vybíjení `dis_p_ratio` × poslední nabíjecí výkon po dobu
-# `dis_t_ratio` bodu × doba posledního schodu nabíjení → konec cyklu. Další bod: odjetý min. počet cyklů A SoC ≥ SoC bodu.
+# nejníž na minimum bodu. Na minimu a při dosažení stropu → vybíjení `dis_p_ratio` × poslední nabíjecí výkon, dokud nejvyšší
+# článek neklesne na (strop − `dis_drop_v` bodu) → konec cyklu. Bez časového limitu (v1.13.8); brzdí jen SoC ≤ 10 %,
+# meze článku a nejdelší běh celého balancování.
+# Další bod: odjetý min. počet cyklů A SoC ≥ SoC bodu.
 # Když SoC přeroste hodnotu bodu a článek je přitom pod (strop − hystereze), přejde se na další bod i bez cyklů (v1.13.6).
-POINT_DEFAULT = {"soc": 100.0, "u_max": 3.52, "cycles": 4, "hyst": 0.01, "dis_t_ratio": 0.1, "p_min_kw": 1.0}
+POINT_DEFAULT = {"soc": 100.0, "u_max": 3.52, "cycles": 4, "hyst": 0.01, "dis_drop_v": 0.02, "p_min_kw": 1.0}
 DEFAULTS_V = {
     "p_in_kw": 10.0,            # vstupní výkon: první nabíjení každého bodu
     "chg_ratio": 0.75,          # další schod nabíjecího výkonu = chg_ratio × aktuální
@@ -76,7 +78,7 @@ DEFAULTS_V = {
 LIMITS_V = {"p_in_kw": (0.2, 50), "chg_ratio": (0.1, 0.99), "dis_p_ratio": (0.0, 2.0), "settle_s": (5, 600),
             "cell_vtop": (3.40, 3.60), "p_idle_kw": (0.0, 1.0), "max_hours": (0.2, 72)}
 POINT_LIMITS = {"soc": (1, 100), "u_max": (3.20, 3.60), "cycles": (0, 50), "hyst": (0.001, 0.1),
-                "dis_t_ratio": (0.0, 3.0), "p_min_kw": (0.05, 20)}
+                "dis_drop_v": (0.0, 0.3), "p_min_kw": (0.05, 20)}
 
 
 def _num(v, name: str, lo: float, hi: float) -> float:
@@ -527,20 +529,22 @@ async def _vmax_step(b, p, st, now, phase, cycle, p_kw, vmax, soc, t_phase, inv,
         hit_top = vmax >= float(p["cell_vtop"]) * 1000
         full = soc is not None and soc >= 99.5 and t_phase > 180
         if (vmax >= ulim and at_min) or hit_top or full:
-            t_dis = round(t_step * float(pt["dis_t_ratio"]))
+            drop_mv = int(round(float(pt["dis_drop_v"]) * 1000))
+            dis_target = ulim - drop_mv                      # vybíjí se, dokud nejvyšší článek neklesne sem
+            t_dis = 1 if drop_mv > 0 else 0                  # 0 = nevybíjet; jinak bez časového limitu, končí napětím
             p_dis = round(p_kw * float(p["dis_p_ratio"]), 2)
             c = {"n": cycle, "pt": i + 1, "p_start_kw": (st.get("cyc_steps") or [p_kw])[0], "p_kw": p_kw, "steps": list(st.get("cyc_steps") or []),
                  "t_charge_s": round(_secs(st.get("cyc_at"), now)), "t_last_s": round(t_step), "vmax_mv": vmax, "soc": soc,
                  "u_max_mv": ulim, "stop_by": "strop článku 3,60 V" if hit_top and vmax < ulim else ("plné nabití" if full and vmax < ulim else "strop bodu"),
-                 "p_dis_kw": p_dis, "t_discharge_plan_s": t_dis}
+                 "p_dis_kw": p_dis, "t_discharge_plan_s": t_dis, "dis_target_mv": dis_target}
             cycles.append(c)
             del cycles[:-300]
             if last_pt and soc is not None and soc >= target_soc and int(st.get("pt_cycles") or 0) + 1 >= int(pt["cycles"]):
                 c["t_discharge_plan_s"] = 0
                 return cycle, 0.0, ulim, f"nabito na {soc:g} % při stropu článku {pt['u_max']:g} V (bod {i + 1}, cyklus {cycle})"
             msg = f"Bod {i + 1} · cyklus {cycle}: článek {vmax} mV na stropu {ulim} mV při {p_kw:g} kW"
-            if t_dis >= TICK_S and p_dis >= 0.05 and (soc is None or soc > SOC_DIS_FLOOR):
-                go("discharge", msg + f" → vybíjení {p_dis:g} kW na {t_dis} s ({pt['dis_t_ratio']:g} × {round(t_step)} s)")
+            if t_dis and p_dis >= 0.05 and (soc is None or soc > SOC_DIS_FLOOR):
+                go("discharge", msg + f" → vybíjení {p_dis:g} kW, dokud článek neklesne na {dis_target} mV (strop − {drop_mv} mV)")
                 await _force(b, "force_discharge", p_dis, f"bod {i + 1} cyklus {cycle} vybíjení")
                 p_set = -p_dis
             else:
@@ -560,8 +564,15 @@ async def _vmax_step(b, p, st, now, phase, cycle, p_kw, vmax, soc, t_phase, inv,
     elif phase == "discharge":
         c = cycles[-1] if cycles else {}
         plan = float(c.get("t_discharge_plan_s") or 0)
-        if t_phase >= plan or (soc is not None and soc <= SOC_DIS_FLOOR):
-            c["t_discharge_s"] = round(min(t_phase, plan)) if plan else 0
+        dis_target = c.get("dis_target_mv")
+        reached = dis_target is not None and vmax <= int(dis_target) and t_phase >= 10      # 10 s = ať povel stihne zabrat
+        low_soc = soc is not None and soc <= SOC_DIS_FLOOR
+        if reached or not plan or low_soc:
+            c["t_discharge_s"] = round(t_phase) if plan else 0
+            c["dis_end_mv"], c["dis_timeout"] = vmax, False
+            if low_soc and not reached:
+                st["log"].append({"t": now.isoformat(), "text": f"Bod {i + 1} · cyklus {cycle}: vybíjení ukončeno při SoC {soc:g} % "
+                                                                f"(pojistka {SOC_DIS_FLOOR:g} %), článek {vmax} mV"})
             st["pt_cycles"] = int(st.get("pt_cycles") or 0) + 1
             reached = soc is not None and soc >= target_soc and st["pt_cycles"] >= int(pt["cycles"])
             if reached and last_pt:

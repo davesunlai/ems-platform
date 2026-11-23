@@ -1,3 +1,17 @@
+## v1.13.8 — balancování (body podle SoC): vybíjení bez časového limitu
+
+- Vybíjení v cyklu trvá tak dlouho, dokud nejvyšší článek neklesne na (strop bodu − „vybít pod strop o V“). Pojistka
+  „nejdelší vybíjení“ z 1.13.7 zrušena. Zůstává: SoC ≤ 10 % vybíjení ukončí, meze článku 2,80–3,65 V a nejdelší běh celého
+  balancování.
+
+## v1.13.7 — balancování (body podle SoC): vybíjení podle napětí místo doby
+
+- U bodu se místo „poměru doby vybíjení“ zadává **o kolik V pod strop bodu** má nejvyšší článek při vybíjení klesnout
+  (výchozí 0,02 V; 0 = nevybíjet). Vybíjí se `poměr vybíjecího výkonu` × poslední nabíjecí výkon, dokud nejvyšší článek
+  neklesne na (strop − hodnota), pak se zase nabíjí ke stropu. Pojistka „nejdelší vybíjení“ (výchozí 10 min).
+- Ukazatel při vybíjení: cílové napětí, kolik mV zbývá. V pravítku tečkovaná čára cíle vybíjení. V tabulce cyklů „vybito na“.
+- Dříve uložené body (s poměrem doby) dostanou výchozích 0,02 V.
+
 ## v1.13.6 — balancování (body podle SoC): bod se posune, když SoC přeroste a strop neomezuje
 
 - Chyba: na další bod se přecházelo jen na konci cyklu. Když článek ke stropu bodu nedošel (žádný cyklus), balancování zůstalo
