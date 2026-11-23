@@ -68,7 +68,7 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick }) {
           <th style={{ textAlign: "left", padding: "1px 6px 1px 0" }} className="muted">modul</th>
           {Array.from({ length: c.per_module }, (_, i) => <th key={i} className="muted" style={{ fontWeight: 400, padding: pad }}>{i + 1}</th>)}
           <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>{mode === "mv" ? "průměr" : "modul"}</th>
-          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>V</th>}
+          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }} title="Napětí modulu = součet jeho článků, na mV">V modulu</th>}
         </tr></thead>
         <tbody>{c.modules.map((m) => (
           <tr key={m.idx}>
@@ -91,7 +91,9 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick }) {
                 </td>);
             })}
             <td style={{ padding: "1px 6px", textAlign: "right" }}>{mode === "mv" ? m.avg.toFixed(0) : (m.temp_module != null ? `${m.temp_module.toFixed(1)} °C` : "—")}</td>
-            {mode === "mv" && <td style={{ padding: "1px 6px", textAlign: "right" }}>{m.voltage != null ? m.voltage.toFixed(2) : "—"}</td>}
+            {mode === "mv" && <td style={{ padding: "1px 6px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                                  title={`součet napětí ${m.mv.length} článků modulu${m.voltage != null ? ` · BMS hlásí modul ${m.voltage.toFixed(2)} V (rozlišení 10 mV)` : ""}`}>
+              {(m.mv.reduce((x, y) => x + y, 0) / 1000).toFixed(3)}</td>}
           </tr>))}</tbody>
       </table>
     </div>);
@@ -231,7 +233,7 @@ export default function BmsCells({ locId }) {
           <BmsBalance key={fb.module_id} block={fb} open={bal} setOpen={setBal} hover={hover} onHover={setHover} onPick={setSel} localHist={histRef.current[fb.module_id]} />
           <h3 style={{ fontSize: 15, margin: "10px 0 4px" }}>Napětí článků (mV)</h3>
           <CellTable c={c} mode="mv" big trend={fb.trend} hover={hover} onHover={setHover} onPick={setSel} />
-          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec V = napětí celého modulu. Najetím se článek zvýrazní i v seřazeném seznamu, kliknutím se otevře jeho průběh." /></div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Sloupec „V modulu“ = součet napětí článků modulu na mV. Najetím se článek zvýrazní i v seřazeném seznamu, kliknutím se otevře jeho průběh." /></div>
           <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
             {fb.trend
               ? <>Šipka u článku = změna jeho napětí za posledních {fb.trend.samples} snímků ({fb.trend.window_s < 120 ? `${fb.trend.window_s} s` : `${Math.round(fb.trend.window_s / 60)} min`}):{" "}

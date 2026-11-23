@@ -1,3 +1,8 @@
+## v1.13.9 — tabulka článků: napětí modulu na mV
+
+- Poslední sloupec tabulky napětí ukazuje napětí modulu na tři desetinná místa (např. 51,548 → 51.548 V) jako součet napětí
+  jeho článků; BMS sám hlásí napětí modulu jen po 10 mV (je v bublině). Jen web.
+
 ## v1.13.8 — balancování (body podle SoC): vybíjení bez časového limitu
 
 - Vybíjení v cyklu trvá tak dlouho, dokud nejvyšší článek neklesne na (strop bodu − „vybít pod strop o V“). Pojistka
