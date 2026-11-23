@@ -1,3 +1,8 @@
+## v1.13.12 — tabulka článků: rozdíly mezi boxy v pořadí
+
+- Úplně vpravo sloupec „Δ k vyššímu / k prvnímu (V)“: o kolik V je box pod boxem o místo výš v pořadí podle napětí a o kolik
+  pod boxem s nejvyšším napětím (záporné hodnoty, na mV). Počítá se podle pořadí napětí i bez zapnutého řazení. Jen web.
+
 ## v1.13.11 — tabulka článků: číslo boxu u napětí modulu
 
 - Poslední sloupec: barevný štítek s číslem boxu, napětí modulu na mV a proužek polohy mezi nejnižším a nejvyšším boxem

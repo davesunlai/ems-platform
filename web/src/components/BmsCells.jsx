@@ -60,6 +60,11 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
   const sumOf = (m) => m.mv.reduce((x, y) => x + y, 0);
   const rows = sortV ? [...c.modules].sort((a, b) => sumOf(b) - sumOf(a) || a.idx - b.idx) : c.modules;
   const sums = c.modules.map(sumOf), sMin = Math.min(...sums), sMax = Math.max(...sums), sMed = median(sums);
+  // pořadí boxů podle napětí → pro každý box rozdíl k boxu těsně nad ním a k prvnímu (v mV, záporné = chybí)
+  const gap = {};
+  [...c.modules].sort((a, b) => sumOf(b) - sumOf(a) || a.idx - b.idx).forEach((m, r, arr) => {
+    gap[m.idx] = { rank: r + 1, prev: r ? sumOf(m) - sumOf(arr[r - 1]) : null, first: r ? sumOf(m) - sumOf(arr[0]) : null }; });
+  const fV = (mv) => (mv == null ? "—" : `${mv > 0 ? "+" : mv < 0 ? "−" : ""}${(Math.abs(mv) / 1000).toFixed(3)}`);
   const fs = big ? 15 : 10.5, pad = big ? "4px 7px" : "1px 2px";
   const temps = c.modules.flatMap((m) => m.temp);
   const tMed = temps.length ? median(temps) : 0;
@@ -73,6 +78,8 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
           {Array.from({ length: c.per_module }, (_, i) => <th key={i} className="muted" style={{ fontWeight: 400, padding: pad }}>{i + 1}</th>)}
           <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>{mode === "mv" ? "průměr" : "modul"}</th>
           {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }} title="Číslo boxu a napětí modulu = součet jeho článků, na mV. Proužek = poloha mezi nejnižším a nejvyšším boxem.">box · V modulu</th>}
+          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px", textAlign: "right" }}
+                               title="Rozdíl napětí boxu proti boxu o jedno místo výš v pořadí / proti boxu s nejvyšším napětím. Záporné číslo = o tolik voltů mu chybí.">Δ k vyššímu / k prvnímu (V)</th>}
         </tr></thead>
         <tbody>{rows.map((m, ri) => (
           <tr key={m.idx}>
@@ -111,6 +118,13 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
                       </span>
                     </span>
                   </span>
+                </td>); })()}
+            {mode === "mv" && (() => { const g = gap[m.idx];
+              return (
+                <td style={{ padding: big ? "3px 8px" : "1px 6px", whiteSpace: "nowrap", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                    title={g.prev == null ? `box ${m.idx} má nejvyšší napětí` : `box ${m.idx} je ${g.rank}. v pořadí: ${Math.abs(g.prev)} mV pod boxem před ním, ${Math.abs(g.first)} mV pod prvním`}>
+                  {g.prev == null ? <span className="muted">1. nejvyšší</span>
+                    : <><span>{fV(g.prev)}</span><span className="muted"> / </span><b>{fV(g.first)}</b></>}
                 </td>); })()}
           </tr>))}</tbody>
       </table>
@@ -258,7 +272,7 @@ export default function BmsCells({ locId }) {
             {sortV && <span className="muted" style={{ fontSize: 12 }}>nejvyšší napětí nahoře · číslo za tečkou = pořadí · rozdíl mezi prvním a posledním boxem {(() => { const v = c.modules.map((m) => m.mv.reduce((x, y) => x + y, 0)); return (Math.max(...v) - Math.min(...v)).toLocaleString("cs-CZ"); })()} mV</span>}
           </div>
           <CellTable c={c} mode="mv" big trend={fb.trend} hover={hover} onHover={setHover} onPick={setSel} sortV={sortV} />
-          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Poslední sloupec = číslo boxu a součet napětí jeho článků na mV; proužek ukazuje, kde box leží mezi nejnižším a nejvyšším (oranžová nad mediánem boxů, modrá pod). Najetím se článek zvýrazní i v seřazeném seznamu, kliknutím se otevře jeho průběh." /></div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}><Legend med={`${c.median} mV`} what=". Tučně nejnižší a nejvyšší článek. Poslední sloupec = číslo boxu a součet napětí jeho článků na mV; proužek ukazuje, kde box leží mezi nejnižším a nejvyšším (oranžová nad mediánem boxů, modrá pod). Úplně vpravo: kolik V boxu chybí na box o místo výš / na první box. Najetím se článek zvýrazní i v seřazeném seznamu, kliknutím se otevře jeho průběh." /></div>
           <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
             {fb.trend
               ? <>Šipka u článku = změna jeho napětí za posledních {fb.trend.samples} snímků ({fb.trend.window_s < 120 ? `${fb.trend.window_s} s` : `${Math.round(fb.trend.window_s / 60)} min`}):{" "}
