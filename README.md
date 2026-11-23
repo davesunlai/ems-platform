@@ -1,3 +1,13 @@
+## v1.13.14 — řazení boxů podle napětí se pamatuje u uživatele
+
+- Zapnuté / vypnuté řazení boxů podle napětí se ukládá do předvoleb přihlášeného uživatele (`ui_prefs.bms_sort_by_voltage`)
+  a platí na všech jeho zařízeních. Kratší záhlaví posledního sloupce, nulový rozdíl lícuje s ostatními. Jen web.
+
+## v1.13.13 — tabulka článků: rozdíly mezi boxy hned u napětí boxu
+
+- Rozdíly „k vyššímu / k prvnímu“ nejsou samostatný sloupec na okraji, ale stojí těsně za napětím boxu ve stejné buňce,
+  zarovnané pod sebou. Jen web.
+
 ## v1.13.12 — tabulka článků: rozdíly mezi boxy v pořadí
 
 - Úplně vpravo sloupec „Δ k vyššímu / k prvnímu (V)“: o kolik V je box pod boxem o místo výš v pořadí podle napětí a o kolik

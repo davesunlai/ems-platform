@@ -64,7 +64,7 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
   const gap = {};
   [...c.modules].sort((a, b) => sumOf(b) - sumOf(a) || a.idx - b.idx).forEach((m, r, arr) => {
     gap[m.idx] = { rank: r + 1, prev: r ? sumOf(m) - sumOf(arr[r - 1]) : null, first: r ? sumOf(m) - sumOf(arr[0]) : null }; });
-  const fV = (mv) => (mv == null ? "—" : `${mv > 0 ? "+" : mv < 0 ? "−" : ""}${(Math.abs(mv) / 1000).toFixed(3)}`);
+  const fV = (mv) => (mv == null ? "—" : `${mv > 0 ? "+" : mv < 0 ? "−" : "\u2007"}${(Math.abs(mv) / 1000).toFixed(3)}`);   // u nuly číslicová mezera, ať sloupec lícuje
   const fs = big ? 15 : 10.5, pad = big ? "4px 7px" : "1px 2px";
   const temps = c.modules.flatMap((m) => m.temp);
   const tMed = temps.length ? median(temps) : 0;
@@ -77,9 +77,7 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
           <th style={{ textAlign: "left", padding: "1px 6px 1px 0" }} className="muted">modul</th>
           {Array.from({ length: c.per_module }, (_, i) => <th key={i} className="muted" style={{ fontWeight: 400, padding: pad }}>{i + 1}</th>)}
           <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }}>{mode === "mv" ? "průměr" : "modul"}</th>
-          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }} title="Číslo boxu a napětí modulu = součet jeho článků, na mV. Proužek = poloha mezi nejnižším a nejvyšším boxem.">box · V modulu</th>}
-          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px", textAlign: "right" }}
-                               title="Rozdíl napětí boxu proti boxu o jedno místo výš v pořadí / proti boxu s nejvyšším napětím. Záporné číslo = o tolik voltů mu chybí.">Δ k vyššímu / k prvnímu (V)</th>}
+          {mode === "mv" && <th className="muted" style={{ fontWeight: 400, padding: "1px 6px" }} title="Číslo boxu a napětí modulu = součet jeho článků, na mV. Proužek = poloha mezi nejnižším a nejvyšším boxem.">box · V · Δ k vyššímu / k prvnímu</th>}
         </tr></thead>
         <tbody>{rows.map((m, ri) => (
           <tr key={m.idx}>
@@ -106,7 +104,7 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
               const sv = sumOf(m), rel = sMax > sMin ? (sv - sMin) / (sMax - sMin) : 0.5, hi = sv >= sMed;
               const col = hi ? HIGH[2] : LOW[2];
               return (
-                <td style={{ padding: big ? "3px 8px" : "1px 6px", whiteSpace: "nowrap" }}
+                <td style={{ padding: big ? "3px 8px" : "1px 6px", whiteSpace: "nowrap", width: 1 }}
                     title={`box ${m.idx}: součet napětí ${m.mv.length} článků = ${(sv / 1000).toFixed(3)} V, ${sv - sMed >= 0 ? "+" : ""}${Math.round(sv - sMed)} mV od mediánu boxů${m.voltage != null ? ` · BMS hlásí modul ${m.voltage.toFixed(2)} V (rozlišení 10 mV)` : ""}`}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: big ? 8 : 5 }}>
                     <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: big ? 30 : 20, height: big ? 22 : 15, padding: "0 5px",
@@ -117,14 +115,13 @@ function CellTable({ c, mode, big, trend, hover, onHover, onPick, sortV }) {
                         <i style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: `${Math.max(6, rel * 100)}%`, borderRadius: 2, background: col, transition: "width .6s ease" }} />
                       </span>
                     </span>
+                    {(() => { const g = gap[m.idx]; return (
+                      <span style={{ display: "inline-block", minWidth: big ? 128 : 92, textAlign: "left", fontVariantNumeric: "tabular-nums", fontSize: big ? 13.5 : 9.5 }}
+                            title={g.prev == null ? `box ${m.idx} má nejvyšší napětí` : `box ${m.idx} je ${g.rank}. v pořadí: ${Math.abs(g.prev)} mV pod boxem o místo výš, ${Math.abs(g.first)} mV pod prvním`}>
+                        {g.prev == null ? <span className="muted">nejvyšší</span>
+                          : <><span>{fV(g.prev)}</span><span className="muted"> / </span><b>{fV(g.first)}</b></>}
+                      </span>); })()}
                   </span>
-                </td>); })()}
-            {mode === "mv" && (() => { const g = gap[m.idx];
-              return (
-                <td style={{ padding: big ? "3px 8px" : "1px 6px", whiteSpace: "nowrap", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                    title={g.prev == null ? `box ${m.idx} má nejvyšší napětí` : `box ${m.idx} je ${g.rank}. v pořadí: ${Math.abs(g.prev)} mV pod boxem před ním, ${Math.abs(g.first)} mV pod prvním`}>
-                  {g.prev == null ? <span className="muted">1. nejvyšší</span>
-                    : <><span>{fV(g.prev)}</span><span className="muted"> / </span><b>{fV(g.first)}</b></>}
                 </td>); })()}
           </tr>))}</tbody>
       </table>
@@ -144,7 +141,9 @@ export default function BmsCells({ locId }) {
   const [hover, setHover] = useState(null);           // {n, src} článek pod myší (tabulka ↔ seřazený seznam se zvýrazňují navzájem)
   const [sel, setSel] = useState(null);               // číslo článku s otevřeným detailem
   const histRef = useRef({});                         // modul → živé snímky po dobu otevřeného okna [{t, mv[], soc, pw}]
-  const [sortV, setSortV] = useState(false);          // řádky tabulek seřazené podle napětí boxu (živě)
+  const [sortV, setSortVState] = useState(false);     // řádky tabulek seřazené podle napětí boxu (živě); pamatuje se u uživatele
+  useEffect(() => { api.getPrefs().then((r) => setSortVState(!!r.prefs?.bms_sort_by_voltage)).catch(() => {}); }, []);
+  const setSortV = (v) => { setSortVState(v); api.setPrefs({ bms_sort_by_voltage: !!v }).catch(() => {}); };
   const [balRun, setBalRun] = useState({});          // modul → běží ⚖ balancování (čtení po 5 s pak nezávisí na otevřeném okně)
   // Živé sledování: dokud je okno otevřené, hlásíme to serveru (EMSBOX pak čte články po pár sekundách) a dotahujeme po 5 s.
   useEffect(() => {
